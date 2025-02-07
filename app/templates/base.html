@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<head>
+    <title>{% block title %}{% endblock %} - MyApp</title>
+
+    <!-- Required meta tags -->
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <!-- CSS -->
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/base.css') }}" />
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/bootstrap-darkly.css') }}" />
+
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}" />
+
+</head>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <img class="navbar-brand" src="{{ url_for('static', filename='images/favicon.png') }}" style="width:48px;height:48px;" />
+    <a class="navbar-brand" href='#'>MyApp</a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarText" aria-controls="navbarText" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      
+      <div class="collapse navbar-collapse" id="navbarText">
+        <ul class="navbar-nav me-auto">
+          {% set nav_links = {
+            "Home": "main.index",
+            "Kitties": "kitties"
+          }%}
+          {% set dead_links = ['kitties'] %}
+
+          {% for title, link in nav_links.items() %}
+            {% if link in dead_links %}
+              <li class="nav-item">
+                <a class="nav-link disabled" href="#">{{title}}</a>
+              </li>
+            {% else %}
+              <li class="{{ 'nav-item active' if active_page == link else 'nav-item' }}">
+                <a class="nav-link" href="{{url_for(link)}}">{{title}}</a>
+              </li>
+            {% endif %}
+          {% endfor %}
+        </ul>
+      </div>
+</nav>
+
+
+<header>
+    {% block header %}
+    {% endblock %}
+</header>
+
+<body>
+    {% block body %}
+    {% endblock %}
+</body>
+
+
+<footer>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    {% block script %}{% endblock %}
+</footer>
