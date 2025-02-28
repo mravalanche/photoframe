@@ -1,8 +1,12 @@
 import os
+from photoframe.common import log
 
 def load_env_file(env_path="../.env"):
     """Manually loads key-value pairs from a .env file into environment variables."""
+    log.debug("Trying to load config...")
+    
     if not os.path.exists(env_path):
+        log.error(f"Unable to load config for path {env_path}")
         return
     
     with open(env_path) as f:

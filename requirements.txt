@@ -7,4 +7,4 @@ google-auth-httplib2==0.2.0
 google-api-python-client==2.98.0
 requests==2.31.0
 flask_wtf==1.2.2
-inky==2.0.0; platform_system=="Linux" and platform_machine=="armv7l"
+inky==2.0.0; platform_system=="Linux"

@@ -1,6 +1,7 @@
 from flask import Flask
 import threading
 from photoframe.config import load_config
+from photoframe.common import log
 from photoframe.google_photos_client import GooglePhotosClient
 from photoframe.photo_handler import photo_updater
 from photoframe.store import store
@@ -8,6 +9,8 @@ import secrets
 
 def create_app():
     app = Flask(__name__)
+    log.debug(f"Photoframe started. {app.root_path = }")
+    
     load_config(app)
     app.secret_key = secrets.token_hex(32)
     app.config["app_route"] = app.root_path
