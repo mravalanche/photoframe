@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% set active_page = "main.settings"%}
+
+{% block title %}Settings{% endblock %}
+
+{% block header %}
+    <!--Header-->
+{% endblock %}
+
+
+{% block body %}
+<div class="card mb-3">
+    <h3 class="card-header">Settings</h3>
+    <div class="card-body">
+        <form id="save-settings-form" action="{{ url_for('main.save_settings') }}" method="POST">
+            <fieldset>
+                <div>
+                    <label for="transition" class="form-label mt-4">Transition</label>
+                    <select class="form-select" id="transition_select" name="transition">
+                        {% for transition in transitions %}
+                        <option>{{ transition|title }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if current_transition %}
+                    <small class="form-text text-muted">Current: {{current_transition|title}}</small>
+                    {% endif %}
+                </div>
+                <div>
+                    <label for="speed" class="form-label mt-4">Speed</label>
+                    <select class="form-select" id="speed_select" name="speed">
+                        {% for speed, label in speeds.items() %}
+                        <option value="{{speed}}">{{label}}</option>
+                        {% endfor %}
+                    </select>
+                    {% if current_speed %}
+                    <small class="form-text text-muted">Current: {{speeds[current_speed]}}</small>
+                    {% endif %}
+                </div>
+                <br>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </fieldset>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block script %}
+    <!--Scripts-->
+{% endblock %}

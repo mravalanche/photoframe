@@ -4,7 +4,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 console = Console()
-DEBUG = False
+DEBUG = True
 
 __all__= [
     'console',

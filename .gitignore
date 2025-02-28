@@ -175,3 +175,8 @@ cython_debug/
 .vscode/
 gh/
 .gh/
+test/
+*/photos/
+token.pickle
+store.json
+.env

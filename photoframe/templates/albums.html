@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% set active_page = "main.albums"%}
+
+{% block title %}Albums{% endblock %}
+
+{% block header %}
+    <!--Header-->
+{% endblock %}
+
+{% block body %}
+<div id="top-loader" class="text-center py-3">
+  <div class="spinner-border text-primary" role="status">
+    <span class="visually-hidden">Loading...</span>
+  </div>
+  <p class="mt-2">Loading albums...</p>
+</div>
+
+<!-- Single form that posts to /store_album. -->
+
+
+<!-- Main card with extra bottom padding in the body -->
+<div class="card border-dark mb-3" style="margin:5px;">
+  <div class="card-header">Select an Album:</div>
+  
+  <!-- 
+    Use pb-5 + inline padding-bottom for extra space 
+    so the floating bar doesn't overlap the last row. 
+  -->
+  <div class="card-body pb-5" style="padding-bottom: 6rem;">
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+      {% for album in albums %}
+      <div class="col">
+        <div class="card album-card h-100"
+             data-album-id="{{ album.album_id|e }}"
+             data-album-title="{{ album.title|e }}"
+             data-album-size="{{ album.item_count|e }}"
+             onclick="selectAlbum(this)"
+             style="cursor: pointer;">
+             
+          <div class="card-header text-center py-2">
+            {{ album.title }}
+          </div>
+          
+          <img src="{{ album.cover_photo_url }}=w300-h300"
+               class="card-img-top"
+               alt="Album Cover"
+               style="height: 200px; object-fit: cover;">
+          
+          <div class="card-body text-center">
+            <p class="mb-0">Items: {{ album.item_count }}</p>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Floating bottom bar with a dark background -->
+<div class="fixed-bottom p-3 d-flex justify-content-center bg-dark text-light border-top border-light" style="gap:1rem;">
+    <form id="choose-album-form" action="{{ url_for('main.store_album') }}" method="POST">
+        <input type="hidden" name="album_id" id="album_id_input">
+        <input type="hidden" name="album_title" id="album_title_input">
+        <input type="hidden" name="album_size" id="album_size_input">
+        <button type="submit"
+                form="choose-album-form"
+                class="btn btn-primary"
+                style="max-width: 300px;">
+          Select Album
+        </button>
+    </form>
+  <a href="{{ url_for('main.index') }}"
+     class="btn btn-danger"
+     style="max-width: 300px;">
+    Cancel
+  </a>
+</div>
+{% endblock %}
+
+{% block script %}
+<!-- Hide the top spinner once the entire page (including images) has loaded -->
+<script>
+  window.addEventListener("load", function() {
+    const loader = document.getElementById("top-loader");
+    if (loader) {
+      loader.style.display = "none";
+    }
+  });
+
+  let selectedCard = null;
+
+  function selectAlbum(cardElement) {
+    // Read album data from data-* attributes
+    const albumId = cardElement.dataset.albumId;
+    const albumTitle = cardElement.dataset.albumTitle;
+    const albumSize = cardElement.dataset.albumSize;
+
+    // 1. Update hidden inputs in the form
+    document.getElementById("album_id_input").value = albumId;
+    document.getElementById("album_title_input").value = albumTitle;
+    document.getElementById("album_size_input").value = albumSize;
+
+    // 2. Visually indicate which card is selected
+    if (selectedCard) {
+      selectedCard.classList.remove("border", "border-primary", "selected-card");
+    }
+    cardElement.classList.add("border", "border-primary", "selected-card");
+    selectedCard = cardElement;
+  }
+</script>
+
+<style>
+  .selected-card {
+    border-width: 3px !important; 
+    background-color: rgba(0, 123, 255, 0.05);
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.3);
+  }
+</style>
+{% endblock %}
