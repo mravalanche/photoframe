@@ -11,9 +11,9 @@ def create_app():
     app = Flask(__name__)
     log.debug(f"Photoframe started. {app.root_path = }")
     
+    app.config["app_route"] = app.root_path
     load_config(app)
     app.secret_key = secrets.token_hex(32)
-    app.config["app_route"] = app.root_path
     app.extensions['photo_client'] = GooglePhotosClient(
         client_id=app.config["GOOGLE_CLIENT_ID"],
         client_secret=app.config["GOOGLE_CLIENT_SECRET"],

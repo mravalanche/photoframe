@@ -51,6 +51,22 @@ ALBUM_ID=your-google-photos-album-id
 
 Todo.
 
+### Clone this library
+
+Wherever works for you (probably your home directory) clone this library:
+```bash
+git clone https://github.com/mravalanche/photoframe.git
+```
+
+### Set up your python virtual environment
+
+The pimoroni libraries don't like be run from the system python, so instead should be run from a .venv, so lets set that up:
+
+```bash
+cd <directory for photoframe>
+python -m venv .venv
+```
+
 ## Todo
 
 - [x] Add Google Photos Interface
