@@ -3,7 +3,7 @@ import threading
 from photoframe.config import load_config
 from photoframe.common import log
 from werkzeug.middleware.proxy_fix import ProxyFix
-from photoframe.google_photos_client import GooglePhotosClient, GOOGLE_AUTH_CONFIG
+from photoframe.google_photos_client import GooglePhotosClient
 from photoframe.photo_handler import photo_updater
 from photoframe.store import store
 import secrets

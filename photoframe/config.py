@@ -13,6 +13,8 @@ def load_env_file():
     log.debug("Trying to load config...")
     success = False
 
+    config = dict()
+
     for env_file in ENV_OPTIONS:
         if not env_file.is_file():
             log.info(f"Didn't load config file from {env_file.absolute()}")
@@ -26,6 +28,7 @@ def load_env_file():
                         continue
                     key, value = line.split("=", 1)
                     os.environ[key] = value.strip()
+                    config[key] = value.strip()
         except Exception:
             continue
         else:
@@ -34,13 +37,22 @@ def load_env_file():
 
     if success:
         log.debug("Loaded .env file(s)")
+        return config
     else:
         log.error("Tried to load .env files, but was unable to")
         log.critical("Unless .env variables have been set manually, this application is unlikely to work")
 
-def load_config(app):
+def load_config(app, all_environ=False):
     """Loads .env variables into app.config dynamically."""
-    root_dir = app.config["app_route"]
-    load_env_file()
-    for key, value in os.environ.items():
+    config = load_env_file()
+    
+    if all_environ:
+        for key, value in os.environ.items():
+            app.config[key] = value
+    
+    # Local config always after, as it will overwrite any envs
+
+    if not config:
+        return None
+    for key, value in config.items():
         app.config[key] = value
