@@ -1,9 +1,14 @@
 import os
+import pickle
+
 from flask import Blueprint, render_template, redirect, url_for, request, flash, send_from_directory, current_app
 
 from photoframe.common import log, DEBUG
 from photoframe.photo_handler import list_photos
 from photoframe.store import store
+from photoframe.google_photos_client import GOOGLE_AUTH_CONFIG
+
+from google_auth_oauthlib.flow import InstalledAppFlow
 
 main = Blueprint("main", __name__)
 photo = Blueprint("photo", __name__, url_prefix="/photo")
@@ -16,7 +21,12 @@ photo = Blueprint("photo", __name__, url_prefix="/photo")
 
 def get_photo_client():
     """Fetch the persistent photo_client from Flask's app extensions."""
-    return current_app.extensions['photo_client']
+    photo_client = current_app.extensions['photo_client']
+
+    if not GOOGLE_AUTH_CONFIG["redirect_uris"]:
+        GOOGLE_AUTH_CONFIG["redirect_uris"] = url_for('main.oauth_callback', _external=True)
+    
+    return photo_client
 
 
 def bool_from_input(input, default=False)->bool:
@@ -29,6 +39,13 @@ def bool_from_input(input, default=False)->bool:
             return False
         case _:
             return default
+        
+
+def auth_needed(photo_client):
+    if not photo_client.service:
+        flash("Not Authenticated. You need to authenticate first.", "warning")
+        return redirect(url_for("main.index"))
+
 
 # ------------------
 # Settings
@@ -73,18 +90,22 @@ def authenticate():
 
     photo_client = get_photo_client()
     photo_client.authenticate(force=force)
+    auth_url = photo_client.authenticate(force=force)
 
-    if force:
-        flash("Re-authenticated successfully!", "success")
-    else:
-        flash("Authenticated successfully!", "success")
+    if not auth_url and not force:
+        flash("Already Authenticated")
+        return redirect(url_for('main.index'))
 
-    return redirect(url_for("main.index"))
+    return redirect(auth_url)
 
 
 @main.route("/albums")
 def albums():
     photo_client = get_photo_client()
+    
+    if (redirect_response := auth_needed(photo_client)):
+        return redirect_response
+
     return render_template(
         "albums.html",
         albums=photo_client.album_dict
@@ -158,3 +179,13 @@ def serve_photos(filename):
     photo_client = get_photo_client()
     photos_dir = photo_client.photo_directory
     return send_from_directory(photos_dir, filename)
+
+
+@main.route("/oauth_callback")
+def oauth_callback():
+    """Handles the OAuth callback from Google after user authentication."""
+    photo_client = get_photo_client()
+    photo_client.complete_authentication(request.url)
+    
+    flash("Authentication successful!", "success")
+    return redirect(url_for("main.index"))

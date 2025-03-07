@@ -1,8 +1,8 @@
-from flask import Flask
+from flask import Flask, url_for
 import threading
 from photoframe.config import load_config
 from photoframe.common import log
-from photoframe.google_photos_client import GooglePhotosClient
+from photoframe.google_photos_client import GooglePhotosClient, GOOGLE_AUTH_CONFIG
 from photoframe.photo_handler import photo_updater
 from photoframe.store import store
 import secrets
@@ -18,7 +18,7 @@ def create_app():
         client_id=app.config["GOOGLE_CLIENT_ID"],
         client_secret=app.config["GOOGLE_CLIENT_SECRET"],
         app_route=app.config["app_route"],
-        album_id=store.get("album_id", None)
+        album_id=store.get("album_id", None),
     )
 
     from .routes import main, photo

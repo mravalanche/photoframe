@@ -11,10 +11,6 @@ def list_photos(photo_client):
     return [f for f in os.listdir(photo_dir) if os.path.isfile(os.path.join(photo_dir, f))]
 
 
-def get_next_photo():
-    pass
-
-
 def photo_updater(photo_client):
 
     def _photo_list_gen(photo_list):

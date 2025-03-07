@@ -179,4 +179,6 @@ test/
 */photos/
 token.pickle
 store.json
+credentials.json
 .env
+*.pem

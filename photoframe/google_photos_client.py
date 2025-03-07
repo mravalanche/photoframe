@@ -3,14 +3,24 @@ import pickle
 import requests
 import datetime
 import threading
+import json
 
 from time import sleep
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from google.auth.transport.requests import Request
 from google.auth.exceptions import RefreshError
 from photoframe.store import store
+
+
+GOOGLE_AUTH_CONFIG = {
+    "scopes": ['https://www.googleapis.com/auth/photoslibrary.readonly'],
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "redirect_uris": None,
+}
+
 
 class GooglePhotosAlbum:
     def __init__(self, album:dict):
@@ -25,16 +35,20 @@ class GooglePhotosAlbum:
 
 
 class GooglePhotosClient:
-    SCOPES = ['https://www.googleapis.com/auth/photoslibrary.readonly']
     TOKEN_FILE = 'token.pickle'  # File to store authentication tokens
 
     def __init__(self, client_id, client_secret, app_route=None, local_directory="photos", album_id=None):
         self.client_id = client_id
         self.client_secret = client_secret
+        
+        # Photo Directory handling
         if app_route:
             self.photo_directory = os.path.join(app_route, local_directory)
         else:
             self.photo_directory = local_directory
+        if not os.path.exists(self.photo_directory):
+            os.makedirs(self.photo_directory, exist_ok=True)
+        
         self.album_id = album_id
         self.service = None
         self.albums:list[GooglePhotosAlbum]|None = list()
@@ -66,50 +80,78 @@ class GooglePhotosClient:
             sleep(5)
 
     def authenticate(self, force=False):
-        """Handle authentication and store tokens in a pickle file.
-        If token refresh fails, re-authenticate.
-        """
         creds = None
 
         # Load credentials from the pickle file if available and force is not set
         if os.path.exists(self.TOKEN_FILE) and not force:
             with open(self.TOKEN_FILE, 'rb') as token:
                 creds = pickle.load(token)
-
-        try:
-            # If credentials are invalid or expired, attempt to refresh
-            if creds and creds.expired and creds.refresh_token:
+        
+        # Try to refresh the token if we can
+        if creds and creds.expired and creds.refresh_token:
+            try:
                 creds.refresh(Request())
-            elif not creds or not creds.valid:
-                force = True  # Set force to True to trigger full re-authentication
+            except RefreshError:
+                force=True
+        
 
-        except RefreshError:
-            print("Token refresh failed. Re-authenticating...")
-            force = True  # Trigger full re-authentication
-
-        # Perform full authentication if necessary
-        if force:
-            flow = InstalledAppFlow.from_client_config(
-                {
-                    "installed": {
-                        "client_id": self.client_id,
-                        "client_secret": self.client_secret,
-                        "redirect_uris": ["http://localhost"],
-                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                        "token_uri": "https://oauth2.googleapis.com/token",
-                    }
-                },
-                self.SCOPES,
+        if not creds or not creds.valid or force:
+            config = {
+                "web": {
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                    "redirect_uris": GOOGLE_AUTH_CONFIG.get("redirect_uris"),
+                    "auth_uri": GOOGLE_AUTH_CONFIG.get("auth_uri"),
+                    "token_uri": GOOGLE_AUTH_CONFIG.get("token_uri"),
+                }
+            }
+            print(f"{config = }")
+            flow = Flow.from_client_config(
+                config,
+                scopes=GOOGLE_AUTH_CONFIG.get("scopes"),
+                redirect_uri=GOOGLE_AUTH_CONFIG.get("redirect_uris")
             )
-            creds = flow.run_local_server(port=0)
 
-            # Save credentials to a file
-            with open(self.TOKEN_FILE, 'wb') as token:
-                pickle.dump(creds, token)
+            auth_url, _ = flow.authorization_url(prompt="consent")
 
-        # Build the service client
+            return auth_url
+        
+        with open(self.TOKEN_FILE, 'wb+') as token:
+            pickle.dump(creds, token)
+        
         self.service = build('photoslibrary', 'v1', credentials=creds, static_discovery=False)
         store.set("authed", True)
+
+
+    def complete_authentication(self, auth_response_url):
+        oauth_data = store.get("oauth_data")
+        if not oauth_data:
+            return None
+        
+        config = {
+                "web": {
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                    "redirect_uris": GOOGLE_AUTH_CONFIG.get("redirect_uris"),
+                    "auth_uri": GOOGLE_AUTH_CONFIG.get("auth_uri"),
+                    "token_uri": GOOGLE_AUTH_CONFIG.get("token_uri"),
+                }
+            }
+        print(f"{config = }")
+        flow = Flow.from_client_config(
+            config,
+            scopes=GOOGLE_AUTH_CONFIG.get("scopes"),
+            redirect_uri=GOOGLE_AUTH_CONFIG.get("redirect_uris")
+            )
+        flow.fetch_token(authorization_response=auth_response_url)
+
+        creds = flow.credentials
+        with open(self.TOKEN_FILE, 'wb+') as token:
+            pickle.dump(creds, token)
+        
+        store.set("authed", True)
+        self.service = build('photoslibrary', 'v1', credentials=creds, static_discovery=False)
+    
         
     def _get_albums(self):
         albums = self.service.albums().list(pageSize=50).execute().get('albums', [])
