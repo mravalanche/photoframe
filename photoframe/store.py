@@ -8,11 +8,12 @@ DEFAULT = {
     "album_id": "",
     "album_size": 0,
     "current_photo": "",
-    "speed": 1800,
+    "speed": 21600,
     "transition": "normal",
     "authed": False,
     "next_update": "1970-01-01 00:00:00.000000",
-    "downloaded": False
+    "downloaded": False,
+    "eink_busy": False,
 }
 
 
