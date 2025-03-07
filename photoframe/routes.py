@@ -141,7 +141,8 @@ def settings():
         transitions=SETTINGS["transitions"],
         current_transition=store.get("transition"),
         speeds=SETTINGS["speeds"],
-        current_speed=store.get("speed")
+        current_speed=store.get("speed"),
+        all_config=store.read_all()
     )
 
 

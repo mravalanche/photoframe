@@ -45,7 +45,8 @@ def photo_updater(photo_client):
         # If the current photo isn't what it's supposed to be, update it
         if current_photo != required_photo:
             log.debug(f"Required photo mismatch. Changing {current_photo} -> {required_photo}")
-            current_photo = update_photo(os.path.join(photo_client.photo_directory, required_photo))
+            photo_path = update_photo(os.path.join(photo_client.photo_directory, required_photo))
+            current_photo = os.path.basename(photo_path)
             store.set("next_update", now+datetime.timedelta(seconds=store.get("speed", 1800)))
         
         # If the photo is supposed to be pinned, we don't need to do anything else
@@ -74,8 +75,9 @@ def photo_updater(photo_client):
 
         # Get next photo if we're due an update, and update the next_update time
         if now >= store.get("next_update"):
-            current_photo = update_photo(os.path.join(photo_client.photo_directory, required_photo))
             log.debug(f"Update time hit. Changing photo: {required_photo} -> {current_photo}")
+            photo_path = update_photo(os.path.join(photo_client.photo_directory, required_photo))
+            current_photo = os.path.basename(photo_path)
             store.set("next_update", now+datetime.timedelta(seconds=store.get("speed", 1800)))
         time.sleep(5)
 
@@ -84,7 +86,7 @@ def update_photo(new_photo):
     if store.get("eink_busy"):
         return False
 
-    store.set("current_photo", new_photo)
+    store.set("current_photo", os.path.basename(new_photo))
     
     # This is purely here if we're running in a test environment somewhere, where we don't have an Inky display
     if NOT_INKY:

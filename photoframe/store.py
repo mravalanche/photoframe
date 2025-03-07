@@ -30,7 +30,7 @@ class Store:
         with open(self.file, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, default=str)
         
-    def _read_all(self) -> dict:
+    def read_all(self) -> dict:
         with open(self.file, 'r', encoding='utf-8') as f:
             try:
                 return json.load(f)
@@ -38,7 +38,7 @@ class Store:
                 return dict()
     
     def get(self, key, default=None):
-        data = self._read_all()
+        data = self.read_all()
         entry = data.get(key, default)
 
         # Try to return the correct type
@@ -55,7 +55,7 @@ class Store:
         return entry
 
     def set(self, key, value):
-        data = self._read_all()
+        data = self.read_all()
         data[key] = value
         self._write_all(data)
 
