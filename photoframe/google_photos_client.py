@@ -12,6 +12,7 @@ from googleapiclient.errors import HttpError
 from google.auth.transport.requests import Request
 from google.auth.exceptions import RefreshError
 from photoframe.store import store
+from photoframe.common import log
 
 
 GOOGLE_AUTH_CONFIG = {
@@ -105,7 +106,7 @@ class GooglePhotosClient:
                     "token_uri": GOOGLE_AUTH_CONFIG.get("token_uri"),
                 }
             }
-            print(f"{config = }")
+            log.debug(f"{config = }")
             flow = Flow.from_client_config(
                 config,
                 scopes=GOOGLE_AUTH_CONFIG.get("scopes"),
@@ -123,11 +124,7 @@ class GooglePhotosClient:
         store.set("authed", True)
 
 
-    def complete_authentication(self, auth_response_url):
-        oauth_data = store.get("oauth_data")
-        if not oauth_data:
-            return None
-        
+    def complete_authentication(self, auth_response_url):        
         config = {
                 "web": {
                     "client_id": self.client_id,
@@ -137,7 +134,6 @@ class GooglePhotosClient:
                     "token_uri": GOOGLE_AUTH_CONFIG.get("token_uri"),
                 }
             }
-        print(f"{config = }")
         flow = Flow.from_client_config(
             config,
             scopes=GOOGLE_AUTH_CONFIG.get("scopes"),

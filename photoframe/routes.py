@@ -84,7 +84,6 @@ def index():
 
 @main.route("/authenticate", methods=["POST"])
 def authenticate():
-    log.debug(request.form.to_dict())
     force_str = request.args.get("force", "false").lower()
     force = force_str in ("true", "1", "yes")
 
