@@ -13,8 +13,16 @@ uv sync
 uv run photoframe
 ```
 
-Then open <http://127.0.0.1:8000>. To use a different data directory, set
-`PHOTOFRAME_DATA_DIR`; it defaults to `./data`.
+Photoframe listens on localhost by default. Open <http://127.0.0.1:8000> on the same machine.
+Set `PHOTOFRAME_HOST` to change the bind address, `PHOTOFRAME_PORT` to change the port, and
+`PHOTOFRAME_DATA_DIR` to change the data directory (which defaults to `./data`). To allow other
+devices on a trusted local network to connect, set `PHOTOFRAME_HOST=0.0.0.0` and open
+`http://<device-ip>:8000`.
+
+The application has no user login in version one. Binding to `0.0.0.0` makes it reachable on
+interfaces permitted by the host firewall, so do not expose port 8000 directly to the public
+internet. For access outside a trusted home network, place it behind a TLS reverse proxy with
+authentication or use a private VPN.
 
 Create an Immich API key with album and asset read access. Enter the server root URL (for example
 `https://photos.example.com`) and the key in the app. The key is never rendered back to the browser.
@@ -57,8 +65,8 @@ sudo bash ./scripts/install.sh
 
 The installer synchronizes `uv.lock`, creates `data/` with owner-only permissions, installs and
 enables `photoframe.service`, and starts it. It runs the service as the user who invoked `sudo`,
-never as root. The service binds to localhost on port 8000; use a reverse proxy or SSH tunnel if
-you need remote access. Useful variants are:
+never as root. The service binds to localhost on port 8000; use a private VPN or an authenticated
+TLS reverse proxy if you need remote access. Useful variants are:
 
 ```bash
 sudo bash ./scripts/install.sh --user pi --data-dir /var/lib/photoframe
