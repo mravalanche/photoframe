@@ -12,7 +12,7 @@
   </script>
   <title>Photoframe</title>
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=2">
+  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=3">
   <script src="{{ url_for('static', path='/vendor/htmx-2.0.4.min.js') }}" defer></script>
 </head>
 <body>
@@ -35,8 +35,27 @@
       });
     }
     function syncThemeToggle() { setTheme(document.documentElement.dataset.theme || 'dark'); }
-    document.addEventListener('DOMContentLoaded', syncThemeToggle);
-    document.addEventListener('htmx:afterSwap', syncThemeToggle);
+    function dismissNotice(control) {
+      const notice = control?.closest?.('[data-notice]') || control;
+      if (!notice) return;
+      notice.remove();
+      const stack = document.querySelector('.notification-stack');
+      if (stack && !stack.querySelector('[data-notice]')) stack.remove();
+    }
+    function setupNotifications() {
+      document.querySelectorAll('[data-notice][data-auto-dismiss]').forEach(notice => {
+        if (notice.dataset.dismissTimer) return;
+        notice.dataset.dismissTimer = String(window.setTimeout(
+          () => dismissNotice(notice), Number(notice.dataset.autoDismiss),
+        ));
+      });
+    }
+    function syncInterface() {
+      syncThemeToggle();
+      setupNotifications();
+    }
+    document.addEventListener('DOMContentLoaded', syncInterface);
+    document.addEventListener('htmx:afterSwap', syncInterface);
 
     let previewScrollState = null;
     document.addEventListener('htmx:beforeRequest', event => {

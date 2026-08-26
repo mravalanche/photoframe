@@ -1,6 +1,8 @@
 <div id="workspace" class="workspace">
-  {% if notice %}<div class="notice success" role="status">{{ notice }}</div>{% endif %}
-  {% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
+  {% if notice or error %}<div class="notification-stack" aria-label="Notifications">
+    {% if notice %}<div class="notice success" role="status" aria-atomic="true" data-notice data-auto-dismiss="6000"><span class="notice-label">Success</span><span class="notice-message">{{ notice }}</span><button type="button" class="notice-close" aria-label="Dismiss notification" onclick="dismissNotice(this)">×</button></div>{% endif %}
+    {% if error %}<div class="notice error" role="alert" aria-atomic="true" data-notice data-notice-kind="error"><span class="notice-label">Action needed</span><span class="notice-message">{{ error }}</span><button type="button" class="notice-close" aria-label="Dismiss notification" onclick="dismissNotice(this)">×</button></div>{% endif %}
+  </div>{% endif %}
 
   <section class="overview">
     <div>

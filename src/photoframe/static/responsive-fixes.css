@@ -138,7 +138,81 @@ body {
   margin-left: auto;
 }
 
+.notification-stack {
+  position: fixed;
+  top: 76px;
+  right: max(18px, calc((100vw - 1180px) / 2 + 22px));
+  z-index: 100;
+  display: grid;
+  gap: 10px;
+  width: min(440px, calc(100vw - 36px));
+  pointer-events: none;
+}
+
+.notice {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 12px;
+  padding: 14px 14px 14px 16px;
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 32%);
+  pointer-events: auto;
+}
+
+.notice.success {
+  border-color: var(--moss-deep);
+}
+
+.notice.error {
+  border-color: var(--danger);
+}
+
+.notice-label {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.notice-message {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.notice-close {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: start;
+  width: 36px;
+  height: 36px;
+  margin: -7px -7px 0 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.notice-close:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
 @media (max-width: 760px) {
+  .notification-stack {
+    top: 72px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+
   .source-identity {
     display: none;
   }

@@ -102,6 +102,9 @@ def test_render_requires_native_display_dimensions(tmp_path: Path):
         response = client.post("/render/start")
 
     assert "native display width and height" in response.text
+    assert 'class="notice error" role="alert"' in response.text
+    assert 'data-notice-kind="error"' in response.text
+    assert 'aria-label="Dismiss notification"' in response.text
 
 
 def test_demo_mode_is_local_and_renderable(tmp_path: Path):
@@ -125,6 +128,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
         workspace = client.get("/partials/workspace")
         selected_workspace = client.post("/photo/preview", data={"photo_id": "coast"})
         htmx = client.get("/static/vendor/htmx-2.0.4.min.js")
+        responsive_css = client.get("/static/responsive-fixes.css")
 
     assert "/static/vendor/htmx-2.0.4.min.js" in page.text
     assert "unpkg.com" not in page.text
@@ -132,6 +136,8 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'version:"2.0.4"' in htmx.text
     assert 'data-theme-choice="light" aria-pressed="false"' in page.text
     assert 'data-theme-choice="dark" aria-pressed="true"' in page.text
+    assert "setupNotifications" in page.text
+    assert ".notification-stack" in responsive_css.text
     assert 'action="/photo/start"' in selected_workspace.text
     assert "Start rotation here" in selected_workspace.text
     assert "Advanced / manual hardware settings" in workspace.text
