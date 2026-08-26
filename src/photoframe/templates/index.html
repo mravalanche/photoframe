@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en-GB" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <script>
+    (() => {
+      const saved = localStorage.getItem('photoframe-theme');
+      document.documentElement.dataset.theme = saved === 'light' ? 'light' : 'dark';
+    })();
+  </script>
+  <title>Photoframe</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=2">
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <a href="/" class="brand" aria-label="Photoframe home"><span class="brand-mark">PF</span><span>Photoframe</span></a>
+    <div class="theme-toggle" role="group" aria-label="Colour theme">
+      <button type="button" data-theme-choice="light" onclick="setTheme('light')">Light</button>
+      <button type="button" data-theme-choice="dark" onclick="setTheme('dark')">Dark</button>
+    </div>
+  </header>
+  <main class="app-shell">
+    <div hx-get="/partials/workspace" hx-trigger="load" hx-swap="outerHTML"><div class="loading">Preparing your frame…</div></div>
+  </main>
+  <script>
+    function setTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      localStorage.setItem('photoframe-theme', theme);
+      document.querySelectorAll('[data-theme-choice]').forEach(button => {
+        button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme));
+      });
+    }
+    function syncThemeToggle() { setTheme(document.documentElement.dataset.theme || 'dark'); }
+    document.addEventListener('DOMContentLoaded', syncThemeToggle);
+    document.addEventListener('htmx:afterSwap', syncThemeToggle);
+
+    let previewScrollState = null;
+    document.addEventListener('htmx:beforeRequest', event => {
+      const thumbnail = event.detail.elt?.closest?.('.thumbnail');
+      if (!thumbnail) return;
+      const rail = thumbnail.closest('.thumbnail-rail');
+      previewScrollState = { pageY: window.scrollY, railX: rail?.scrollLeft || 0 };
+    });
+    document.addEventListener('htmx:afterSettle', () => {
+      if (!previewScrollState) return;
+      const saved = previewScrollState;
+      previewScrollState = null;
+      const rail = document.querySelector('.thumbnail-rail');
+      if (rail) rail.scrollLeft = saved.railX;
+      window.scrollTo(0, saved.pageY);
+    });
+  </script>
+</body>
+</html>

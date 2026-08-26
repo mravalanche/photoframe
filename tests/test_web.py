@@ -1,0 +1,118 @@
+from io import BytesIO
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+from PIL import Image
+
+from photoframe.models import Album, Photo
+from photoframe.web import create_app
+
+
+class FakeProvider:
+    def validate_connection(self):
+        return "Connected for test"
+
+    def list_albums(self):
+        return [Album(id="album", name="Family", asset_count=2)]
+
+    def list_photos(self, album_id):
+        assert album_id == "album"
+        return [
+            Photo(id="wide", filename="wide.jpg", width=1200, height=800),
+            Photo(id="tall", filename="tall.jpg", width=800, height=1200),
+        ]
+
+    def thumbnail(self, photo_id):
+        return b"image", "image/jpeg"
+
+    def original(self, photo_id):
+        image = Image.new("RGB", (1200, 800), "navy")
+        output = BytesIO()
+        image.save(output, format="JPEG")
+        return output.getvalue(), "image/jpeg"
+
+
+def test_complete_local_web_flow(tmp_path: Path):
+    app = create_app(tmp_path, lambda _url, _key: FakeProvider())
+    with TestClient(app) as client:
+        assert client.get("/").status_code == 200
+        response = client.post(
+            "/connection", data={"server_url": "https://immich.test", "api_key": "secret"}
+        )
+        assert response.status_code == 200
+        assert "Connected for test" in response.text
+        assert "secret" not in response.text
+        response = client.post("/album/select", data={"album_id": "album"})
+        assert "1 of 2 images eligible" in response.text
+        assert "wide.jpg" in response.text
+        response = client.post(
+            "/workflow",
+            data={
+                "orientation": "portrait",
+                "rotation_seconds": "300",
+                "timezone": "Europe/London",
+                "display_width_px": "800",
+                "display_height_px": "480",
+                "expected_refresh_seconds": "28",
+                "render_timeout_seconds": "90",
+            },
+        )
+        assert "tall.jpg" in response.text
+        health = client.get("/health")
+        assert health.status_code == 200
+        assert health.json()["status"] == "healthy"
+
+
+def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path):
+    app = create_app(tmp_path, lambda _url, _key: FakeProvider())
+    with TestClient(app) as client:
+        client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
+        client.post("/album/select", data={"album_id": "album"})
+        client.post(
+            "/workflow",
+            data={
+                "orientation": "landscape",
+                "rotation_seconds": "300",
+                "timezone": "Europe/London",
+                "display_width_px": "1200",
+                "display_height_px": "800",
+                "expected_refresh_seconds": "28",
+                "render_timeout_seconds": "90",
+            },
+        )
+        runtime = app.state.runtime
+        original_start = runtime.repository.load().frame.starting_photo_id
+        response = client.post("/photo/preview", data={"photo_id": "wide"})
+        assert "SELECTED PREVIEW" in response.text
+        assert "Show now" in response.text
+        assert runtime.repository.load().frame.starting_photo_id == original_start
+        response = client.post("/render/start")
+        assert "Preparing image" in response.text
+        assert runtime.renderer.state.photo_id == "wide"
+        assert runtime.prepared_image is not None
+        assert runtime.prepared_image.size == (1200, 800)
+
+
+def test_render_requires_native_display_dimensions(tmp_path: Path):
+    app = create_app(tmp_path, lambda _url, _key: FakeProvider())
+    with TestClient(app) as client:
+        client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
+        client.post("/album/select", data={"album_id": "album"})
+        client.post("/photo/preview", data={"photo_id": "wide"})
+        response = client.post("/render/start")
+
+    assert "native display width and height" in response.text
+
+
+def test_demo_mode_is_local_and_renderable(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    with TestClient(app) as client:
+        page = client.get("/partials/workspace")
+        assert "Quiet places" in page.text
+        assert "SELECTED ALBUM" in page.text
+        assert "Demo library" in page.text
+        assert "Local preview · no network" in page.text
+        assert 'name="timezone"' not in page.text
+        assert 'class="album-thumbnail" src="/thumbnail/coast"' in page.text
+        assert "Northumberland coast.jpg" in page.text
+        assert client.get("/thumbnail/coast").headers["content-type"] == "image/svg+xml"

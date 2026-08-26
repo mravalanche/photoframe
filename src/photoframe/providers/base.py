@@ -1,0 +1,16 @@
+from typing import Protocol, runtime_checkable
+
+from ..models import Album, Photo
+
+
+class ProviderError(RuntimeError):
+    pass
+
+
+@runtime_checkable
+class PhotoProvider(Protocol):
+    def validate_connection(self) -> str: ...
+    def list_albums(self) -> list[Album]: ...
+    def list_photos(self, album_id: str) -> list[Photo]: ...
+    def thumbnail(self, photo_id: str) -> tuple[bytes, str]: ...
+    def original(self, photo_id: str) -> tuple[bytes, str]: ...

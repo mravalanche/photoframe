@@ -1,78 +1,112 @@
 # Photoframe
-[![Run Tests](https://github.com/mravalanche/photoframe/actions/workflows/test.yaml/badge.svg)](https://github.com/mravalanche/photoframe/actions/workflows/test.yaml)  
 
-This library allows you to use a Pimoroni Inky Impression eInk display, as a digital photoframe.  
-If I get it working correctly, we'll be able to interface with Google Photos, pull all the pictures out of an album, and play them in a random order.
+A local-first FastAPI application for configuring and proving a photo-frame workflow before
+connecting e-ink hardware. Version one connects to Immich, selects an album, filters images to
+the frame orientation, and deterministically shows which photo is active now and when it changes.
 
-## Hardware
-Really simple hardware for this one:
-- A [Pimoroni Inky Impression](https://shop.pimoroni.com/products/inky-impression-7-3) (7.3" for my deployment)
-- A Raspberry Pi Zero 2 W (I'm using the one with the [pre-soldered header from PiHut](https://thepihut.com/products/raspberry-pi-zero-2?variant=43855634497731))
-- A micro-usb cable and compatible power supply
-- An 8" photoframe to put everything in
+The previous Flask application is preserved unchanged in `archive/legacy-flask/`.
 
-## Pre-Requisites
+## Run
 
-### Authenticate with Google Cloud
-
-We need API access to Photos on Google Cloud.
-
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and log in with your account
-1. Make a new project:
-    1. Click "Select a project" in the top left, and click "New project"
-    1. Give it a name (something like "photoframe") and follow the prompts to continue
-    1. Select the project, once created ("Select a project")
-1. Enable the Google Photos API
-    1. Select "Enabled APIs and service" on the left, or search
-    1. Click "Enable APIs and Services" at the top of the page
-    1. Search for `photoslibrary.googleapis.com` and select "Google Photos Library API"
-    1. Click "Enable"
-1. Create some credentials
-    1. Under the same API menu on the left, click "Credentials" then "Create Credentials" selecting "OAuth client ID" from the dropdown
-    1. If prompted, follow the instructions to create a consent screen
-    1. Create an OAuth client ID, with application type of "Desktop app"
-    1. Click on your client, and save the client ID and secret in your .env file. It should look like the .env file example below
-1. Enable data access
-    1. Go to the "Data access" tab on the left (under Google Auth Platform)
-    1. Click "add or remove scopes"
-    1. Search for `photoslibrary.readonly` in the filter, and tick the scope, clicking "Update" to finish
-1. Go to "audience", and add your email as a "Test user"
-
-
-```.env
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-ALBUM_ID=your-google-photos-album-id
+```powershell
+uv sync
+uv run photoframe
 ```
 
+Then open <http://127.0.0.1:8000>. To use a different data directory, set
+`PHOTOFRAME_DATA_DIR`; it defaults to `./data`.
 
+Create an Immich API key with album and asset read access. Enter the server root URL (for example
+`https://photos.example.com`) and the key in the app. The key is never rendered back to the browser.
+It is encrypted locally in `data/secrets.bin`; its separate key file and data directory are made
+owner-only where the platform supports it. Treat the machine account as the security boundary.
 
-## Setup
+Configuration is human-editable TOML in `data/settings.toml`. Writes are validated and atomic.
+After hand-editing it, restart the app so validation is applied.
 
-Todo.
+## Display image preparation
 
-### Clone this library
+Set **Native width** and **Native height** in the workflow settings to the exact pixel dimensions
+of the installed e-ink panel. They are deliberately not guessed: a production frame must identify
+its own panel resolution. Both fields must be set before a render can begin.
 
-Wherever works for you (probably your home directory) clone this library:
-```bash
-git clone https://github.com/mravalanche/photoframe.git
-```
+On each render, Photoframe downloads the selected asset's original image and uses Pillow to apply
+EXIF orientation, convert it to RGB, crop it centrally to the panel's aspect ratio, and resize it
+with Lanczos resampling. The result exactly matches the configured panel dimensions. It is retained
+in memory as the handoff to the e-ink driver; panel-specific palette conversion remains the
+driver's responsibility.
 
-### Set up your python virtual environment
+## Pimoroni Inky display
 
-The pimoroni libraries don't like be run from the system python, so instead should be run from a .venv, so lets set that up:
+Install the official hardware support on the Pi with `uv sync --extra inky`. At startup,
+Photoframe asks Inky to auto-detect the attached panel and saves its model and native resolution
+in `settings.toml`; the image pipeline prepares images at exactly that resolution. If detection is
+unavailable, select **Pimoroni Inky** in Frame settings and enter a model label plus width and
+height manually. Development hosts remain hardware-free, and selecting **Mock** disables probing.
+
+## Raspberry Pi installation
+
+Using a `systemd` service with `uv` is an appropriate deployment model for a single Pi: systemd
+starts the app at boot and restarts it after a crash, while `uv` creates and uses the checkout's
+locked virtual environment. Install `uv` for the regular Linux user that owns this checkout, then
+on the Pi run:
 
 ```bash
-cd <directory for photoframe>
-python -m venv .venv
+sudo bash ./scripts/install.sh
 ```
 
-## Todo
+The installer synchronizes `uv.lock`, creates `data/` with owner-only permissions, installs and
+enables `photoframe.service`, and starts it. It runs the service as the user who invoked `sudo`,
+never as root. The service binds to localhost on port 8000; use a reverse proxy or SSH tunnel if
+you need remote access. Useful variants are:
 
-- [x] Add Google Photos Interface
-- [ ] Try not to leak any creds
-- [ ] Add Pimoroni Interface
-- [ ] Write pre-requisite instructions
-- [ ] Write setup instruction
-- [ ] Do everything else in the universe
-- [ ] Write tests
+```bash
+sudo bash ./scripts/install.sh --user pi --data-dir /var/lib/photoframe
+sudo bash ./scripts/install.sh --no-start
+sudo systemctl status photoframe
+sudo journalctl -u photoframe -f
+```
+
+Run the installer again after updating the checkout to re-sync dependencies and refresh the unit.
+To remove just the boot service, while preserving configuration, encrypted credentials, and the
+checkout, run:
+
+```bash
+sudo bash ./scripts/uninstall.sh
+```
+
+## Unattended refresh, cache, and monitoring
+
+Photoframe maintains a local cache of provider originals under `data/photo-cache/`.
+The worker refreshes the selected album catalog, prefetches a bounded number of
+orientation-eligible images, and uses the cached original during rendering. Its
+settings are in the `[refresh]` section of `settings.toml`: `cache_max_bytes`
+(four GiB by default), `cache_prefetch_count`, `catalog_refresh_seconds`, and
+`retry_seconds`. Least-recently-used originals are removed before a new download
+would exceed the configured capacity. A source outage leaves the previously
+cached images intact and the worker retries after `retry_seconds`.
+
+`GET /health` is suitable for an Uptime Kuma HTTP monitor. It returns HTTP 200
+and `status: healthy` after a successful, non-stale refresh. Before the first
+success, after a failed refresh, or once the last success is older than
+`health_stale_seconds`, it returns HTTP 503 with `status: degraded`, the retry
+time, cache usage, and failure count. Monitoring the endpoint therefore detects
+an application which is running but can no longer refresh its photo source.
+
+## Development
+
+```powershell
+uv run pytest
+uv run ruff check .
+```
+
+The Immich adapter keeps API paths and compatibility parsing isolated in
+`src/photoframe/providers/immich.py`. It supports both album responses containing `assets` and
+newer servers that require metadata search. Any incompatible server response is surfaced in the UI
+instead of being guessed silently.
+
+## Nice-to-have improvements
+
+- Enrich FastAPI's generated OpenAPI documentation with typed request bodies for the form-based
+  workflow routes and explicit response models for endpoints such as `GET /health`. All routes are
+  already listed at `/docs`, but these schemas would make the page a complete, useful API contract.
