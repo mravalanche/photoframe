@@ -43,7 +43,7 @@ safe_path "$PROJECT_DIR"; safe_path "$DATA_DIR"; safe_path "$UV_BIN"; safe_path 
 
 mkdir -p "$DATA_DIR"; chown "$APP_USER:$APP_GROUP" "$DATA_DIR"; chmod 700 "$DATA_DIR"
 echo "Syncing locked dependencies with uv as $APP_USER..."
-runuser -u "$APP_USER" -- env PHOTOFRAME_DATA_DIR="$DATA_DIR" "$UV_BIN" sync --frozen
+runuser -u "$APP_USER" -- env PHOTOFRAME_DATA_DIR="$DATA_DIR" "$UV_BIN" sync --frozen --extra inky
 
 escape_sed() { printf '%s' "$1" | sed 's/[&|]/\\&/g'; }
 tmp_unit="$(mktemp)"; trap 'rm -f "$tmp_unit"' EXIT
