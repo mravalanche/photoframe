@@ -26,7 +26,17 @@ inky = ["inky>=2.0"]
 photoframe = "photoframe.__main__:main"
 
 [dependency-groups]
-dev = ["pytest>=8.3", "pytest-cov>=6.0", "ruff>=0.9"]
+dev = [
+  "bandit>=1.8",
+  "deptry>=0.23",
+  "detect-secrets>=1.5",
+  "pip-audit>=2.9",
+  "poethepoet>=0.37",
+  "pre-commit>=4.3",
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+  "ruff>=0.9",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -46,3 +56,26 @@ exclude = ["archive", ".tools", ".venv"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.deptry]
+known_first_party = ["photoframe"]
+
+[tool.deptry.per_rule_ignores]
+# Runtime integrations which are intentionally consumed indirectly by FastAPI,
+# ZoneInfo, or the optional dynamic hardware loader.
+DEP002 = ["jinja2", "python-multipart", "tzdata", "inky"]
+
+[tool.poe.tasks]
+test = { cmd = "pytest", help = "Run the test suite" }
+lint = { cmd = "ruff check .", help = "Lint Python, including unused imports and variables" }
+unused = { cmd = "ruff check --select F401,F841 src tests", help = "Report unused imports and local variables explicitly" }
+format-check = { cmd = "ruff format --check src tests", help = "Verify Python formatting without changing files" }
+deps-check = { cmd = "deptry src", help = "Find missing, transitive, and unused dependency declarations" }
+deps-tree = { cmd = "python scripts/uv_tree.py", help = "Print the complete locked UV dependency tree" }
+security-code = { cmd = "bandit -q -r src", help = "Run static application security checks" }
+security-secrets = { cmd = "pre-commit run detect-secrets --all-files", help = "Scan tracked files against the reviewed secrets baseline" }
+security-audit = { cmd = "pip-audit --local --progress-spinner off", help = "Check installed dependencies against published advisories" }
+check-fast = { sequence = ["test", "lint", "unused", "format-check", "deps-check", "deps-tree", "security-code"], help = "Run the deterministic offline commit gate" }
+security = { sequence = ["security-code", "security-secrets", "security-audit"], help = "Run code, secret, and dependency security checks" }
+check = { sequence = ["check-fast", "security-secrets", "security-audit"], help = "Run the complete pre-push quality and security gate" }
+pre-commit = { cmd = "pre-commit run --all-files", help = "Run the configured Git pre-commit hooks" }

@@ -96,9 +96,27 @@ an application which is running but can no longer refresh its photo source.
 ## Development
 
 ```powershell
-uv run pytest
-uv run ruff check .
+uv sync --all-groups
+uv run poe check
 ```
+
+`uv run poe check` is the complete pre-push gate. It runs the tests, Ruff linting and
+format verification, explicit unused import/variable checks, dependency declaration checks,
+the full UV dependency tree, Bandit static security analysis, tracked-file secret detection,
+and a published-vulnerability audit of the installed environment.
+
+For a fast, deterministic check before each local commit, use:
+
+```powershell
+uv run poe check-fast
+uv run poe pre-commit
+```
+
+The first command runs the offline quality and source-security gate. The second runs the local
+pre-commit configuration, including secret detection against the reviewed `.secrets.baseline`.
+The dependency vulnerability audit needs advisory data, so it remains part of the full
+`uv run poe check` gate. Run `uv run poe --help` to list every focused task, including
+`deps-tree`, `deps-check`, and the individual `security-*` checks.
 
 The Immich adapter keeps API paths and compatibility parsing isolated in
 `src/photoframe/providers/immich.py`. It supports both album responses containing `assets` and

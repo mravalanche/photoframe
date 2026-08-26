@@ -1,0 +1,15 @@
+repos:
+  - repo: local
+    hooks:
+      - id: detect-secrets
+        name: Detect leaked secrets
+        # Module execution avoids Windows Application Control blocking the
+        # generated detect-secrets-hook executable shim.
+        entry: python -m detect_secrets.pre_commit_hook --baseline .secrets.baseline
+        language: system
+        pass_filenames: true
+      - id: photoframe-quality
+        name: Photoframe offline quality gate
+        entry: poe check-fast
+        language: system
+        pass_filenames: false
