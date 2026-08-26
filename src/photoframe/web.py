@@ -341,9 +341,9 @@ def create_app(
     def stop_refresh_worker() -> None:
         worker.stop()
 
-    def workspace(
+    def workspace_context(
         request: Request, notice: str | None = None, error: str | None = None
-    ) -> HTMLResponse:
+    ) -> dict:
         settings = repository.load()
         if not runtime.loaded and settings.verification.ok:
             try:
@@ -367,33 +367,39 @@ def create_app(
             (RenderPhase.WAITING, "Waiting for e-ink refresh"),
             (RenderPhase.COMPLETE, "Complete"),
         ]
+        return {
+            "request": request,
+            "settings": settings,
+            "credential_saved": secrets.exists(),
+            "albums": albums,
+            "photos": photos,
+            "eligible": eligible,
+            "selection": selection,
+            "displayed_photo": displayed_photo,
+            "selected_photo": selected_photo,
+            "render_photo": render_photo,
+            "render_state": render_state,
+            "render_phases": phases,
+            "RenderPhase": RenderPhase,
+            "next_change": schedule_label(selection.next_change_at, settings.device.timezone),
+            "source_name": "Demo library" if is_demo else settings.provider.kind.value.title(),
+            "source_detail": (
+                "Local preview · no network"
+                if is_demo
+                else str(settings.provider.server_url or "Not configured")
+            ),
+            "notice": notice,
+            "error": error,
+            "demo_mode": is_demo,
+        }
+
+    def workspace(
+        request: Request, notice: str | None = None, error: str | None = None
+    ) -> HTMLResponse:
         return templates.TemplateResponse(
             request,
             "_workspace.html",
-            {
-                "settings": settings,
-                "credential_saved": secrets.exists(),
-                "albums": albums,
-                "photos": photos,
-                "eligible": eligible,
-                "selection": selection,
-                "displayed_photo": displayed_photo,
-                "selected_photo": selected_photo,
-                "render_photo": render_photo,
-                "render_state": render_state,
-                "render_phases": phases,
-                "RenderPhase": RenderPhase,
-                "next_change": schedule_label(selection.next_change_at, settings.device.timezone),
-                "source_name": "Demo library" if is_demo else settings.provider.kind.value.title(),
-                "source_detail": (
-                    "Local preview · no network"
-                    if is_demo
-                    else str(settings.provider.server_url or "Not configured")
-                ),
-                "notice": notice,
-                "error": error,
-                "demo_mode": is_demo,
-            },
+            workspace_context(request, notice=notice, error=error),
         )
 
     @app.get("/", response_class=HTMLResponse)
@@ -403,6 +409,16 @@ def create_app(
     @app.get("/partials/workspace", response_class=HTMLResponse)
     def workspace_partial(request: Request) -> HTMLResponse:
         return workspace(request)
+
+    @app.get("/partials/frame-status", response_class=HTMLResponse)
+    def frame_status_partial(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(request, "_frame_status.html", workspace_context(request))
+
+    @app.get("/partials/render-status", response_class=HTMLResponse)
+    def render_status_partial(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request, "_render_status.html", workspace_context(request)
+        )
 
     @app.post("/connection", response_class=HTMLResponse)
     async def save_connection(request: Request) -> HTMLResponse:

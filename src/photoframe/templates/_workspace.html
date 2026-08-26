@@ -1,4 +1,4 @@
-<div id="workspace" class="workspace" hx-get="/partials/workspace" hx-trigger="every {{ '1s' if render_state.active else '30s' }}" hx-swap="outerHTML">
+<div id="workspace" class="workspace">
   {% if notice %}<div class="notice success" role="status">{{ notice }}</div>{% endif %}
   {% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
 
@@ -11,21 +11,7 @@
     <div class="device-status {{ 'online' if settings.verification.ok else '' }}"><span></span><div class="source-identity"><strong>{{ source_name if settings.verification.ok else 'Setup required' }}</strong><small>{{ source_detail if settings.verification.ok else 'No photo library connected' }}</small></div></div>
   </section>
 
-  <section class="frame-section">
-    <div class="frame-meta">
-      <div><span>ON FRAME</span><strong>{{ displayed_photo.filename if displayed_photo else 'Nothing selected yet' }}</strong></div>
-      <div class="schedule"><span>NEXT CHANGE</span><strong>{{ next_change if selection.photo else 'Not scheduled' }}</strong></div>
-    </div>
-    <div class="frame-canvas">
-      <div class="digital-frame {{ settings.frame.orientation.value }}">
-        {% if displayed_photo %}<img src="/thumbnail/{{ displayed_photo.id }}" alt="Photo currently represented on the frame">
-        {% else %}<div class="frame-empty"><span>PF</span><p>Your selected photo will appear here</p></div>{% endif %}
-      </div>
-    </div>
-    <div class="frame-foot">
-      <span>{{ settings.frame.orientation.value|title }} frame</span><span>Rotation every {{ (settings.frame.rotation_seconds // 3600)|string + ' hr' if settings.frame.rotation_seconds >= 3600 else (settings.frame.rotation_seconds // 60)|string + ' min' }}</span><span>{{ settings.device.timezone }} · 24-hour</span>
-    </div>
-  </section>
+  {% include "_frame_status.html" %}
 
   {% if eligible %}
   <section class="library-section" aria-labelledby="library-title">
@@ -48,16 +34,7 @@
   </section>
   {% endif %}
 
-  {% if render_state.phase != RenderPhase.IDLE %}
-  <section class="render-state {{ 'failed' if render_state.phase == RenderPhase.FAILED }}" aria-live="polite">
-    <div class="render-heading"><div><p class="kicker">FRAME UPDATE</p><h2>{% if render_state.phase == RenderPhase.COMPLETE %}Refresh complete{% elif render_state.phase == RenderPhase.FAILED %}Refresh timed out{% else %}Updating the frame{% endif %}</h2></div><span class="elapsed">{{ render_state.elapsed_seconds }} sec elapsed</span></div>
-    <div class="phase-track">
-      {% for phase,label in render_phases %}<div class="phase {% if render_state.phase == phase %}current{% elif render_state.phase == RenderPhase.COMPLETE or (render_state.phase == RenderPhase.WAITING and phase in [RenderPhase.PREPARING, RenderPhase.SENDING]) or (render_state.phase == RenderPhase.SENDING and phase == RenderPhase.PREPARING) %}done{% endif %}"><i></i><span>{{ label }}</span></div>{% endfor %}
-    </div>
-    <div class="render-detail">{% if render_state.phase == RenderPhase.PREPARING %}<p>Preparing <strong>{{ render_photo.filename }}</strong> for the display.</p>{% elif render_state.phase == RenderPhase.SENDING %}<p>Sending the prepared image to the frame controller.</p>{% elif render_state.phase == RenderPhase.WAITING %}<p>The image has been sent. Waiting for the e-ink busy signal to clear; a typical refresh is around {{ settings.device.expected_refresh_seconds }} seconds.</p>{% elif render_state.phase == RenderPhase.COMPLETE %}<p><strong>{{ render_photo.filename }}</strong> is now represented as shown on the frame.</p>{% else %}<p>{{ render_state.message }}</p>{% endif %}<small>No percentage is shown because e-ink hardware reports phases and a busy signal, not smooth progress. Safety timeout: {{ settings.device.render_timeout_seconds }} sec.</small></div>
-    {% if not render_state.active %}<form method="post" action="/render/reset" hx-post="/render/reset" hx-target="#workspace" hx-swap="outerHTML"><button class="primary">Done</button></form>{% endif %}
-  </section>
-  {% endif %}
+  {% include "_render_status.html" %}
 
   <section class="settings-section">
     <div class="section-heading"><div><p class="kicker">CONFIGURATION</p><h2>Frame settings</h2></div><p>Human-editable settings are stored locally.</p></div>

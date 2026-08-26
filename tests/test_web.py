@@ -146,3 +146,23 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
         "render_timeout_seconds",
     ):
         assert f'name="{name}"' in workspace.text
+
+
+def test_background_polling_never_replaces_the_settings_workspace(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    with TestClient(app) as client:
+        workspace = client.get("/partials/workspace")
+        client.post("/photo/preview", data={"photo_id": "coast"})
+        render_started = client.post("/render/start")
+        frame_status = client.get("/partials/frame-status")
+        render_status = client.get("/partials/render-status")
+
+    workspace_tag = workspace.text.split(">", 1)[0]
+    assert workspace_tag == '<div id="workspace" class="workspace"'
+    assert 'id="frame-status"' in workspace.text
+    assert 'hx-get="/partials/frame-status"' in frame_status.text
+    assert 'hx-trigger="every 30s"' in frame_status.text
+    assert 'id="render-status"' in render_started.text
+    assert 'hx-get="/partials/render-status"' in render_started.text
+    assert 'hx-trigger="every 1s"' in render_started.text
+    assert 'hx-target="#workspace"' not in render_status.text
