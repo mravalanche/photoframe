@@ -105,8 +105,16 @@ The Immich adapter keeps API paths and compatibility parsing isolated in
 newer servers that require metadata search. Any incompatible server response is surfaced in the UI
 instead of being guessed silently.
 
+HTMX is vendored at `src/photoframe/static/vendor/htmx-2.0.4.min.js` from the
+official `htmx.org@2.0.4` production distribution. The UI therefore has no
+runtime CDN or internet dependency.
+
 ## Nice-to-have improvements
 
 - Enrich FastAPI's generated OpenAPI documentation with typed request bodies for the form-based
   workflow routes and explicit response models for endpoints such as `GET /health`. All routes are
   already listed at `/docs`, but these schemas would make the page a complete, useful API contract.
+- Run a dedicated WCAG and assistive-technology audit, including focus visibility, contrast,
+  reduced-motion behaviour, and screen-reader announcements for HTMX-updated status content.
+- Broaden visual regression coverage across additional mobile browsers and intermediate viewport
+  widths beyond the acceptance sizes used for version one.

@@ -116,3 +116,33 @@ def test_demo_mode_is_local_and_renderable(tmp_path: Path):
         assert 'class="album-thumbnail" src="/thumbnail/coast"' in page.text
         assert "Northumberland coast.jpg" in page.text
         assert client.get("/thumbnail/coast").headers["content-type"] == "image/svg+xml"
+
+
+def test_ui_acceptance_contracts_are_present(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    with TestClient(app) as client:
+        page = client.get("/")
+        workspace = client.get("/partials/workspace")
+        selected_workspace = client.post("/photo/preview", data={"photo_id": "coast"})
+        htmx = client.get("/static/vendor/htmx-2.0.4.min.js")
+
+    assert "/static/vendor/htmx-2.0.4.min.js" in page.text
+    assert "unpkg.com" not in page.text
+    assert htmx.status_code == 200
+    assert 'version:"2.0.4"' in htmx.text
+    assert 'data-theme-choice="light" aria-pressed="false"' in page.text
+    assert 'data-theme-choice="dark" aria-pressed="true"' in page.text
+    assert 'action="/photo/start"' in selected_workspace.text
+    assert "Start rotation here" in selected_workspace.text
+    assert "Advanced / manual hardware settings" in workspace.text
+    assert '<details class="advanced-settings span-2">' in workspace.text
+    assert '<details class="advanced-settings span-2" open' not in workspace.text
+    for name in (
+        "display_driver",
+        "display_model",
+        "display_width_px",
+        "display_height_px",
+        "expected_refresh_seconds",
+        "render_timeout_seconds",
+    ):
+        assert f'name="{name}"' in workspace.text
