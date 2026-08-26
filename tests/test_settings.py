@@ -1,4 +1,5 @@
 from pathlib import Path
+from threading import Barrier, Thread
 
 from photoframe.models import AppSettings
 from photoframe.settings import SecretStore, SettingsRepository
@@ -26,3 +27,37 @@ def test_invalid_human_edit_is_rejected(tmp_path: Path):
         pass
     else:
         raise AssertionError("invalid TOML settings should fail validation")
+
+
+def test_repository_update_preserves_prior_transaction(tmp_path: Path):
+    repository = SettingsRepository(tmp_path)
+    repository.load()
+    repository.update(lambda settings: setattr(settings.frame, "album_name", "One"))
+    repository.update(lambda settings: setattr(settings.verification, "message", "Checked"))
+    loaded = repository.load()
+    assert loaded.frame.album_name == "One"
+    assert loaded.verification.message == "Checked"
+
+
+def test_concurrent_transactions_do_not_lose_updates(tmp_path: Path):
+    repository = SettingsRepository(tmp_path)
+    repository.load()
+    start = Barrier(3)
+
+    def album_update():
+        start.wait()
+        repository.update(lambda settings: setattr(settings.frame, "album_name", "Concurrent"))
+
+    def verification_update():
+        start.wait()
+        repository.update(lambda settings: setattr(settings.verification, "message", "Current"))
+
+    threads = [Thread(target=album_update), Thread(target=verification_update)]
+    for thread in threads:
+        thread.start()
+    start.wait()
+    for thread in threads:
+        thread.join()
+    loaded = repository.load()
+    assert loaded.frame.album_name == "Concurrent"
+    assert loaded.verification.message == "Current"

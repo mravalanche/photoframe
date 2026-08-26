@@ -13,6 +13,7 @@ import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from threading import RLock
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class PhotoCache:
     def __init__(self, data_dir: Path, max_bytes: int) -> None:
         self.path = data_dir / "photo-cache"
         self.max_bytes = max_bytes
+        self._lock = RLock()
 
     @staticmethod
     def _name(key: str) -> str:
@@ -34,24 +36,35 @@ class PhotoCache:
         return self.path / self._name(key)[:2] / self._name(key)
 
     def get(self, key: str) -> bytes | None:
-        path = self._file(key)
-        try:
-            content = path.read_bytes()
-            # atime is unreliable on many Pi filesystems; use mtime as an LRU
-            # marker instead, without changing the file contents.
-            os.utime(path, None)
-            return content
-        except FileNotFoundError:
-            return None
+        with self._lock:
+            path = self._file(key)
+            try:
+                content = path.read_bytes()
+                # atime is unreliable on many Pi filesystems; use mtime as an
+                # LRU marker instead, without changing the file contents.
+                os.utime(path, None)
+                return content
+            except FileNotFoundError:
+                return None
 
     def stats(self) -> CacheStats:
-        try:
-            entries = [p for p in self.path.rglob("*.image") if p.is_file()]
-        except FileNotFoundError:
-            return CacheStats(0, 0)
-        return CacheStats(len(entries), sum(p.stat().st_size for p in entries))
+        with self._lock:
+            try:
+                entries = [p for p in self.path.rglob("*.image") if p.is_file()]
+            except FileNotFoundError:
+                return CacheStats(0, 0)
+            return CacheStats(len(entries), sum(p.stat().st_size for p in entries))
 
     def put(self, key: str, content: bytes) -> None:
+        with self._lock:
+            self._put(key, content)
+
+    def set_max_bytes(self, value: int) -> None:
+        with self._lock:
+            self.max_bytes = value
+            self._evict_until(value, exclude=Path())
+
+    def _put(self, key: str, content: bytes) -> None:
         if len(content) > self.max_bytes:
             # An original larger than the complete cache cannot be safely kept.
             return

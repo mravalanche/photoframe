@@ -116,6 +116,10 @@ class RefreshStatus(BaseModel):
     last_error: str | None = None
     cached_photo_count: Annotated[int, Field(ge=0)] = 0
     cached_bytes: Annotated[int, Field(ge=0)] = 0
+    last_completed_schedule_slot: int | None = None
+    last_completed_schedule_anchor: datetime | None = None
+    last_rendered_photo_id: str | None = None
+    last_render_error: str | None = None
 
 
 class Verification(BaseModel):

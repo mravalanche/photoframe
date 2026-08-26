@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from threading import Event, Thread
 from typing import Protocol
@@ -71,6 +72,8 @@ def health_payload(
         status.last_success_at is not None
         and age is not None
         and age <= settings.refresh.health_stale_seconds
+        and status.consecutive_failures == 0
+        and status.last_render_error is None
     )
     state = "healthy" if healthy else "degraded"
     return (
@@ -82,7 +85,11 @@ def health_payload(
             "consecutive_failures": status.consecutive_failures,
             "cached_photo_count": status.cached_photo_count,
             "cached_bytes": status.cached_bytes,
-            "detail": status.last_error if not healthy else "Refresh lifecycle is current",
+            "detail": (
+                status.last_render_error or status.last_error
+                if not healthy
+                else "Refresh lifecycle is current"
+            ),
         },
         healthy,
     )
@@ -91,8 +98,13 @@ def health_payload(
 class RefreshWorker:
     """Small daemon worker; systemd remains responsible for process recovery."""
 
-    def __init__(self, run_once: Callable[[], bool]) -> None:
+    def __init__(
+        self,
+        run_once: Callable[[], bool],
+        on_unexpected: Callable[[Exception], None] | None = None,
+    ) -> None:
         self.run_once = run_once
+        self.on_unexpected = on_unexpected
         self.stop_event = Event()
         self.thread = Thread(target=self._run, name="photoframe-refresh", daemon=True)
 
@@ -105,7 +117,12 @@ class RefreshWorker:
 
     def _run(self) -> None:
         while not self.stop_event.is_set():
-            self.run_once()
+            try:
+                self.run_once()
+            except Exception as exc:  # keep the daemon alive after integration faults
+                if self.on_unexpected:
+                    with suppress(Exception):
+                        self.on_unexpected(exc)
             # A short polling interval ensures a configured retry happens near
             # its due time without keeping a request thread alive.
             self.stop_event.wait(15)

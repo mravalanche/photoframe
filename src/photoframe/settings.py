@@ -2,8 +2,10 @@ import os
 import stat
 import tempfile
 import tomllib
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
+from threading import RLock
 
 import tomli_w
 from cryptography.fernet import Fernet, InvalidToken
@@ -36,19 +38,30 @@ class SettingsRepository:
     def __init__(self, data_dir: Path):
         self.data_dir = data_dir
         self.path = data_dir / "settings.toml"
+        self._lock = RLock()
 
     def load(self) -> AppSettings:
-        if not self.path.exists():
-            settings = AppSettings()
-            self.save(settings)
-            return settings
-        with self.path.open("rb") as handle:
-            return AppSettings.model_validate(tomllib.load(handle))
+        with self._lock:
+            if not self.path.exists():
+                settings = AppSettings()
+                self.save(settings)
+                return settings
+            with self.path.open("rb") as handle:
+                return AppSettings.model_validate(tomllib.load(handle))
 
     def save(self, settings: AppSettings) -> None:
-        validated = AppSettings.model_validate(settings)
-        payload = tomli_w.dumps(validated.model_dump(mode="json", exclude_none=True)).encode()
-        _atomic_write(self.path, payload)
+        with self._lock:
+            validated = AppSettings.model_validate(settings)
+            payload = tomli_w.dumps(validated.model_dump(mode="json", exclude_none=True)).encode()
+            _atomic_write(self.path, payload)
+
+    def update(self, change: Callable[[AppSettings], None]) -> AppSettings:
+        """Apply one validated read-modify-write transaction."""
+        with self._lock:
+            settings = self.load()
+            change(settings)
+            self.save(settings)
+            return settings
 
 
 class SecretStore:
