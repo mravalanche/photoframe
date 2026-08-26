@@ -20,12 +20,14 @@ class FakePanel:
     def __init__(self):
         self.image = None
         self.shown = False
+        self.busy_wait = None
 
     def set_image(self, image):
         self.image = image
 
-    def show(self):
+    def show(self, *, busy_wait):
         self.shown = True
+        self.busy_wait = busy_wait
 
 
 def test_auto_detect_persists_native_capabilities(monkeypatch):
@@ -49,6 +51,7 @@ def test_inky_requires_native_sized_image():
         display.show(Image.new("RGB", (100, 100)))
     display.show(Image.new("RGB", (800, 480)))
     assert panel.shown
+    assert panel.busy_wait is True
 
 
 def test_manual_dimensions_survive_missing_inky(monkeypatch):

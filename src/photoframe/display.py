@@ -98,7 +98,10 @@ class InkyDisplay:
             self._panel.set_image(image)
             # Inky's show() waits for the panel refresh. Do not emulate a busy
             # percentage: the call is the authoritative completion boundary.
-            self._panel.show()
+            # The busy signal clearing is the only truthful completion boundary.
+            # Refuse drivers which do not support this contract rather than
+            # silently falling back to a non-blocking refresh.
+            self._panel.show(busy_wait=True)
         except Exception as exc:
             raise DisplayError(f"Pimoroni Inky failed to refresh: {exc}") from exc
 
