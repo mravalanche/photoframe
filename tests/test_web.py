@@ -58,6 +58,7 @@ def test_complete_local_web_flow(tmp_path: Path):
             },
         )
         assert "tall.jpg" in response.text
+        assert "Every 5 minutes · In album order · Portrait" in response.text
         health = client.get("/health")
         assert health.status_code == 200
         assert health.json()["status"] == "healthy"
@@ -167,12 +168,155 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
         "render_timeout_seconds",
     ):
         assert f'name="{name}"' in workspace.text
-    assert 'data-settings-panel="reset"' in workspace.text
+    assert 'data-settings-panel="advanced"' in workspace.text
+    assert "Advanced settings" in workspace.text
+    assert "Every 1 hour · In album order · Landscape" in workspace.text
+    assert "Simulator · 24-hour" not in workspace.text
+    assert "Network & web security" in workspace.text
+    assert "This device only" in workspace.text
+    assert "Devices on my local network" in workspace.text
+    assert 'name="network_access" value="local_network"' in workspace.text
+    assert "home_network" not in workspace.text
+    assert "home_network" not in page.text
+    assert (
+        "Devices on this network can connect through this device\u2019s local IP address"
+        in workspace.text
+    )
+    assert "home network" not in workspace.text.lower()
+    assert "Trusted LAN" not in workspace.text
+    assert 'name="web_protocol" value="http"' in workspace.text
+    assert 'name="web_protocol" value="https"' in workspace.text
+    assert "data-certificate-controls hidden" in workspace.text
+    assert "Address after restart" in workspace.text
+    assert "setupNetworkSettings" in page.text
+    assert "confirmNetworkChange" in page.text
+    assert 'class="advanced-card-content advanced-card-body"' in workspace.text
+    assert 'id="network-port"' in workspace.text
+    assert 'aria-describedby="network-port-help"' in workspace.text
+    assert 'aria-describedby="certificate-path-help"' in workspace.text
+    assert 'aria-describedby="private-key-path-help"' in workspace.text
+    assert ".advanced-card-body" in responsive_css.text
+    assert "padding: 26px 32px" in responsive_css.text
+    assert ".network-field > input" in responsive_css.text
+    assert "@media (max-width: 700px)" in responsive_css.text
     assert "Reset Photoframe to defaults?" in workspace.text
     assert "Keep current settings" in workspace.text
     assert "Reset to defaults" in workspace.text
     assert 'name="photo_order"' in workspace.text
     assert "Controls future scheduled changes" in workspace.text
+
+
+def test_network_change_requires_confirmation_and_requests_restart(tmp_path: Path):
+    from photoframe.settings import SettingsRepository
+
+    restarts: list[bool] = []
+    app = create_app(tmp_path, demo_mode=True, restart_callback=lambda: restarts.append(True))
+    payload = {
+        "network_access": "local_network",
+        "network_port": "8443",
+        "web_protocol": "http",
+        "certificate_mode": "automatic",
+    }
+    with TestClient(app) as client:
+        rejected = client.post("/network", data=payload)
+        accepted = client.post("/network", data={**payload, "confirm_endpoint_change": "yes"})
+
+    assert "Confirm the listener change" in rejected.text
+    assert "http://&lt;device-ip&gt;:8443" in accepted.text
+    assert restarts == [True]
+    saved = SettingsRepository(tmp_path).load().network
+    assert saved.bind_address == "0.0.0.0"
+    assert saved.port == 8443
+
+
+def test_network_port_validation_is_user_facing(tmp_path: Path):
+    from photoframe.settings import SettingsRepository
+
+    app = create_app(tmp_path, demo_mode=True)
+    with TestClient(app) as client:
+        response = client.post(
+            "/network",
+            data={
+                "network_access": "device_only",
+                "network_port": "70000",
+                "web_protocol": "http",
+                "certificate_mode": "automatic",
+                "confirm_endpoint_change": "yes",
+            },
+        )
+
+    assert "Network settings were not saved" in response.text
+    assert "Listening port must be between 1 and 65535" in response.text
+    assert SettingsRepository(tmp_path).load().network.port == 8000
+
+
+def test_automatic_https_generates_private_material_outside_ui(tmp_path: Path):
+    from photoframe.settings import SettingsRepository
+
+    app = create_app(tmp_path, demo_mode=True)
+    with TestClient(app) as client:
+        response = client.post(
+            "/network",
+            data={
+                "network_access": "device_only",
+                "network_port": "8000",
+                "web_protocol": "https",
+                "certificate_mode": "automatic",
+                "confirm_endpoint_change": "yes",
+            },
+        )
+
+    private_key = tmp_path / "tls" / "photoframe-local.key"
+    assert private_key.is_file()
+    assert "BEGIN PRIVATE KEY" not in response.text  # pragma: allowlist secret
+    assert "photoframe-local.key" not in response.text
+    assert SettingsRepository(tmp_path).load().network.protocol.value == "https"
+
+
+def test_invalid_supplied_tls_files_do_not_replace_saved_configuration(tmp_path: Path):
+    from photoframe.settings import SettingsRepository
+
+    app = create_app(tmp_path, demo_mode=True)
+    with TestClient(app) as client:
+        response = client.post(
+            "/network",
+            data={
+                "network_access": "device_only",
+                "network_port": "8443",
+                "web_protocol": "https",
+                "certificate_mode": "supplied",
+                "certificate_path": str(tmp_path / "missing.crt"),
+                "private_key_path": str(tmp_path / "missing.key"),
+                "confirm_endpoint_change": "yes",
+            },
+        )
+
+    assert "Certificate file does not exist" in response.text
+    assert SettingsRepository(tmp_path).load().network == AppSettings().network
+
+
+def test_valid_supplied_tls_files_are_preserved(tmp_path: Path):
+    from photoframe.tls import generate_local_certificate
+
+    certificate, key = generate_local_certificate(tmp_path / "supplied")
+    before = (certificate.read_bytes(), key.read_bytes())
+    app = create_app(tmp_path / "app", demo_mode=True)
+    with TestClient(app) as client:
+        response = client.post(
+            "/network",
+            data={
+                "network_access": "local_network",
+                "network_port": "8443",
+                "web_protocol": "https",
+                "certificate_mode": "supplied",
+                "certificate_path": str(certificate),
+                "private_key_path": str(key),
+                "confirm_endpoint_change": "yes",
+            },
+        )
+
+    assert "Network settings saved" in response.text
+    assert (certificate.read_bytes(), key.read_bytes()) == before
 
 
 def test_shuffle_setting_persists_and_start_here_anchors_new_round(tmp_path: Path):
@@ -192,6 +336,7 @@ def test_shuffle_setting_persists_and_start_here_anchors_new_round(tmp_path: Pat
             },
         )
         assert "Scheduled shuffle" in response.text
+        assert "Every 5 minutes · Shuffle · Landscape" in response.text
         runtime = app.state.runtime
         saved = runtime.repository.load()
         first_deck = saved.frame.shuffle_photo_ids

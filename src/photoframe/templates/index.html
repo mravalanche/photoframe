@@ -76,6 +76,53 @@
         });
       });
     }
+    function networkSignature(form) {
+      const value = name => form.querySelector(`[name="${name}"]:checked`)?.value
+        || form.elements[name]?.value || '';
+      return ['network_access', 'network_port', 'web_protocol', 'certificate_mode',
+        'certificate_path', 'private_key_path'].map(value).join('|');
+    }
+    function updateNetworkControls(form) {
+      if (!form) return;
+      const protocol = form.querySelector('[name="web_protocol"]:checked')?.value || 'http';
+      const mode = form.querySelector('[name="certificate_mode"]:checked')?.value || 'automatic';
+      const https = protocol === 'https';
+      const certificateControls = form.querySelector('[data-certificate-controls]');
+      const suppliedControls = form.querySelector('[data-supplied-certificate-controls]');
+      if (certificateControls) certificateControls.hidden = !https;
+      if (suppliedControls) suppliedControls.hidden = !https || mode !== 'supplied';
+      suppliedControls?.querySelectorAll('input').forEach(input => {
+        input.required = https && mode === 'supplied';
+      });
+      const access = form.querySelector('[name="network_access"]:checked')?.value;
+      const host = access === 'local_network' ? '<device-ip>' : '127.0.0.1';
+      const port = form.elements.network_port?.value || '8000';
+      const preview = form.querySelector('[data-address-preview]');
+      if (preview) preview.textContent = `${protocol}://${host}:${port}`;
+    }
+    function setupNetworkSettings() {
+      document.querySelectorAll('[data-network-form]').forEach(form => {
+        updateNetworkControls(form);
+        if (form.dataset.networkReady) return;
+        form.dataset.networkReady = 'true';
+        form.addEventListener('input', () => updateNetworkControls(form));
+        form.addEventListener('change', () => updateNetworkControls(form));
+      });
+    }
+    function confirmNetworkChange(form) {
+      updateNetworkControls(form);
+      const confirmation = form.elements.confirm_endpoint_change;
+      if (networkSignature(form) === form.dataset.originalSignature) {
+        confirmation.value = 'no';
+        return true;
+      }
+      const address = form.querySelector('[data-address-preview]')?.textContent || 'the new address';
+      const accepted = window.confirm(
+        `Photoframe will restart and this page may disconnect. Continue and use ${address}?`,
+      );
+      confirmation.value = accepted ? 'yes' : 'no';
+      return accepted;
+    }
     function openResetDialog() {
       const dialog = document.querySelector('[data-reset-dialog]');
       if (dialog && !dialog.open) dialog.showModal();
@@ -92,6 +139,7 @@
       syncThemeToggle();
       setupNotifications();
       setupSettingsAccordion();
+      setupNetworkSettings();
     }
     document.addEventListener('DOMContentLoaded', syncInterface);
     document.addEventListener('htmx:afterSwap', syncInterface);
