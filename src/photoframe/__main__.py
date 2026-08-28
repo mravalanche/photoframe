@@ -50,6 +50,15 @@ def server_bind(target: Path | None = None) -> tuple[str, int]:
     return config.host, config.port
 
 
+def run_server(server: uvicorn.Server) -> bool:
+    """Run Uvicorn, returning false only for an intentional console interrupt."""
+    try:
+        server.run()
+    except KeyboardInterrupt:
+        return False
+    return True
+
+
 def main() -> None:
     from .web import create_app
 
@@ -69,8 +78,7 @@ def main() -> None:
             )
         )
         restart.server = server
-        server.run()
-        if not restart.requested.is_set():
+        if not run_server(server) or not restart.requested.is_set():
             break
 
 

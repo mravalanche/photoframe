@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from photoframe.__main__ import server_bind, server_configuration
+import pytest
+
+from photoframe.__main__ import run_server, server_bind, server_configuration
 from photoframe.models import NetworkAccess, WebProtocol
 from photoframe.settings import SettingsRepository
 
@@ -52,3 +54,20 @@ def test_server_prepares_automatic_https_material(tmp_path: Path):
     assert configuration.ssl_keyfile
     assert Path(configuration.ssl_certfile).is_file()
     assert Path(configuration.ssl_keyfile).is_file()
+
+
+def test_intentional_keyboard_interrupt_stops_without_escaping():
+    class InterruptedServer:
+        def run(self):
+            raise KeyboardInterrupt
+
+    assert run_server(InterruptedServer()) is False  # type: ignore[arg-type]
+
+
+def test_real_server_error_is_not_hidden():
+    class FailedServer:
+        def run(self):
+            raise RuntimeError("bind failed")
+
+    with pytest.raises(RuntimeError, match="bind failed"):
+        run_server(FailedServer())  # type: ignore[arg-type]
