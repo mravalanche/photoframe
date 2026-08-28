@@ -69,33 +69,45 @@ retained under `tls/` and can be reused if automatic HTTPS is enabled again.
 
 ## Raspberry Pi and systemd
 
-Install `uv` for the regular Linux account that owns the checkout, then run:
+From the checkout, run:
 
 ```bash
 sudo bash ./scripts/install.sh
 ```
 
-The installer:
+The installer is safe to run again after an update. It:
 
 1. refuses to run the application as root;
-2. creates and protects the selected data directory;
-3. runs `uv sync --frozen --extra inky` as the application user;
-4. renders and installs `systemd/photoframe.service.template`;
+2. installs UFW and, when needed, `uv` using the official HTTPS installer;
+3. creates an owner-only data directory and locked virtual environment, then runs
+   `uv sync --frozen --extra inky` as the service account;
+4. renders the hardened `systemd/photoframe.service.template` with absolute paths;
 5. enables the service at boot; and
-6. starts or restarts the service unless `--no-start` is supplied.
+6. starts or restarts it unless `--no-start` is supplied.
+
+The service account defaults to the non-root user who invoked `sudo` (`$SUDO_USER`). This preserves
+the existing checkout ownership and avoids a privileged daemon. `--user USER` selects another
+existing non-root account; that account must be able to traverse and read the checkout. The data
+directory is assigned to that user and mode `0700`; runtime-created settings, secrets, cache, and
+TLS keys inherit the unit's `UMask=0077`. If root invokes the script directly, `--user` is required.
 
 Useful commands and variants:
 
 ```bash
 sudo bash ./scripts/install.sh --user pi --data-dir /var/lib/photoframe
+sudo bash ./scripts/install.sh --uv-bin /opt/uv/uv
 sudo bash ./scripts/install.sh --no-start
 sudo systemctl status photoframe
 sudo journalctl -u photoframe -f
 sudo bash ./scripts/uninstall.sh
 ```
 
-Run the installer again after updating the checkout so the locked environment and unit template
-stay current. The uninstaller removes only the systemd unit; it preserves the checkout and data.
+Use `--no-install-uv` to require a preinstalled `uv`. Otherwise the installer first searches as the
+service user and installs only when no executable is found. A supplied `--uv-bin` must be an
+absolute executable path and must successfully run as the service user. Downloads require valid
+HTTPS, CA roots, DNS, and any site proxy configuration; failures stop with a focused error rather
+than leaving a partially configured service. The uninstaller removes only the systemd unit; it
+preserves the checkout, UFW policy, dependencies, and data.
 
 The service launches the `photoframe` console entrypoint, so it honors the listener saved in
 `settings.toml`; it is not permanently fixed to localhost. The unit uses `NoNewPrivileges`, a
@@ -104,42 +116,42 @@ Generated TLS files therefore work without granting write access to the rest of 
 
 ### Headless first boot
 
-A Pi connected only to an e-ink panel has no interactive browser with which to change the default
-local-only listener. Configure it over SSH before the first service start. This example assumes the
-Linux account is `pi` and deliberately uses `/var/lib/photoframe` as the data directory; substitute
-the account and path you actually use.
-
-First install and enable the unit without starting Photoframe:
+A Pi connected only to an e-ink panel cannot use the default local-only web listener. The explicit
+headless option provisions it before the first service start:
 
 ```bash
-sudo bash ./scripts/install.sh --user pi --data-dir /var/lib/photoframe --no-start
+sudo bash ./scripts/install.sh --headless --enable-ufw
 ```
 
-For an initial HTTP setup on the local network, create the minimal owner-only configuration below.
-The shell refuses to replace an existing settings file, which protects prior configuration:
+`--headless` changes only the persisted `[network]` settings, preserving provider, album, display,
+and schedule settings on a reinstall. It selects `local_network` (`0.0.0.0`), port `8123`, HTTPS,
+and an automatic certificate. The certificate is generated before systemd starts and is reused on
+later installs. Without `--headless`, existing listener settings are preserved and a fresh install
+continues to default to HTTP `127.0.0.1:8000`.
+
+UFW is always installed, but firewall activation remains an administrator decision:
 
 ```bash
-sudo -u pi sh -c 'umask 077; test ! -e /var/lib/photoframe/settings.toml && cat > /var/lib/photoframe/settings.toml' <<'EOF'
-[network]
-access = "local_network"
-port = 8000
-protocol = "http"
-certificate_mode = "automatic"
-EOF
-sudo systemctl start photoframe
+sudo bash ./scripts/install.sh --headless                         # stage rules; do not activate UFW
+sudo bash ./scripts/install.sh --headless --enable-ufw            # allow SSH/22, then activate UFW
+sudo bash ./scripts/install.sh --headless --enable-ufw --ssh-port 2222
+sudo bash ./scripts/install.sh --headless --firewall-source 192.168.10.0/24
+sudo bash ./scripts/install.sh --headless --firewall-source none  # manage access outside this script
 ```
 
-`local_network` is the configuration-file value for the UI choice **Devices on my local network**.
-Valid ports are `1` through `65535`. To use HTTPS from the first boot, change `protocol`
-to `"https"`; `certificate_mode = "automatic"` then creates and reuses an owner-protected local
-certificate and key under `/var/lib/photoframe/tls/` when the service starts. Do not add certificate
-or key paths for automatic mode.
+The default firewall source, `local`, creates one rule per directly connected non-loopback IPv4
+subnet. Use an explicit trusted IPv4 or IPv6 CIDR when route discovery is ambiguous. `any` is
+accepted only as an explicit choice and exposes the port on every interface allowed by upstream
+networking; Photoframe has no login, so this is rarely appropriate. `none` skips the application
+rule. If UFW is inactive, the installer stages rules but does not activate it unless
+`--enable-ufw` is present. Before activation it permits the selected SSH TCP port, preventing the
+usual remote lockout. This does not account for a more complex SSH source restriction; configure
+such policy yourself and omit `--enable-ufw` when necessary.
 
 Find the Pi's local address with `hostname -I`, then browse from another device to
-`http://<pi-address>:8000` or `https://<pi-address>:8000`, matching the configured protocol and
-port. Review startup with `sudo systemctl status photoframe` and
+`https://<pi-address>:8123`. Review startup with `sudo systemctl status photoframe` and
 `sudo journalctl -u photoframe -b` if it is not reachable. A host firewall must also allow the
-chosen port from the local network.
+chosen port from the local network. `sudo ufw status verbose` shows the effective host policy.
 
 Binding to `0.0.0.0` makes the service reachable through the Pi's network interfaces; it does not
 by itself publish the service to the internet. Do not add router port forwarding or a public
