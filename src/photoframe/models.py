@@ -28,6 +28,27 @@ class DisplayDriver(StrEnum):
     MOCK = "mock"
 
 
+class NetworkAccess(StrEnum):
+    DEVICE_ONLY = "device_only"
+    LOCAL_NETWORK = "local_network"
+
+    @property
+    def bind_address(self) -> str:
+        # The wildcard is only reachable after an explicit local-network
+        # choice.
+        return "127.0.0.1" if self == self.DEVICE_ONLY else "0.0.0.0"  # nosec B104
+
+
+class WebProtocol(StrEnum):
+    HTTP = "http"
+    HTTPS = "https"
+
+
+class CertificateMode(StrEnum):
+    AUTOMATIC = "automatic"
+    SUPPLIED = "supplied"
+
+
 class ProviderSettings(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
 
@@ -114,6 +135,44 @@ class RefreshSettings(BaseModel):
     health_stale_seconds: Annotated[int, Field(ge=60, le=2_592_000)] = 7200
 
 
+class NetworkSettings(BaseModel):
+    """Secure-default web listener settings persisted with the installation."""
+
+    model_config = ConfigDict(validate_assignment=True)
+
+    access: NetworkAccess = NetworkAccess.DEVICE_ONLY
+    port: Annotated[int, Field(ge=1, le=65535)] = 8000
+    protocol: WebProtocol = WebProtocol.HTTP
+    certificate_mode: CertificateMode = CertificateMode.AUTOMATIC
+    certificate_path: str | None = None
+    private_key_path: str | None = None
+
+    @field_validator("access", mode="before")
+    @classmethod
+    def normalize_legacy_access(cls, value: object) -> object:
+        """Accept the former persisted value while writing only the current name."""
+        return NetworkAccess.LOCAL_NETWORK if value == "home_network" else value
+
+    @model_validator(mode="after")
+    def supplied_tls_paths_are_complete(self) -> "NetworkSettings":
+        if (
+            self.protocol == WebProtocol.HTTPS
+            and self.certificate_mode == CertificateMode.SUPPLIED
+            and (not self.certificate_path or not self.private_key_path)
+        ):
+            raise ValueError("Choose both a certificate file and private-key file")
+        return self
+
+    @property
+    def bind_address(self) -> str:
+        return self.access.bind_address
+
+    @property
+    def display_address(self) -> str:
+        host = "127.0.0.1" if self.access == NetworkAccess.DEVICE_ONLY else "<device-ip>"
+        return f"{self.protocol.value}://{host}:{self.port}"
+
+
 class RefreshStatus(BaseModel):
     """Persisted outcome of the last unattended refresh attempt."""
 
@@ -141,6 +200,7 @@ class AppSettings(BaseModel):
     provider: ProviderSettings = Field(default_factory=ProviderSettings)
     frame: FrameSettings = Field(default_factory=FrameSettings)
     device: DeviceSettings = Field(default_factory=DeviceSettings)
+    network: NetworkSettings = Field(default_factory=NetworkSettings)
     refresh: RefreshSettings = Field(default_factory=RefreshSettings)
     refresh_status: RefreshStatus = Field(default_factory=RefreshStatus)
     verification: Verification = Field(default_factory=Verification)

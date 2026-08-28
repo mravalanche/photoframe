@@ -6,7 +6,7 @@ from pathlib import Path
 from threading import Lock, RLock
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, Request
+from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -20,16 +20,21 @@ from .lifecycle import RefreshCoordinator, RefreshWorker, health_payload
 from .models import (
     Album,
     AppSettings,
+    CertificateMode,
     DisplayDriver,
+    NetworkAccess,
+    NetworkSettings,
     Orientation,
     Photo,
     PhotoOrder,
     ProviderKind,
+    WebProtocol,
 )
 from .providers import DemoProvider, ImmichProvider, PhotoProvider, ProviderError
 from .renderer import MockRenderCoordinator, RenderPhase, RenderService
 from .selector import active_selection, shuffled_photo_ids
 from .settings import SecretStore, SettingsRepository
+from .tls import tls_paths
 
 ProviderFactory = Callable[[str, str], PhotoProvider]
 
@@ -54,6 +59,15 @@ def schedule_label(target: datetime | None, timezone: str, now: datetime | None 
         date_format = "%a %#d %b · %H:%M" if os.name == "nt" else "%a %-d %b · %H:%M"
         prefix = local_target.strftime(date_format)
     return f"{prefix} · {relative}"
+
+
+def rotation_interval_label(seconds: int) -> str:
+    """Return a compact, human-readable saved rotation interval."""
+    for unit_seconds, unit_name in ((86_400, "day"), (3600, "hour"), (60, "minute")):
+        if seconds >= unit_seconds and seconds % unit_seconds == 0:
+            amount = seconds // unit_seconds
+            return f"{amount} {unit_name}{'' if amount == 1 else 's'}"
+    return f"{seconds} second{'' if seconds == 1 else 's'}"
 
 
 class Runtime:
@@ -349,6 +363,7 @@ def create_app(
     data_dir: Path | None = None,
     provider_factory: ProviderFactory | None = None,
     demo_mode: bool | None = None,
+    restart_callback: Callable[[], None] | None = None,
 ) -> FastAPI:
     package = Path(__file__).parent
     target = data_dir or Path(os.getenv("PHOTOFRAME_DATA_DIR", "data"))
@@ -448,6 +463,16 @@ def create_app(
                 "Scheduled shuffle"
                 if settings.frame.photo_order == PhotoOrder.SHUFFLE
                 else "Album order"
+            ),
+            "network_summary": (
+                f"{'This device only' if settings.network.access == NetworkAccess.DEVICE_ONLY else 'Local network'}"
+                f" · {settings.network.protocol.value.upper()} · {settings.network.port}"
+            ),
+            "network_address": settings.network.display_address,
+            "display_summary": (
+                f"Every {rotation_interval_label(settings.frame.rotation_seconds)} · "
+                f"{'Shuffle' if settings.frame.photo_order == PhotoOrder.SHUFFLE else 'In album order'}"
+                f" · {settings.frame.orientation.value.title()}"
             ),
         }
 
@@ -602,6 +627,54 @@ def create_app(
         except Exception as exc:
             return workspace(request, error=str(exc))
 
+    @app.post("/network", response_class=HTMLResponse)
+    async def save_network(request: Request, background_tasks: BackgroundTasks) -> HTMLResponse:
+        form = await request.form()
+        try:
+            raw_port = str(form.get("network_port", "")).strip()
+            try:
+                port = int(raw_port)
+            except ValueError as exc:
+                raise ValueError("Listening port must be a whole number from 1 to 65535") from exc
+            if not 1 <= port <= 65535:
+                raise ValueError("Listening port must be between 1 and 65535")
+            candidate = NetworkSettings(
+                access=NetworkAccess(str(form.get("network_access", "device_only"))),
+                port=port,
+                protocol=WebProtocol(str(form.get("web_protocol", "http"))),
+                certificate_mode=CertificateMode(str(form.get("certificate_mode", "automatic"))),
+                certificate_path=str(form.get("certificate_path", "")).strip() or None,
+                private_key_path=str(form.get("private_key_path", "")).strip() or None,
+            )
+            current = repository.load().network
+            listener_changed = candidate != current
+            if listener_changed and str(form.get("confirm_endpoint_change", "")) != "yes":
+                raise ValueError(
+                    "Confirm the listener change before saving; Photoframe must restart and the "
+                    f"new address will be {candidate.display_address}"
+                )
+            # Generate or validate TLS material before committing a configuration
+            # which Uvicorn could not start.
+            tls_paths(target, candidate)
+            repository.update(lambda settings: setattr(settings, "network", candidate))
+            if listener_changed:
+                message = (
+                    f"Network settings saved. Photoframe is restarting; open "
+                    f"{candidate.display_address} when it is ready."
+                )
+                if restart_callback:
+                    background_tasks.add_task(restart_callback)
+                else:
+                    message = (
+                        f"Network settings saved. Restart Photoframe, then open "
+                        f"{candidate.display_address}."
+                    )
+            else:
+                message = "Network settings are already up to date"
+            return workspace(request, notice=message)
+        except (OSError, ValueError) as exc:
+            return workspace(request, error=f"Network settings were not saved: {exc}")
+
     @app.post("/photo/preview", response_class=HTMLResponse)
     async def preview_photo(request: Request) -> HTMLResponse:
         photo_id = str((await request.form()).get("photo_id", ""))
@@ -641,10 +714,11 @@ def create_app(
         return workspace(request, notice=message)
 
     @app.post("/reset", response_class=HTMLResponse)
-    def reset_photoframe(request: Request) -> HTMLResponse:
+    def reset_photoframe(request: Request, background_tasks: BackgroundTasks) -> HTMLResponse:
         if not reset_lock.acquire(blocking=False):
             return workspace(request, error="Photoframe reset is already in progress")
         try:
+            listener_changed = repository.load().network != NetworkSettings()
             failures = runtime.reset_to_defaults()
             if failures:
                 return workspace(
@@ -654,10 +728,17 @@ def create_app(
                         "data could not be removed. Retry cleanup before reconnecting."
                     ),
                 )
-            return workspace(
+            response = workspace(
                 request,
-                notice="Photoframe was reset to defaults. Connect a photo provider to begin.",
+                notice=(
+                    "Photoframe was reset to defaults and is restarting at http://127.0.0.1:8000."
+                    if listener_changed and restart_callback
+                    else "Photoframe was reset to defaults. Connect a photo provider to begin."
+                ),
             )
+            if listener_changed and restart_callback:
+                background_tasks.add_task(restart_callback)
+            return response
         except (OSError, RuntimeError, ValueError) as exc:
             return workspace(request, error=f"Photoframe could not be reset: {exc}")
         finally:

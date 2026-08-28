@@ -1,7 +1,7 @@
 from pathlib import Path
 from threading import Barrier, Thread
 
-from photoframe.models import AppSettings
+from photoframe.models import AppSettings, NetworkAccess
 from photoframe.settings import SecretStore, SettingsRepository
 
 
@@ -27,6 +27,33 @@ def test_invalid_human_edit_is_rejected(tmp_path: Path):
         pass
     else:
         raise AssertionError("invalid TOML settings should fail validation")
+
+
+def test_local_network_access_round_trips_with_current_value(tmp_path: Path):
+    repository = SettingsRepository(tmp_path)
+    settings = AppSettings()
+    settings.network.access = NetworkAccess.LOCAL_NETWORK
+
+    repository.save(settings)
+
+    assert repository.load().network.access == NetworkAccess.LOCAL_NETWORK
+    assert 'access = "local_network"' in repository.path.read_text()
+    assert 'access = "home_network"' not in repository.path.read_text()
+
+
+def test_legacy_home_network_access_normalizes_on_save(tmp_path: Path):
+    repository = SettingsRepository(tmp_path)
+    repository.path.write_text('[network]\naccess = "home_network"\n')
+
+    settings = repository.load()
+
+    assert settings.network.access == NetworkAccess.LOCAL_NETWORK
+    assert settings.network.bind_address == "0.0.0.0"
+
+    repository.save(settings)
+
+    assert 'access = "local_network"' in repository.path.read_text()
+    assert 'access = "home_network"' not in repository.path.read_text()
 
 
 def test_repository_update_preserves_prior_transaction(tmp_path: Path):
