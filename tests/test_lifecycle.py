@@ -53,6 +53,17 @@ def test_cache_reset_removes_current_and_interrupted_reset_data(tmp_path: Path):
     assert not interrupted.exists()
 
 
+def test_cache_persists_decodability_without_counting_marker_as_an_image(tmp_path: Path):
+    cache = PhotoCache(tmp_path, max_bytes=100)
+
+    assert cache.decodability("asset") is None
+    cache.set_decodability("asset", False)
+
+    restarted = PhotoCache(tmp_path, max_bytes=100)
+    assert restarted.decodability("asset") is False
+    assert restarted.stats().files == 0
+
+
 class FakeRuntime:
     def __init__(self, fail: bool = False):
         self.fail = fail
@@ -66,6 +77,9 @@ class FakeRuntime:
     def cache_photo(self, photo_id):
         self.cached.append(photo_id)
         return b"image"
+
+    def renderable_photos(self, photos, frame):
+        return [photo for photo in photos if photo.matches(frame.orientation)]
 
     def cache_stats(self):
         from photoframe.cache import CacheStats

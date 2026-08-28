@@ -6,6 +6,125 @@
   max-width: 100%;
 }
 
+.frame-canvas {
+  position: relative;
+  overflow: hidden;
+}
+
+.frame-canvas.transition-visible .digital-frame {
+  opacity: 0.68;
+  transform: scale(0.985);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.frame-transition {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  left: 20px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: min(620px, calc(100% - 40px));
+  margin-inline: auto;
+  padding: 14px 16px;
+  border: 2px solid var(--amber);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 14px 42px rgb(0 0 0 / 48%);
+  color: var(--text);
+  backdrop-filter: blur(12px);
+}
+
+.frame-transition > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.frame-transition strong,
+.frame-transition span {
+  overflow-wrap: anywhere;
+}
+
+.frame-transition strong {
+  font-size: 14px;
+}
+
+.frame-transition > div > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.frame-transition.manual,
+.frame-transition.complete {
+  border-color: var(--moss);
+}
+
+.frame-transition.failed {
+  border-color: var(--danger);
+}
+
+.transition-spinner,
+.transition-mark {
+  flex: 0 0 auto;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+}
+
+.transition-spinner {
+  border: 3px solid color-mix(in srgb, var(--amber) 28%, transparent);
+  border-top-color: var(--amber);
+  animation: frame-transition-spin 900ms linear infinite;
+}
+
+.transition-mark {
+  display: grid;
+  place-items: center;
+  background: var(--moss-soft);
+  color: var(--text);
+  font-weight: 900;
+}
+
+.frame-transition.failed .transition-mark {
+  background: color-mix(in srgb, var(--danger) 18%, var(--surface));
+  color: var(--danger);
+}
+
+@keyframes frame-transition-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.eligibility-summary {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px 13px;
+  flex-wrap: wrap;
+  max-width: 620px;
+  text-align: right;
+}
+
+.eligibility-summary strong {
+  color: var(--text);
+}
+
+.eligibility-summary span {
+  white-space: nowrap;
+}
+
+.empty-candidates {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
 html,
 body {
   overflow-x: hidden;
@@ -565,6 +684,20 @@ body {
 }
 
 @media (max-width: 760px) {
+  .frame-transition {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    width: calc(100% - 24px);
+    padding: 12px;
+  }
+
+  .eligibility-summary {
+    justify-content: flex-start;
+    max-width: none;
+    text-align: left;
+  }
+
   .notification-stack {
     top: 72px;
     right: 12px;
@@ -644,6 +777,17 @@ body {
   .selected-actions .quiet {
     width: 100%;
     min-height: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transition-spinner {
+    animation: none;
+    border-color: var(--amber);
+  }
+
+  .frame-canvas.transition-visible .digital-frame {
+    transition: none;
   }
 }
 

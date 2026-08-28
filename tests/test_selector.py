@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from photoframe.models import FrameSettings, Orientation, Photo, PhotoOrder
-from photoframe.selector import active_selection, shuffled_photo_ids
+from photoframe.selector import active_selection, classify_photos, shuffled_photo_ids
 
 
 def test_selection_is_deterministic_and_rotates_from_chosen_start():
@@ -29,6 +29,20 @@ def test_square_and_unknown_dimensions_are_not_eligible():
         Photo(id="unknown", filename="u"),
     ]
     assert active_selection(photos, FrameSettings()).photo is None
+
+
+def test_eligibility_reports_orientation_and_decode_failures_separately():
+    photos = [
+        Photo(id="ready", filename="ready.jpg", width=1200, height=800),
+        Photo(id="portrait", filename="portrait.jpg", width=800, height=1200),
+        Photo(id="heic", filename="unsupported.heic", width=1200, height=800),
+    ]
+
+    summary = classify_photos(photos, FrameSettings(), lambda photo: photo.id != "heic")
+
+    assert [photo.id for photo in summary.eligible] == ["ready"]
+    assert summary.wrong_orientation == 1
+    assert summary.unsupported == 1
 
 
 def test_shuffle_deck_is_stable_complete_and_avoids_boundary_repeat():

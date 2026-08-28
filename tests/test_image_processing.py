@@ -3,7 +3,11 @@ from io import BytesIO
 import pytest
 from PIL import Image
 
-from photoframe.image_processing import ImageProcessingError, prepare_for_display
+from photoframe.image_processing import (
+    ImageProcessingError,
+    image_is_decodable,
+    prepare_for_display,
+)
 from photoframe.models import DeviceSettings
 
 
@@ -28,6 +32,11 @@ def test_prepare_for_display_applies_exif_orientation_before_fit():
     prepared = prepare_for_display(jpeg((1600, 1000), orientation=6), (480, 800))
 
     assert prepared.size == (480, 800)
+
+
+def test_decodability_uses_the_installed_image_pipeline():
+    assert image_is_decodable(jpeg((1200, 800)))
+    assert not image_is_decodable(b"HEIC-like bytes Pillow cannot decode")
 
 
 def test_prepare_for_display_rejects_invalid_image_data():

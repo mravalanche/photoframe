@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 
@@ -43,7 +44,9 @@ def test_complete_local_web_flow(tmp_path: Path):
         assert "Connected for test" in response.text
         assert "secret" not in response.text
         response = client.post("/album/select", data={"album_id": "album"})
-        assert "1 of 2 images eligible" in response.text
+        assert "1 eligible" in response.text
+        assert "1 wrong orientation" in response.text
+        assert "0 unsupported or unreadable" in response.text
         assert "wide.jpg" in response.text
         response = client.post(
             "/workflow",
@@ -62,6 +65,25 @@ def test_complete_local_web_flow(tmp_path: Path):
         health = client.get("/health")
         assert health.status_code == 200
         assert health.json()["status"] == "healthy"
+
+
+class MixedFormatProvider(FakeProvider):
+    def __init__(self):
+        self.original_calls: list[str] = []
+
+    def list_photos(self, album_id):
+        assert album_id == "album"
+        return [
+            Photo(id="wide", filename="wide.jpg", width=1200, height=800),
+            Photo(id="tall", filename="tall.jpg", width=800, height=1200),
+            Photo(id="heic", filename="phone.heic", width=1200, height=800),
+        ]
+
+    def original(self, photo_id):
+        self.original_calls.append(photo_id)
+        if photo_id == "heic":
+            return b"HEIC-like bytes Pillow cannot decode", "image/heic"
+        return super().original(photo_id)
 
 
 def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path):
@@ -85,10 +107,14 @@ def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path)
         original_start = runtime.repository.load().frame.starting_photo_id
         response = client.post("/photo/preview", data={"photo_id": "wide"})
         assert "MANUAL PREVIEW" in response.text
+        assert 'data-frame-transition="manual-preview"' in response.text
+        assert "Manual preview selected — frame unchanged" in response.text
         assert "Show now" in response.text
         assert runtime.repository.load().frame.starting_photo_id == original_start
         response = client.post("/render/start")
         assert "Preparing image" in response.text
+        assert 'data-frame-transition="updating"' in response.text
+        assert "Frame changing now" in response.text
         assert runtime.renderer.state.photo_id == "wide"
         assert runtime.prepared_image is not None
         assert runtime.prepared_image.size == (1200, 800)
@@ -120,6 +146,33 @@ def test_demo_mode_is_local_and_renderable(tmp_path: Path):
         assert 'class="album-thumbnail" src="/thumbnail/coast"' in page.text
         assert "Northumberland coast.jpg" in page.text
         assert client.get("/thumbnail/coast").headers["content-type"] == "image/svg+xml"
+
+
+def test_unsupported_assets_are_filtered_once_and_reported_by_category(tmp_path: Path):
+    provider = MixedFormatProvider()
+    app = create_app(tmp_path, lambda _url, _key: provider)
+    with TestClient(app) as client:
+        client.post(
+            "/connection",
+            data={
+                "server_url": "https://immich.test",
+                "api_key": "key",  # pragma: allowlist secret
+            },
+        )
+        response = client.post("/album/select", data={"album_id": "album"})
+        calls_after_scan = list(provider.original_calls)
+        refreshed = client.get("/partials/workspace")
+        rejected = client.post("/photo/preview", data={"photo_id": "heic"})
+
+    assert "1 eligible" in response.text
+    assert "1 wrong orientation" in response.text
+    assert "1 unsupported or unreadable" in response.text
+    assert 'aria-label="Preview wide.jpg"' in response.text
+    assert 'aria-label="Preview phone.heic"' not in response.text
+    assert "phone.heic" not in refreshed.text
+    assert provider.original_calls == calls_after_scan
+    assert sorted(calls_after_scan) == ["heic", "wide"]
+    assert "not eligible or cannot be decoded" in rejected.text
 
 
 def test_ui_acceptance_contracts_are_present(tmp_path: Path):
@@ -402,8 +455,71 @@ def test_background_polling_never_replaces_the_settings_workspace(tmp_path: Path
     assert workspace_tag == '<div id="workspace" class="workspace"'
     assert 'id="frame-status"' in workspace.text
     assert 'hx-get="/partials/frame-status"' in frame_status.text
-    assert 'hx-trigger="every 30s"' in frame_status.text
+    assert 'hx-trigger="every 1s"' in frame_status.text
+    assert 'id="workspace"' not in frame_status.text
     assert 'id="render-status"' in render_started.text
     assert 'hx-get="/partials/render-status"' in render_started.text
     assert 'hx-trigger="every 1s"' in render_started.text
     assert 'hx-target="#workspace"' not in render_status.text
+    assert 'id="workspace"' not in render_status.text
+
+
+def test_scheduled_transition_is_prominent_in_the_frame_preview(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    now = datetime.now(UTC)
+    app.state.runtime.repository.update(
+        lambda settings: (
+            setattr(settings.frame, "rotation_seconds", 30),
+            setattr(settings.frame, "schedule_anchor", now),
+        )
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/partials/frame-status")
+
+    assert 'data-frame-transition="scheduled"' in response.text
+    assert "Scheduled change approaching" in response.text
+    assert 'role="status" aria-live="polite"' in response.text
+    assert 'hx-trigger="every 1s"' in response.text
+
+
+def test_successful_render_auto_dismisses_but_failure_remains(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    with TestClient(app) as client:
+        client.post("/photo/preview", data={"photo_id": "coast"})
+        client.post("/render/start")
+        runtime = app.state.runtime
+        started = runtime.renderer.snapshot().started_at
+        assert started is not None
+        settings = runtime.repository.load()
+        runtime.renderer.update(
+            settings.device,
+            started + timedelta(seconds=settings.device.expected_refresh_seconds),
+        )
+        completed = client.get("/partials/render-status")
+
+        assert 'data-auto-dismiss-render="6000"' in completed.text
+        assert 'hx-post="/render/dismiss"' in completed.text
+        assert 'hx-trigger="load delay:6s"' in completed.text
+        assert "Dismiss now" in completed.text
+
+        dismissed = client.post("/render/dismiss")
+        assert dismissed.text == ""
+        assert runtime.renderer.snapshot().phase.value == "idle"
+        assert runtime.preview_id() is None
+
+        runtime.repository.update(
+            lambda saved: (
+                setattr(saved.device, "expected_refresh_seconds", 50),
+                setattr(saved.device, "render_timeout_seconds", 10),
+            )
+        )
+        now = datetime.now(UTC)
+        runtime.renderer.start("coast", now)
+        runtime.renderer.update(runtime.repository.load().device, now + timedelta(seconds=10))
+        failed = client.get("/partials/render-status")
+
+    assert "Frame update failed" in failed.text
+    assert "data-auto-dismiss-render" not in failed.text
+    assert 'hx-post="/render/dismiss"' not in failed.text
+    assert ">Done<" in failed.text

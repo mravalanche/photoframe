@@ -15,13 +15,14 @@ from PIL import Image
 
 from .cache import CacheStats, PhotoCache
 from .display import InkyDisplay, apply_profile, discover_inky
-from .image_processing import ImageProcessingError, prepare_for_display
+from .image_processing import ImageProcessingError, image_is_decodable, prepare_for_display
 from .lifecycle import RefreshCoordinator, RefreshWorker, health_payload
 from .models import (
     Album,
     AppSettings,
     CertificateMode,
     DisplayDriver,
+    FrameSettings,
     NetworkAccess,
     NetworkSettings,
     Orientation,
@@ -32,7 +33,7 @@ from .models import (
 )
 from .providers import DemoProvider, ImmichProvider, PhotoProvider, ProviderError
 from .renderer import MockRenderCoordinator, RenderPhase, RenderService
-from .selector import active_selection, shuffled_photo_ids
+from .selector import EligibilitySummary, active_selection, classify_photos, shuffled_photo_ids
 from .settings import SecretStore, SettingsRepository
 from .tls import tls_paths
 
@@ -90,6 +91,7 @@ class Runtime:
         self.cache = PhotoCache(settings.data_dir, self.repository.load().refresh.cache_max_bytes)
         self.refresh_coordinator = RefreshCoordinator(self)
         self._runtime_lock = RLock()
+        self._eligibility_lock = RLock()
         self._claim_lock = Lock()
         self._lifecycle_inflight = False
         self._startup_catalog_restore_pending = True
@@ -158,6 +160,7 @@ class Runtime:
     def refresh_photos(self) -> list[Photo]:
         album_id = self.repository.load().frame.album_id
         photos = self.provider().list_photos(album_id) if album_id else []
+        self.photo_eligibility(self.repository.load().frame, photos)
         with self._runtime_lock:
             self.photos = photos
         self.reconcile_shuffle()
@@ -166,6 +169,8 @@ class Runtime:
     def reconcile_shuffle(self, *, anchor_id: str | None = None, fresh: bool = False) -> None:
         """Persist a stable shuffled deck after settings or eligibility changes."""
         _albums, photos = self.catalog_snapshot()
+        frame = self.repository.load().frame
+        eligible = self.photo_eligibility(frame, photos).eligible
 
         def reconcile(settings):
             if settings.frame.photo_order != PhotoOrder.SHUFFLE:
@@ -174,7 +179,7 @@ class Runtime:
                 settings.frame.shuffle_seed = secure_random.randbits(63)
                 settings.frame.shuffle_photo_ids = []
             settings.frame.shuffle_photo_ids = shuffled_photo_ids(
-                photos, settings.frame, anchor_id=anchor_id
+                eligible, settings.frame, anchor_id=anchor_id
             )
 
         self.repository.update(reconcile)
@@ -195,6 +200,34 @@ class Runtime:
         with self._runtime_lock:
             self.selected_preview_id = photo_id
 
+    def _cache_key(self, photo_id: str) -> str:
+        return f"{self.repository.load().provider.kind}:{photo_id}"
+
+    def photo_is_decodable(self, photo_id: str) -> bool:
+        """Verify an asset once, persisting the installed-pipeline verdict."""
+        key = self._cache_key(photo_id)
+        with self._eligibility_lock:
+            known = self.cache.decodability(key)
+            if known is not None:
+                return known
+            source = self.cache_photo(photo_id)
+            supported = image_is_decodable(source)
+            self.cache.set_decodability(key, supported)
+            return supported
+
+    def photo_eligibility(
+        self, frame: FrameSettings, photos: list[Photo] | None = None
+    ) -> EligibilitySummary:
+        candidates = photos if photos is not None else self.catalog_snapshot()[1]
+        return classify_photos(
+            candidates,
+            frame,
+            lambda photo: self.photo_is_decodable(photo.id),
+        )
+
+    def renderable_photos(self, photos: list[Photo], frame: FrameSettings) -> list[Photo]:
+        return self.photo_eligibility(frame, photos).eligible
+
     def prepare_photo(self, photo_id: str) -> Image.Image:
         target_size = self.repository.load().device.display_size
         if not target_size:
@@ -202,7 +235,11 @@ class Runtime:
                 "Set the frame's native display width and height before rendering"
             )
         source = self.cache_photo(photo_id)
-        prepared = prepare_for_display(source, target_size)
+        try:
+            prepared = prepare_for_display(source, target_size)
+        except ImageProcessingError:
+            self.cache.set_decodability(self._cache_key(photo_id), False)
+            raise
         with self._runtime_lock:
             self._prepared_image = prepared
         return prepared
@@ -327,7 +364,8 @@ class Runtime:
             and settings.refresh_status.last_completed_schedule_slot == slot
         ):
             return
-        selection = active_selection(photos, settings.frame, current)
+        eligible = self.photo_eligibility(settings.frame, photos).eligible
+        selection = active_selection(eligible, settings.frame, current)
         if not selection.photo:
             return
         try:
@@ -412,6 +450,7 @@ def create_app(
     def workspace_context(
         request: Request, notice: str | None = None, error: str | None = None
     ) -> dict:
+        current = datetime.now(UTC)
         settings = repository.load()
         if not runtime.loaded and settings.verification.ok:
             try:
@@ -422,13 +461,31 @@ def create_app(
                 error = str(exc)
                 runtime.loaded = True
         albums, photos = runtime.catalog_snapshot()
-        selection = active_selection(photos, settings.frame)
-        eligible = [photo for photo in photos if photo.matches(settings.frame.orientation)]
-        render_state = runtime.renderer.update(settings.device)
+        eligibility = runtime.photo_eligibility(settings.frame, photos)
+        eligible = eligibility.eligible
+        selection = active_selection(eligible, settings.frame, current)
+        render_state = runtime.renderer.update(settings.device, current)
         selected_photo = runtime.photo(runtime.preview_id())
         rendered_photo = runtime.photo(runtime.renderer.rendered_photo_id())
         displayed_photo = rendered_photo or selection.photo
         render_photo = runtime.photo(render_state.photo_id)
+        seconds_until_change = (
+            max(0, int((selection.next_change_at - current).total_seconds()))
+            if selection.next_change_at
+            else None
+        )
+        next_selection = (
+            active_selection(eligible, settings.frame, selection.next_change_at)
+            if selection.next_change_at
+            else None
+        )
+        next_photo = next_selection.photo if next_selection else None
+        scheduled_transition_soon = bool(
+            seconds_until_change is not None
+            and seconds_until_change <= 60
+            and next_photo
+            and (not displayed_photo or next_photo.id != displayed_photo.id)
+        )
         phases = [
             (RenderPhase.PREPARING, "Preparing image"),
             (RenderPhase.SENDING, "Sending to frame"),
@@ -442,14 +499,21 @@ def create_app(
             "albums": albums,
             "photos": photos,
             "eligible": eligible,
+            "wrong_orientation_count": eligibility.wrong_orientation,
+            "unsupported_count": eligibility.unsupported,
             "selection": selection,
             "displayed_photo": displayed_photo,
             "selected_photo": selected_photo,
             "render_photo": render_photo,
+            "next_photo": next_photo,
+            "seconds_until_change": seconds_until_change,
+            "scheduled_transition_soon": scheduled_transition_soon,
             "render_state": render_state,
             "render_phases": phases,
             "RenderPhase": RenderPhase,
-            "next_change": schedule_label(selection.next_change_at, settings.device.timezone),
+            "next_change": schedule_label(
+                selection.next_change_at, settings.device.timezone, current
+            ),
             "source_name": "Demo library" if is_demo else settings.provider.kind.value.title(),
             "source_detail": (
                 "Local preview · no network"
@@ -621,6 +685,14 @@ def create_app(
                     settings.frame.shuffle_photo_ids = []
 
             repository.update(workflow_change)
+            saved_frame = repository.load().frame
+            eligible_ids = {
+                photo.id for photo in runtime.photo_eligibility(saved_frame, photos).eligible
+            }
+            if saved_frame.starting_photo_id not in eligible_ids:
+                repository.update(lambda saved: setattr(saved.frame, "starting_photo_id", None))
+            if runtime.preview_id() not in eligible_ids:
+                runtime.set_preview(None)
             runtime.reconcile_shuffle()
             runtime.initialise_display()
             return workspace(request, notice="Frame settings saved; rotation restarted from now")
@@ -680,8 +752,14 @@ def create_app(
         photo_id = str((await request.form()).get("photo_id", ""))
         settings = repository.load()
         _albums, photos = runtime.catalog_snapshot()
-        if not any(p.id == photo_id and p.matches(settings.frame.orientation) for p in photos):
-            return workspace(request, error="That image is not eligible for this orientation")
+        eligible_ids = {
+            photo.id for photo in runtime.photo_eligibility(settings.frame, photos).eligible
+        }
+        if photo_id not in eligible_ids:
+            return workspace(
+                request,
+                error="That image is not eligible or cannot be decoded by this PhotoFrame",
+            )
         runtime.set_preview(photo_id)
         runtime.renderer.reset()
         return workspace(request)
@@ -697,8 +775,14 @@ def create_app(
         photo_id = str((await request.form()).get("photo_id", ""))
         settings = repository.load()
         _albums, photos = runtime.catalog_snapshot()
-        if not any(p.id == photo_id and p.matches(settings.frame.orientation) for p in photos):
-            return workspace(request, error="That image is not eligible for this orientation")
+        eligible_ids = {
+            photo.id for photo in runtime.photo_eligibility(settings.frame, photos).eligible
+        }
+        if photo_id not in eligible_ids:
+            return workspace(
+                request,
+                error="That image is not eligible or cannot be decoded by this PhotoFrame",
+            )
         anchor = datetime.now(UTC)
         repository.update(
             lambda saved: (
@@ -758,6 +842,8 @@ def create_app(
                 runtime.prepare_photo(photo.id)
                 runtime.renderer.start(photo.id)
         except (ImageProcessingError, ProviderError, RuntimeError) as exc:
+            if isinstance(exc, ImageProcessingError):
+                runtime.set_preview(None)
             return workspace(request, error=str(exc))
         return workspace(request)
 
@@ -766,6 +852,13 @@ def create_app(
         runtime.renderer.reset()
         runtime.set_preview(None)
         return workspace(request)
+
+    @app.post("/render/dismiss", response_class=HTMLResponse)
+    def render_dismiss() -> HTMLResponse:
+        if runtime.renderer.snapshot().phase == RenderPhase.COMPLETE:
+            runtime.renderer.reset()
+            runtime.set_preview(None)
+        return HTMLResponse("")
 
     @app.get("/thumbnail/{photo_id}")
     def thumbnail(photo_id: str) -> Response:

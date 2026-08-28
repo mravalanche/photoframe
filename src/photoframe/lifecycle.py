@@ -9,12 +9,13 @@ from threading import Event, Thread
 from typing import Protocol
 
 from .cache import CacheStats
-from .models import AppSettings, Photo
+from .models import AppSettings, FrameSettings, Photo
 from .providers import ProviderError
 
 
 class RefreshRuntime(Protocol):
     def refresh_photos(self) -> list[Photo]: ...
+    def renderable_photos(self, photos: list[Photo], frame: FrameSettings) -> list[Photo]: ...
     def cache_photo(self, photo_id: str) -> bytes: ...
     def cache_stats(self) -> CacheStats: ...
 
@@ -38,7 +39,7 @@ class RefreshCoordinator:
         status.last_attempt_at = current
         try:
             photos = self.runtime.refresh_photos()
-            eligible = [photo for photo in photos if photo.matches(settings.frame.orientation)]
+            eligible = self.runtime.renderable_photos(photos, settings.frame)
             # The first candidates are deterministic, making prefetch bounded
             # and independent of a particular provider's ordering quirks.
             for photo in eligible[: policy.cache_prefetch_count]:

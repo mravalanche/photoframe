@@ -1,7 +1,30 @@
 import hashlib
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from .models import ActiveSelection, FrameSettings, Photo, PhotoOrder
+
+
+@dataclass(frozen=True)
+class EligibilitySummary:
+    eligible: list[Photo]
+    wrong_orientation: int
+    unsupported: int
+
+
+def classify_photos(
+    photos: list[Photo], frame: FrameSettings, is_decodable: Callable[[Photo], bool]
+) -> EligibilitySummary:
+    """Separate candidates using metadata orientation and verified decode support."""
+    orientation_matches = [photo for photo in photos if photo.matches(frame.orientation)]
+    eligible = [photo for photo in orientation_matches if is_decodable(photo)]
+    eligible = eligible_photos(eligible, frame)
+    return EligibilitySummary(
+        eligible=eligible,
+        wrong_orientation=len(photos) - len(orientation_matches),
+        unsupported=len(orientation_matches) - len(eligible),
+    )
 
 
 def eligible_photos(photos: list[Photo], frame: FrameSettings) -> list[Photo]:

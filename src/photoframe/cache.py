@@ -38,6 +38,9 @@ class PhotoCache:
     def _file(self, key: str) -> Path:
         return self.path / self._name(key)[:2] / self._name(key)
 
+    def _decodability_file(self, key: str) -> Path:
+        return self._file(key).with_suffix(".decodable")
+
     def get(self, key: str) -> bytes | None:
         with self._lock:
             path = self._file(key)
@@ -61,6 +64,31 @@ class PhotoCache:
     def put(self, key: str, content: bytes) -> None:
         with self._lock:
             self._put(key, content)
+
+    def decodability(self, key: str) -> bool | None:
+        """Return a persisted pipeline verdict without touching the cached original."""
+        with self._lock:
+            try:
+                value = self._decodability_file(key).read_text(encoding="ascii").strip()
+            except (FileNotFoundError, UnicodeError):
+                return None
+            return {"supported": True, "unsupported": False}.get(value)
+
+    def set_decodability(self, key: str, supported: bool) -> None:
+        """Persist an atomic, compact verdict for an immutable provider asset ID."""
+        with self._lock:
+            target = self._decodability_file(key)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            fd, temporary = tempfile.mkstemp(prefix=".decode-", suffix=".tmp", dir=target.parent)
+            try:
+                with os.fdopen(fd, "w", encoding="ascii") as handle:
+                    handle.write("supported" if supported else "unsupported")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(temporary, target)
+            finally:
+                if os.path.exists(temporary):
+                    os.unlink(temporary)
 
     def set_max_bytes(self, value: int) -> None:
         with self._lock:
