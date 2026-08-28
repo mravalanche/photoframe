@@ -8,9 +8,12 @@ silently grow an SD card without bound.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
+import shutil
 import tempfile
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
@@ -63,6 +66,39 @@ class PhotoCache:
         with self._lock:
             self.max_bytes = value
             self._evict_until(value, exclude=Path())
+
+    def clear(self) -> None:
+        """Atomically detach the complete cache before removing its contents."""
+        with self._lock:
+            # A prior interrupted reset may have detached the cache before its
+            # recursive removal failed. Retrying reset must finish that cleanup.
+            for detached in self.path.parent.glob(f".{self.path.name}.reset-*"):
+                self._remove_detached(detached)
+            if not self.path.exists():
+                return
+            detached = self.path.with_name(f".{self.path.name}.reset-{uuid.uuid4().hex}")
+            os.replace(self.path, detached)
+            self._remove_detached(detached)
+
+    @staticmethod
+    def _remove_detached(path: Path) -> None:
+        """Remove detached cache data, tolerating entries already removed."""
+
+        def ignore_missing(_function: object, _path: str, error: BaseException) -> None:
+            transient = isinstance(error, FileNotFoundError) or (
+                isinstance(error, OSError) and error.errno == errno.ENOTEMPTY
+            )
+            if not transient:
+                raise error
+
+        # Cloud-backed Windows folders can briefly restore a directory entry
+        # while its contents are being removed. Retry that transient state,
+        # then use a strict final pass so persistent failures remain visible.
+        for _attempt in range(4):
+            shutil.rmtree(path, onexc=ignore_missing)
+            if not path.exists():
+                return
+        shutil.rmtree(path)
 
     def _put(self, key: str, content: bytes) -> None:
         if len(content) > self.max_bytes:

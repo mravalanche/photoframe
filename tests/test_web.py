@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from photoframe.models import Album, Photo
+from photoframe.models import Album, AppSettings, Photo, PhotoOrder
 from photoframe.web import create_app
 
 
@@ -83,7 +83,7 @@ def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path)
         runtime = app.state.runtime
         original_start = runtime.repository.load().frame.starting_photo_id
         response = client.post("/photo/preview", data={"photo_id": "wide"})
-        assert "SELECTED PREVIEW" in response.text
+        assert "MANUAL PREVIEW" in response.text
         assert "Show now" in response.text
         assert runtime.repository.load().frame.starting_photo_id == original_start
         response = client.post("/render/start")
@@ -147,7 +147,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'name="frame-settings" data-settings-panel="provider"' in workspace.text
     assert 'name="frame-settings" data-settings-panel="album"' in workspace.text
     assert 'name="frame-settings" data-settings-panel="display"' in workspace.text
-    assert workspace.text.count('class="disclosure-icon"') == 4
+    assert workspace.text.count('class="disclosure-icon"') == 5
     assert "setupSettingsAccordion" in page.text
     assert "activeSettingsPanel" in page.text
     assert ".setting-card[open]" in responsive_css.text
@@ -167,6 +167,81 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
         "render_timeout_seconds",
     ):
         assert f'name="{name}"' in workspace.text
+    assert 'data-settings-panel="reset"' in workspace.text
+    assert "Reset Photoframe to defaults?" in workspace.text
+    assert "Keep current settings" in workspace.text
+    assert "Reset to defaults" in workspace.text
+    assert 'name="photo_order"' in workspace.text
+    assert "Controls future scheduled changes" in workspace.text
+
+
+def test_shuffle_setting_persists_and_start_here_anchors_new_round(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    with TestClient(app) as client:
+        response = client.post(
+            "/workflow",
+            data={
+                "orientation": "landscape",
+                "rotation_seconds": "300",
+                "photo_order": "shuffle",
+                "display_width_px": "1200",
+                "display_height_px": "750",
+                "expected_refresh_seconds": "28",
+                "render_timeout_seconds": "90",
+                "display_driver": "mock",
+            },
+        )
+        assert "Scheduled shuffle" in response.text
+        runtime = app.state.runtime
+        saved = runtime.repository.load()
+        first_deck = saved.frame.shuffle_photo_ids
+        assert saved.frame.photo_order == PhotoOrder.SHUFFLE
+        assert len(first_deck) == 5
+
+        client.post("/photo/preview", data={"photo_id": "coast"})
+        response = client.post("/photo/start", data={"photo_id": "coast"})
+        saved = runtime.repository.load()
+        assert "new shuffled round" in response.text
+        assert saved.frame.shuffle_photo_ids[0] == "coast"
+        assert len(set(saved.frame.shuffle_photo_ids)) == 5
+
+
+def test_reset_clears_configuration_secret_cache_and_runtime(tmp_path: Path):
+    app = create_app(tmp_path, lambda _url, _key: FakeProvider())
+    with TestClient(app) as client:
+        client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
+        client.post("/album/select", data={"album_id": "album"})
+        runtime = app.state.runtime
+        runtime.cache.put("immich:wide", b"cached-photo")
+        assert runtime.cache.stats().files == 1
+
+        response = client.post("/reset")
+
+    assert "Photoframe was reset to defaults" in response.text
+    defaults = runtime.repository.load()
+    assert defaults.provider == AppSettings().provider
+    assert defaults.frame.album_id is None
+    assert defaults.frame.photo_order == PhotoOrder.ALBUM
+    assert defaults.device == AppSettings().device
+    assert not runtime.secrets.exists()
+    assert not runtime.secrets.key_path.exists()
+    assert runtime.cache.stats().files == 0
+    assert runtime.catalog_snapshot() == ([], [])
+    assert runtime.preview_id() is None
+
+
+def test_reset_truthfully_reports_partial_cache_cleanup(tmp_path: Path, monkeypatch):
+    app = create_app(tmp_path, lambda _url, _key: FakeProvider())
+    with TestClient(app) as client:
+        client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
+        runtime = app.state.runtime
+        monkeypatch.setattr(runtime.cache, "clear", lambda: (_ for _ in ()).throw(OSError()))
+        response = client.post("/reset")
+
+    assert "Reset incomplete" in response.text
+    defaults = runtime.repository.load()
+    assert defaults.provider == AppSettings().provider
+    assert defaults.frame.album_id is None
 
 
 def test_background_polling_never_replaces_the_settings_workspace(tmp_path: Path):

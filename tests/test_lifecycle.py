@@ -40,6 +40,19 @@ def test_concurrent_cache_writes_remain_bounded_and_intact(tmp_path: Path):
     assert surviving in ([b"111111"], [b"222222"])
 
 
+def test_cache_reset_removes_current_and_interrupted_reset_data(tmp_path: Path):
+    cache = PhotoCache(tmp_path, max_bytes=100)
+    cache.put("current", b"current")
+    interrupted = tmp_path / ".photo-cache.reset-interrupted"
+    interrupted.mkdir()
+    (interrupted / "orphan.image").write_bytes(b"orphan")
+
+    cache.clear()
+
+    assert cache.stats().files == 0
+    assert not interrupted.exists()
+
+
 class FakeRuntime:
     def __init__(self, fail: bool = False):
         self.fail = fail

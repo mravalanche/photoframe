@@ -1,4 +1,5 @@
 import os
+import secrets as secure_random
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -16,10 +17,18 @@ from .cache import CacheStats, PhotoCache
 from .display import InkyDisplay, apply_profile, discover_inky
 from .image_processing import ImageProcessingError, prepare_for_display
 from .lifecycle import RefreshCoordinator, RefreshWorker, health_payload
-from .models import Album, DisplayDriver, Orientation, Photo, ProviderKind
+from .models import (
+    Album,
+    AppSettings,
+    DisplayDriver,
+    Orientation,
+    Photo,
+    PhotoOrder,
+    ProviderKind,
+)
 from .providers import DemoProvider, ImmichProvider, PhotoProvider, ProviderError
 from .renderer import MockRenderCoordinator, RenderPhase, RenderService
-from .selector import active_selection
+from .selector import active_selection, shuffled_photo_ids
 from .settings import SecretStore, SettingsRepository
 
 ProviderFactory = Callable[[str, str], PhotoProvider]
@@ -137,7 +146,24 @@ class Runtime:
         photos = self.provider().list_photos(album_id) if album_id else []
         with self._runtime_lock:
             self.photos = photos
-            return list(self.photos)
+        self.reconcile_shuffle()
+        return list(photos)
+
+    def reconcile_shuffle(self, *, anchor_id: str | None = None, fresh: bool = False) -> None:
+        """Persist a stable shuffled deck after settings or eligibility changes."""
+        _albums, photos = self.catalog_snapshot()
+
+        def reconcile(settings):
+            if settings.frame.photo_order != PhotoOrder.SHUFFLE:
+                return
+            if fresh:
+                settings.frame.shuffle_seed = secure_random.randbits(63)
+                settings.frame.shuffle_photo_ids = []
+            settings.frame.shuffle_photo_ids = shuffled_photo_ids(
+                photos, settings.frame, anchor_id=anchor_id
+            )
+
+        self.repository.update(reconcile)
 
     def photo(self, photo_id: str | None) -> Photo | None:
         with self._runtime_lock:
@@ -182,6 +208,32 @@ class Runtime:
     def cache_stats(self) -> CacheStats:
         self.cache.set_max_bytes(self.repository.load().refresh.cache_max_bytes)
         return self.cache.stats()
+
+    def reset_to_defaults(self) -> list[str]:
+        """Clear app data and runtime state, returning any cleanup failures."""
+        if self.renderer.hardware_busy:
+            raise RuntimeError("Wait for the current frame update to finish before resetting")
+        failures: list[str] = []
+        with self._claim_lock, self._runtime_lock:
+            for label, clear in (
+                ("saved credential", self.secrets.clear),
+                ("downloaded photo cache", self.cache.clear),
+            ):
+                try:
+                    clear()
+                except OSError:
+                    failures.append(label)
+            # SettingsRepository.save performs one validated atomic replacement.
+            self.repository.save(AppSettings())
+            self.albums = []
+            self.photos = []
+            self.selected_preview_id = None
+            self._prepared_image = None
+            self._loaded = False
+            self._startup_catalog_restore_pending = True
+            self.display = None
+            self.renderer.reset()
+        return failures
 
     def refresh_lifecycle(self, now: datetime | None = None) -> bool:
         with self._claim_lock:
@@ -304,6 +356,7 @@ def create_app(
     factory = provider_factory or (lambda url, key: ImmichProvider(url, key))
     is_demo = demo_mode if demo_mode is not None else os.getenv("PHOTOFRAME_DEMO_MODE") == "1"
     runtime = Runtime(repository, secrets, factory, DemoProvider() if is_demo else None)
+    reset_lock = Lock()
     if not is_demo:
         runtime.initialise_display()
     templates = Jinja2Templates(directory=package / "templates")
@@ -391,6 +444,11 @@ def create_app(
             "notice": notice,
             "error": error,
             "demo_mode": is_demo,
+            "schedule_order": (
+                "Scheduled shuffle"
+                if settings.frame.photo_order == PhotoOrder.SHUFFLE
+                else "Album order"
+            ),
         }
 
     def workspace(
@@ -503,8 +561,12 @@ def create_app(
             anchor = datetime.now(UTC)
 
             def workflow_change(settings):
+                previous_order = settings.frame.photo_order
                 settings.frame.orientation = Orientation(str(form.get("orientation")))
                 settings.frame.rotation_seconds = int(str(form.get("rotation_seconds")))
+                settings.frame.photo_order = PhotoOrder(
+                    str(form.get("photo_order", settings.frame.photo_order.value))
+                )
                 settings.device.timezone = str(form.get("timezone") or settings.device.timezone)
                 settings.device.expected_refresh_seconds = int(
                     str(form.get("expected_refresh_seconds"))
@@ -526,8 +588,15 @@ def create_app(
                     for p in photos
                 ):
                     settings.frame.starting_photo_id = None
+                if settings.frame.photo_order == PhotoOrder.ALBUM:
+                    settings.frame.shuffle_photo_ids = []
+                    settings.frame.shuffle_seed = 0
+                elif previous_order != PhotoOrder.SHUFFLE:
+                    settings.frame.shuffle_seed = secure_random.randbits(63)
+                    settings.frame.shuffle_photo_ids = []
 
             repository.update(workflow_change)
+            runtime.reconcile_shuffle()
             runtime.initialise_display()
             return workspace(request, notice="Frame settings saved; rotation restarted from now")
         except Exception as exc:
@@ -564,7 +633,35 @@ def create_app(
                 setattr(saved.frame, "schedule_anchor", anchor),
             )
         )
-        return workspace(request, notice="Rotation now starts from the selected image")
+        if settings.frame.photo_order == PhotoOrder.SHUFFLE:
+            runtime.reconcile_shuffle(anchor_id=photo_id, fresh=True)
+            message = "A new shuffled round now starts from the selected image"
+        else:
+            message = "Rotation now starts from the selected image"
+        return workspace(request, notice=message)
+
+    @app.post("/reset", response_class=HTMLResponse)
+    def reset_photoframe(request: Request) -> HTMLResponse:
+        if not reset_lock.acquire(blocking=False):
+            return workspace(request, error="Photoframe reset is already in progress")
+        try:
+            failures = runtime.reset_to_defaults()
+            if failures:
+                return workspace(
+                    request,
+                    error=(
+                        "Reset incomplete. Your configuration was cleared, but some local photo "
+                        "data could not be removed. Retry cleanup before reconnecting."
+                    ),
+                )
+            return workspace(
+                request,
+                notice="Photoframe was reset to defaults. Connect a photo provider to begin.",
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            return workspace(request, error=f"Photoframe could not be reset: {exc}")
+        finally:
+            reset_lock.release()
 
     @app.post("/render/start", response_class=HTMLResponse)
     def render_start(request: Request) -> HTMLResponse:

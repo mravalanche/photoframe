@@ -10,6 +10,6 @@
     </div>
   </div>
   <div class="frame-foot">
-    <span>{{ settings.frame.orientation.value|title }} frame</span><span>Rotation every {{ (settings.frame.rotation_seconds // 3600)|string + ' hr' if settings.frame.rotation_seconds >= 3600 else (settings.frame.rotation_seconds // 60)|string + ' min' }}</span><span>{{ settings.device.timezone }} · 24-hour</span>
+    <span>{{ settings.frame.orientation.value|title }} frame</span><span>Rotation every {{ (settings.frame.rotation_seconds // 3600)|string + ' hr' if settings.frame.rotation_seconds >= 3600 else (settings.frame.rotation_seconds // 60)|string + ' min' }}</span><span>{{ schedule_order }}</span><span>{{ settings.device.timezone }} · 24-hour</span>
   </div>
 </section>

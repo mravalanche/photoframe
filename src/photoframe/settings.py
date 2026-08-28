@@ -91,3 +91,10 @@ class SecretStore:
 
     def exists(self) -> bool:
         return self.value_path.exists()
+
+    def clear(self) -> None:
+        """Remove the saved credential and its local encryption key."""
+        with suppress(FileNotFoundError):
+            self.value_path.unlink()
+        with suppress(FileNotFoundError):
+            self.key_path.unlink()

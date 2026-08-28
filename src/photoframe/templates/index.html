@@ -76,6 +76,18 @@
         });
       });
     }
+    function openResetDialog() {
+      const dialog = document.querySelector('[data-reset-dialog]');
+      if (dialog && !dialog.open) dialog.showModal();
+    }
+    function confirmPhotoframeReset(control) {
+      const dialog = control.closest('[data-reset-dialog]');
+      const form = dialog?.querySelector('[data-reset-form]');
+      if (!form || control.disabled) return;
+      control.disabled = true;
+      control.textContent = 'Resetting Photoframe…';
+      form.requestSubmit();
+    }
     function syncInterface() {
       syncThemeToggle();
       setupNotifications();

@@ -11,6 +11,11 @@ class Orientation(StrEnum):
     PORTRAIT = "portrait"
 
 
+class PhotoOrder(StrEnum):
+    ALBUM = "album"
+    SHUFFLE = "shuffle"
+
+
 class ProviderKind(StrEnum):
     IMMICH = "immich"
 
@@ -39,6 +44,9 @@ class FrameSettings(BaseModel):
     album_name: str | None = None
     schedule_anchor: datetime = Field(default_factory=lambda: datetime.now(UTC))
     starting_photo_id: str | None = None
+    photo_order: PhotoOrder = PhotoOrder.ALBUM
+    shuffle_seed: int = 0
+    shuffle_photo_ids: list[str] = Field(default_factory=list)
 
 
 class DeviceSettings(BaseModel):

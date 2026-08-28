@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
-from photoframe.models import FrameSettings, Orientation, Photo
-from photoframe.selector import active_selection
+from photoframe.models import FrameSettings, Orientation, Photo, PhotoOrder
+from photoframe.selector import active_selection, shuffled_photo_ids
 
 
 def test_selection_is_deterministic_and_rotates_from_chosen_start():
@@ -29,3 +29,38 @@ def test_square_and_unknown_dimensions_are_not_eligible():
         Photo(id="unknown", filename="u"),
     ]
     assert active_selection(photos, FrameSettings()).photo is None
+
+
+def test_shuffle_deck_is_stable_complete_and_avoids_boundary_repeat():
+    anchor = datetime(2026, 1, 1, tzinfo=UTC)
+    photos = [
+        Photo(id=photo_id, filename=f"{photo_id}.jpg", width=1200, height=800)
+        for photo_id in ("a", "b", "c", "d")
+    ]
+    frame = FrameSettings(
+        photo_order=PhotoOrder.SHUFFLE,
+        shuffle_seed=42,
+        rotation_seconds=60,
+        schedule_anchor=anchor,
+    )
+    frame.shuffle_photo_ids = shuffled_photo_ids(photos, frame)
+    selected = [
+        active_selection(photos, frame, anchor + timedelta(seconds=slot * 60)).photo.id
+        for slot in range(5)
+    ]
+    assert len(set(selected[:4])) == 4
+    assert selected[0] == selected[4]
+    assert selected[3] != selected[4]
+
+
+def test_shuffle_reconciles_catalog_changes_and_can_anchor_a_fresh_round():
+    photos = [
+        Photo(id=photo_id, filename=f"{photo_id}.jpg", width=1200, height=800)
+        for photo_id in ("a", "b", "c")
+    ]
+    frame = FrameSettings(
+        photo_order=PhotoOrder.SHUFFLE,
+        shuffle_seed=7,
+        shuffle_photo_ids=["removed", "b", "a"],
+    )
+    assert shuffled_photo_ids(photos, frame, anchor_id="c") == ["c", "b", "a"]

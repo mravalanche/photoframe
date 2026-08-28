@@ -215,6 +215,72 @@ body {
   margin-left: auto;
 }
 
+.maintenance-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px;
+}
+
+.maintenance-content p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.danger-button {
+  min-height: 42px;
+  padding: 10px 15px;
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.danger-button:hover {
+  background: color-mix(in srgb, var(--danger) 24%, var(--surface));
+}
+
+.reset-dialog {
+  width: min(560px, calc(100vw - 28px));
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.reset-dialog::backdrop {
+  background: rgb(0 0 0 / 68%);
+  backdrop-filter: blur(3px);
+}
+
+.reset-dialog-card {
+  display: grid;
+  gap: 24px;
+  padding: 24px;
+}
+
+.reset-dialog-card h2 {
+  margin: 0;
+  font: 500 28px Georgia, serif;
+}
+
+.reset-dialog-card p:not(.kicker) {
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+
+.reset-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .notification-stack {
   position: fixed;
   top: 76px;
@@ -315,6 +381,20 @@ body {
 
   .advanced-settings-grid {
     grid-template-columns: 1fr;
+  }
+
+  .maintenance-content {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .reset-dialog-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .reset-dialog-actions .danger-button {
+    order: 2;
   }
 
   .selected-actions {
