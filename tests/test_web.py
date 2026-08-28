@@ -129,6 +129,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
         selected_workspace = client.post("/photo/preview", data={"photo_id": "coast"})
         htmx = client.get("/static/vendor/htmx-2.0.4.min.js")
         responsive_css = client.get("/static/responsive-fixes.css")
+        icon = client.get("/static/photoframe.svg")
 
     assert "/static/vendor/htmx-2.0.4.min.js" in page.text
     assert "unpkg.com" not in page.text
@@ -138,6 +139,20 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'data-theme-choice="dark" aria-pressed="true"' in page.text
     assert "setupNotifications" in page.text
     assert ".notification-stack" in responsive_css.text
+    assert 'rel="icon" href="http://testserver/static/photoframe.svg"' in page.text
+    assert 'class="brand-mark"><img src="http://testserver/static/photoframe.svg"' in page.text
+    assert 'class="source-state"><span class="status-dot"' in workspace.text
+    assert ".source-state" in responsive_css.text
+    assert "data-settings-accordion" in workspace.text
+    assert 'name="frame-settings" data-settings-panel="provider"' in workspace.text
+    assert 'name="frame-settings" data-settings-panel="album"' in workspace.text
+    assert 'name="frame-settings" data-settings-panel="display"' in workspace.text
+    assert workspace.text.count('class="disclosure-icon"') == 4
+    assert "setupSettingsAccordion" in page.text
+    assert "activeSettingsPanel" in page.text
+    assert ".setting-card[open]" in responsive_css.text
+    assert icon.status_code == 200
+    assert 'id="mdi-image-frame"' in icon.text
     assert 'action="/photo/start"' in selected_workspace.text
     assert "Start rotation here" in selected_workspace.text
     assert "Advanced / manual hardware settings" in workspace.text

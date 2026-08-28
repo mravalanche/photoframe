@@ -11,13 +11,14 @@
     })();
   </script>
   <title>Photoframe</title>
+  <link rel="icon" href="{{ url_for('static', path='/photoframe.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=3">
+  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=5">
   <script src="{{ url_for('static', path='/vendor/htmx-2.0.4.min.js') }}" defer></script>
 </head>
 <body>
   <header class="app-header">
-    <a href="/" class="brand" aria-label="Photoframe home"><span class="brand-mark">PF</span><span>Photoframe</span></a>
+    <a href="/" class="brand" aria-label="Photoframe home"><span class="brand-mark"><img src="{{ url_for('static', path='/photoframe.svg') }}" alt=""></span><span>Photoframe</span></a>
     <div class="theme-toggle" role="group" aria-label="Colour theme">
       <button type="button" data-theme-choice="light" aria-pressed="false" onclick="setTheme('light')">Light</button>
       <button type="button" data-theme-choice="dark" aria-pressed="true" onclick="setTheme('dark')">Dark</button>
@@ -50,21 +51,66 @@
         ));
       });
     }
+    let activeSettingsPanel = null;
+    let settingsPanelViewState = null;
+    function setupSettingsAccordion() {
+      const panels = Array.from(document.querySelectorAll('[data-settings-panel]'));
+      if (!panels.length) return;
+      const serverChoice = panels.find(panel => panel.open)?.dataset.settingsPanel;
+      const defaultChoice = panels.find(panel => panel.dataset.defaultOpen === 'true')?.dataset.settingsPanel;
+      const choice = activeSettingsPanel || serverChoice || defaultChoice || null;
+      panels.forEach(panel => {
+        panel.open = panel.dataset.settingsPanel === choice;
+        if (panel.dataset.accordionReady) return;
+        panel.dataset.accordionReady = 'true';
+        panel.addEventListener('toggle', () => {
+          const panelId = panel.dataset.settingsPanel;
+          if (panel.open) {
+            activeSettingsPanel = panelId;
+            panels.forEach(other => {
+              if (other !== panel) other.open = false;
+            });
+          } else if (activeSettingsPanel === panelId) {
+            activeSettingsPanel = null;
+          }
+        });
+      });
+    }
     function syncInterface() {
       syncThemeToggle();
       setupNotifications();
+      setupSettingsAccordion();
     }
     document.addEventListener('DOMContentLoaded', syncInterface);
     document.addEventListener('htmx:afterSwap', syncInterface);
 
     let previewScrollState = null;
     document.addEventListener('htmx:beforeRequest', event => {
+      const settingsPanel = event.detail.elt?.closest?.('[data-settings-panel]');
+      if (settingsPanel) {
+        const summary = settingsPanel.querySelector(':scope > summary');
+        activeSettingsPanel = settingsPanel.dataset.settingsPanel;
+        settingsPanelViewState = {
+          panelId: activeSettingsPanel,
+          summaryTop: summary?.getBoundingClientRect().top,
+        };
+      }
       const thumbnail = event.detail.elt?.closest?.('.thumbnail');
       if (!thumbnail) return;
       const rail = thumbnail.closest('.thumbnail-rail');
       previewScrollState = { pageY: window.scrollY, railX: rail?.scrollLeft || 0 };
     });
     document.addEventListener('htmx:afterSettle', () => {
+      if (settingsPanelViewState) {
+        const savedPanel = settingsPanelViewState;
+        settingsPanelViewState = null;
+        const summary = document.querySelector(`[data-settings-panel="${savedPanel.panelId}"] > summary`);
+        if (summary) {
+          const newTop = summary.getBoundingClientRect().top;
+          if (Number.isFinite(savedPanel.summaryTop)) window.scrollBy(0, newTop - savedPanel.summaryTop);
+          summary.focus({ preventScroll: true });
+        }
+      }
       if (!previewScrollState) return;
       const saved = previewScrollState;
       previewScrollState = null;

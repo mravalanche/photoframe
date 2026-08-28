@@ -12,19 +12,25 @@ body {
 }
 
 .device-status {
-  align-items: flex-start;
   padding-bottom: 0;
-}
-
-.device-status > span {
-  margin-top: 0.42rem;
 }
 
 .source-identity {
   display: grid;
-  gap: 0.1rem;
+  gap: 0.15rem;
   min-width: 12rem;
   text-align: right;
+}
+
+.source-state {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.source-state .status-dot {
+  flex: 0 0 auto;
 }
 
 .source-identity strong {
@@ -39,9 +45,76 @@ body {
   font-weight: 400;
 }
 
+.brand-mark img {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
 .form-grid.four {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
+}
+
+.settings-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.setting-card {
+  align-self: start;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.setting-card[open] {
+  border-color: var(--moss-deep);
+  background: color-mix(in srgb, var(--surface) 94%, var(--moss));
+}
+
+.setting-card > summary {
+  min-height: 58px;
+}
+
+.setting-card > summary:focus-visible,
+.advanced-settings > summary:focus-visible {
+  outline: 2px solid var(--moss);
+  outline-offset: -3px;
+}
+
+.setting-summary-main,
+.setting-summary-end {
+  display: flex;
+  align-items: center;
+}
+
+.setting-summary-main {
+  gap: 10px;
+}
+
+.setting-summary-end {
+  justify-content: flex-end;
+  gap: 14px;
+  min-width: 0;
+}
+
+.setting-status {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+.disclosure-icon {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--moss);
+  border-bottom: 2px solid var(--moss);
+  transform: rotate(45deg);
+  transition: transform 160ms ease;
+}
+
+.setting-card[open] > summary .disclosure-icon,
+.advanced-settings[open] > summary .disclosure-icon {
+  transform: rotate(225deg);
 }
 
 .form-grid.four > label {
@@ -67,6 +140,10 @@ body {
 }
 
 .advanced-settings > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   min-height: 44px;
   padding: 12px 14px;
   cursor: pointer;
@@ -215,6 +292,21 @@ body {
 
   .source-identity {
     display: none;
+  }
+
+  .setting-card > summary {
+    min-height: 60px;
+  }
+
+  .setting-summary-end {
+    gap: 12px;
+  }
+
+  .setting-status {
+    max-width: 42vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .form-grid.four {
