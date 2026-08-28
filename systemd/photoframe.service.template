@@ -10,11 +10,13 @@ Group=@APP_GROUP@
 WorkingDirectory=@INSTALL_DIR@
 Environment=HOME=@APP_HOME@
 Environment=PHOTOFRAME_DATA_DIR=@DATA_DIR@
+Environment=UV_PROJECT_ENVIRONMENT=@DATA_DIR@/venv
 Environment=PYTHONUNBUFFERED=1
 ExecStart=@UV_BIN@ run --no-sync photoframe
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
+UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full

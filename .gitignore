@@ -3,8 +3,12 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.pytest-tmp*/
 .test-tmp/
 .ruff_cache/
+.uv-cache/
+.pre-commit-cache/
+.pip-audit-cache/
 .coverage
 htmlcov/
 data/
