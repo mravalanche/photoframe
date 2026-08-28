@@ -137,6 +137,10 @@ runtime CDN or internet dependency.
 
 ## Nice-to-have improvements
 
+- Enrich the selected-photo preview with human-friendly image metadata instead of relying only on
+  often-opaque phone filenames. Surface useful fields when available, such as capture date and
+  time, camera and lens, dimensions, orientation, and optional location, using provider metadata
+  or embedded EXIF with graceful handling for missing fields and sensitive GPS data.
 - Enrich FastAPI's generated OpenAPI documentation with typed request bodies for the form-based
   workflow routes and explicit response models for endpoints such as `GET /health`. All routes are
   already listed at `/docs`, but these schemas would make the page a complete, useful API contract.
