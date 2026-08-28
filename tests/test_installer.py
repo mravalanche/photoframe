@@ -8,3 +8,6 @@ def test_pi_installer_and_service_use_locked_inky_environment():
     assert '[[ "$APP_USER" != root ]]' in installer
     assert "User=@APP_USER@" in service
     assert "ExecStart=@UV_BIN@ run --no-sync photoframe" in service
+    assert "running at http://127.0.0.1:8000" not in installer
+    assert "saved listener configuration" in installer
+    assert "manage the address in Advanced settings" in installer

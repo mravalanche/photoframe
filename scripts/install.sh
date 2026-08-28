@@ -52,7 +52,8 @@ install -m 0644 "$tmp_unit" "$SYSTEMD_DIR/$SERVICE_NAME.service"
 systemctl daemon-reload; systemctl enable "$SERVICE_NAME.service"
 if (( START_SERVICE )); then
   systemctl restart "$SERVICE_NAME.service"; systemctl --no-pager --full status "$SERVICE_NAME.service"
-  echo "Photoframe is running at http://127.0.0.1:8000."
+  echo "Photoframe is running with its saved listener configuration."
+  echo "New installs start on this device only, using HTTP port 8000; manage the address in Advanced settings."
 else
   echo "Photoframe is installed and enabled; start it with: sudo systemctl start $SERVICE_NAME"
 fi
