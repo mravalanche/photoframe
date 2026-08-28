@@ -86,6 +86,18 @@ class MixedFormatProvider(FakeProvider):
         return super().original(photo_id)
 
 
+class PreviewFallbackProvider(MixedFormatProvider):
+    def __init__(self):
+        super().__init__()
+        self.thumbnail_calls: list[str] = []
+
+    def thumbnail(self, photo_id):
+        self.thumbnail_calls.append(photo_id)
+        if photo_id == "heic":
+            return FakeProvider.original(self, photo_id)
+        return super().thumbnail(photo_id)
+
+
 def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path):
     app = create_app(tmp_path, lambda _url, _key: FakeProvider())
     with TestClient(app) as client:
@@ -173,6 +185,37 @@ def test_unsupported_assets_are_filtered_once_and_reported_by_category(tmp_path:
     assert provider.original_calls == calls_after_scan
     assert sorted(calls_after_scan) == ["heic", "wide"]
     assert "not eligible or cannot be decoded" in rejected.text
+
+
+def test_decodable_provider_preview_keeps_heic_original_eligible(tmp_path: Path):
+    provider = PreviewFallbackProvider()
+    app = create_app(tmp_path, lambda _url, _key: provider)
+    with TestClient(app) as client:
+        client.post(
+            "/connection",
+            data={
+                "server_url": "https://immich.test",
+                "api_key": "key",  # pragma: allowlist secret
+            },
+        )
+        response = client.post("/album/select", data={"album_id": "album"})
+        refreshed = client.get("/partials/workspace")
+        previewed = client.post("/photo/preview", data={"photo_id": "heic"})
+        app.state.runtime.repository.update(
+            lambda settings: settings.device.set_display_size(1200, 800)
+        )
+        rendered = client.post("/render/start")
+
+    assert "2 eligible" in response.text
+    assert "1 wrong orientation" in response.text
+    assert "0 unsupported or unreadable" in response.text
+    assert 'aria-label="Preview phone.heic"' in response.text
+    assert "phone.heic" in refreshed.text
+    assert "MANUAL PREVIEW" in previewed.text
+    assert "Preparing image" in rendered.text
+    assert app.state.runtime.prepared_image is not None
+    assert provider.original_calls.count("heic") == 1
+    assert provider.thumbnail_calls.count("heic") == 1
 
 
 def test_ui_acceptance_contracts_are_present(tmp_path: Path):

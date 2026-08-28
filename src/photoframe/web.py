@@ -210,10 +210,29 @@ class Runtime:
             known = self.cache.decodability(key)
             if known is not None:
                 return known
-            source = self.cache_photo(photo_id)
-            supported = image_is_decodable(source)
+            try:
+                self.render_source(photo_id)
+            except ImageProcessingError:
+                supported = False
+            else:
+                supported = True
             self.cache.set_decodability(key, supported)
             return supported
+
+    def render_source(self, photo_id: str) -> bytes:
+        """Return bytes the installed renderer can decode, using a provider preview fallback."""
+        source = self.cache_photo(photo_id)
+        if image_is_decodable(source):
+            return source
+
+        # Immich commonly stores originals as HEIC while exposing a generated
+        # JPEG preview. That preview is still a genuine render source for the
+        # frame, so validate and cache it before excluding the asset.
+        fallback, _media_type = self.provider().thumbnail(photo_id)
+        if not image_is_decodable(fallback):
+            raise ImageProcessingError("The selected photo could not be decoded")
+        self.cache.put(self._cache_key(photo_id), fallback)
+        return fallback
 
     def photo_eligibility(
         self, frame: FrameSettings, photos: list[Photo] | None = None
@@ -234,8 +253,8 @@ class Runtime:
             raise ImageProcessingError(
                 "Set the frame's native display width and height before rendering"
             )
-        source = self.cache_photo(photo_id)
         try:
+            source = self.render_source(photo_id)
             prepared = prepare_for_display(source, target_size)
         except ImageProcessingError:
             self.cache.set_decodability(self._cache_key(photo_id), False)

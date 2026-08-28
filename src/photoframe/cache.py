@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
 
+DECODABILITY_VERSION = "v2"
+
 
 @dataclass(frozen=True)
 class CacheStats:
@@ -72,7 +74,10 @@ class PhotoCache:
                 value = self._decodability_file(key).read_text(encoding="ascii").strip()
             except (FileNotFoundError, UnicodeError):
                 return None
-            return {"supported": True, "unsupported": False}.get(value)
+            return {
+                f"supported-{DECODABILITY_VERSION}": True,
+                f"unsupported-{DECODABILITY_VERSION}": False,
+            }.get(value)
 
     def set_decodability(self, key: str, supported: bool) -> None:
         """Persist an atomic, compact verdict for an immutable provider asset ID."""
@@ -82,7 +87,8 @@ class PhotoCache:
             fd, temporary = tempfile.mkstemp(prefix=".decode-", suffix=".tmp", dir=target.parent)
             try:
                 with os.fdopen(fd, "w", encoding="ascii") as handle:
-                    handle.write("supported" if supported else "unsupported")
+                    verdict = "supported" if supported else "unsupported"
+                    handle.write(f"{verdict}-{DECODABILITY_VERSION}")
                     handle.flush()
                     os.fsync(handle.fileno())
                 os.replace(temporary, target)

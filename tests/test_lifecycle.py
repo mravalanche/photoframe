@@ -64,6 +64,15 @@ def test_cache_persists_decodability_without_counting_marker_as_an_image(tmp_pat
     assert restarted.stats().files == 0
 
 
+def test_cache_rechecks_verdicts_from_the_original_eligibility_implementation(tmp_path: Path):
+    cache = PhotoCache(tmp_path, max_bytes=100)
+    cache.set_decodability("asset", False)
+    marker = next(cache.path.rglob("*.decodable"))
+    marker.write_text("unsupported", encoding="ascii")
+
+    assert PhotoCache(tmp_path, max_bytes=100).decodability("asset") is None
+
+
 class FakeRuntime:
     def __init__(self, fail: bool = False):
         self.fail = fail
