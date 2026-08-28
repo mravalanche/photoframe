@@ -19,8 +19,8 @@ frame. Version 1:
 - supports local-only or local-network HTTP/HTTPS operation without requiring a reverse proxy; and
 - includes a hardware-free demo provider and mock renderer for development and review.
 
-The previous Flask implementation is retained unchanged under `archive/legacy-flask/` for
-historical reference. It is not part of the current runtime.
+The retired Flask implementation is no longer kept in the working tree; it remains available from
+the repository's Git history if historical reference is needed.
 
 ## Architecture and persistence
 
