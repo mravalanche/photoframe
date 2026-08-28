@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en-GB" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <script>
+    (() => {
+      const saved = localStorage.getItem('photoframe-theme');
+      document.documentElement.dataset.theme = saved === 'light' ? 'light' : 'dark';
+    })();
+  </script>
+  <title>Photoframe</title>
+  <link rel="icon" href="{{ url_for('static', path='/photoframe.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=6">
+  <script src="{{ url_for('static', path='/vendor/htmx-2.0.4.min.js') }}" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <a href="/" class="brand" aria-label="Photoframe home"><span class="brand-mark"><img src="{{ url_for('static', path='/photoframe.svg') }}" alt=""></span><span>Photoframe</span></a>
+    <div class="theme-toggle" role="group" aria-label="Colour theme">
+      <button type="button" data-theme-choice="light" aria-pressed="false" onclick="setTheme('light')">Light</button>
+      <button type="button" data-theme-choice="dark" aria-pressed="true" onclick="setTheme('dark')">Dark</button>
+    </div>
+  </header>
+  <main class="app-shell">
+    <div hx-get="/partials/workspace" hx-trigger="load" hx-swap="outerHTML"><div class="loading">Preparing your frame…</div></div>
+  </main>
+  <script>
+    function setTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      localStorage.setItem('photoframe-theme', theme);
+      document.querySelectorAll('[data-theme-choice]').forEach(button => {
+        button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme));
+      });
+    }
+    function syncThemeToggle() { setTheme(document.documentElement.dataset.theme || 'dark'); }
+    function dismissNotice(control) {
+      const notice = control?.closest?.('[data-notice]') || control;
+      if (!notice) return;
+      notice.remove();
+      const stack = document.querySelector('.notification-stack');
+      if (stack && !stack.querySelector('[data-notice]')) stack.remove();
+    }
+    function setupNotifications() {
+      document.querySelectorAll('[data-notice][data-auto-dismiss]').forEach(notice => {
+        if (notice.dataset.dismissTimer) return;
+        notice.dataset.dismissTimer = String(window.setTimeout(
+          () => dismissNotice(notice), Number(notice.dataset.autoDismiss),
+        ));
+      });
+    }
+    let activeSettingsPanel = null;
+    let settingsPanelViewState = null;
+    function setupSettingsAccordion() {
+      const panels = Array.from(document.querySelectorAll('[data-settings-panel]'));
+      if (!panels.length) return;
+      const serverChoice = panels.find(panel => panel.open)?.dataset.settingsPanel;
+      const defaultChoice = panels.find(panel => panel.dataset.defaultOpen === 'true')?.dataset.settingsPanel;
+      const choice = activeSettingsPanel || serverChoice || defaultChoice || null;
+      panels.forEach(panel => {
+        panel.open = panel.dataset.settingsPanel === choice;
+        if (panel.dataset.accordionReady) return;
+        panel.dataset.accordionReady = 'true';
+        panel.addEventListener('toggle', () => {
+          const panelId = panel.dataset.settingsPanel;
+          if (panel.open) {
+            activeSettingsPanel = panelId;
+            panels.forEach(other => {
+              if (other !== panel) other.open = false;
+            });
+          } else if (activeSettingsPanel === panelId) {
+            activeSettingsPanel = null;
+          }
+        });
+      });
+    }
+    function networkSignature(form) {
+      const value = name => form.querySelector(`[name="${name}"]:checked`)?.value
+        || form.elements[name]?.value || '';
+      return ['network_access', 'network_port', 'web_protocol', 'certificate_mode',
+        'certificate_path', 'private_key_path'].map(value).join('|');
+    }
+    function updateNetworkControls(form) {
+      if (!form) return;
+      const protocol = form.querySelector('[name="web_protocol"]:checked')?.value || 'http';
+      const mode = form.querySelector('[name="certificate_mode"]:checked')?.value || 'automatic';
+      const https = protocol === 'https';
+      const certificateControls = form.querySelector('[data-certificate-controls]');
+      const suppliedControls = form.querySelector('[data-supplied-certificate-controls]');
+      if (certificateControls) certificateControls.hidden = !https;
+      if (suppliedControls) suppliedControls.hidden = !https || mode !== 'supplied';
+      suppliedControls?.querySelectorAll('input').forEach(input => {
+        input.required = https && mode === 'supplied';
+      });
+      const access = form.querySelector('[name="network_access"]:checked')?.value;
+      const host = access === 'local_network' ? '<device-ip>' : '127.0.0.1';
+      const port = form.elements.network_port?.value || '8000';
+      const preview = form.querySelector('[data-address-preview]');
+      if (preview) preview.textContent = `${protocol}://${host}:${port}`;
+    }
+    function setupNetworkSettings() {
+      document.querySelectorAll('[data-network-form]').forEach(form => {
+        updateNetworkControls(form);
+        if (form.dataset.networkReady) return;
+        form.dataset.networkReady = 'true';
+        form.addEventListener('input', () => updateNetworkControls(form));
+        form.addEventListener('change', () => updateNetworkControls(form));
+      });
+    }
+    function confirmNetworkChange(form) {
+      updateNetworkControls(form);
+      const confirmation = form.elements.confirm_endpoint_change;
+      if (networkSignature(form) === form.dataset.originalSignature) {
+        confirmation.value = 'no';
+        return true;
+      }
+      const address = form.querySelector('[data-address-preview]')?.textContent || 'the new address';
+      const accepted = window.confirm(
+        `Photoframe will restart and this page may disconnect. Continue and use ${address}?`,
+      );
+      confirmation.value = accepted ? 'yes' : 'no';
+      return accepted;
+    }
+    function openResetDialog() {
+      const dialog = document.querySelector('[data-reset-dialog]');
+      if (dialog && !dialog.open) dialog.showModal();
+    }
+    function confirmPhotoframeReset(control) {
+      const dialog = control.closest('[data-reset-dialog]');
+      const form = dialog?.querySelector('[data-reset-form]');
+      if (!form || control.disabled) return;
+      control.disabled = true;
+      control.textContent = 'Resetting Photoframe…';
+      form.requestSubmit();
+    }
+    function syncInterface() {
+      syncThemeToggle();
+      setupNotifications();
+      setupSettingsAccordion();
+      setupNetworkSettings();
+    }
+    document.addEventListener('DOMContentLoaded', syncInterface);
+    document.addEventListener('htmx:afterSwap', syncInterface);
+
+    let previewScrollState = null;
+    document.addEventListener('htmx:beforeRequest', event => {
+      const settingsPanel = event.detail.elt?.closest?.('[data-settings-panel]');
+      if (settingsPanel) {
+        const summary = settingsPanel.querySelector(':scope > summary');
+        activeSettingsPanel = settingsPanel.dataset.settingsPanel;
+        settingsPanelViewState = {
+          panelId: activeSettingsPanel,
+          summaryTop: summary?.getBoundingClientRect().top,
+        };
+      }
+      const thumbnail = event.detail.elt?.closest?.('.thumbnail');
+      if (!thumbnail) return;
+      const rail = thumbnail.closest('.thumbnail-rail');
+      previewScrollState = { pageY: window.scrollY, railX: rail?.scrollLeft || 0 };
+    });
+    document.addEventListener('htmx:afterSettle', () => {
+      if (settingsPanelViewState) {
+        const savedPanel = settingsPanelViewState;
+        settingsPanelViewState = null;
+        const summary = document.querySelector(`[data-settings-panel="${savedPanel.panelId}"] > summary`);
+        if (summary) {
+          const newTop = summary.getBoundingClientRect().top;
+          if (Number.isFinite(savedPanel.summaryTop)) window.scrollBy(0, newTop - savedPanel.summaryTop);
+          summary.focus({ preventScroll: true });
+        }
+      }
+      if (!previewScrollState) return;
+      const saved = previewScrollState;
+      previewScrollState = null;
+      const rail = document.querySelector('.thumbnail-rail');
+      if (rail) rail.scrollLeft = saved.railX;
+      window.scrollTo(0, saved.pageY);
+    });
+  </script>
+</body>
+</html>

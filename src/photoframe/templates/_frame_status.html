@@ -1,0 +1,20 @@
+<section id="frame-status" class="frame-section" hx-get="/partials/frame-status" hx-trigger="{{ 'every 1s' if render_state.active or scheduled_transition_soon else 'every 15s' }}" hx-swap="outerHTML">
+  <div class="frame-meta">
+    <div><span>ON FRAME</span><strong>{{ displayed_photo.filename if displayed_photo else 'Nothing selected yet' }}</strong></div>
+    <div class="schedule"><span>NEXT CHANGE</span><strong>{{ next_change if selection.photo else 'Not scheduled' }}</strong></div>
+  </div>
+  <div class="frame-canvas {{ 'transition-visible' if render_state.phase != RenderPhase.IDLE or selected_photo or scheduled_transition_soon }}">
+    {% if render_state.active %}<div class="frame-transition updating" role="status" aria-live="assertive" aria-atomic="true" data-frame-transition="updating"><span class="transition-spinner" aria-hidden="true"></span><div><strong>Frame changing now</strong><span>{{ render_photo.filename if render_photo else 'The selected image' }} is being prepared and sent to the display.</span></div></div>
+    {% elif render_state.phase == RenderPhase.COMPLETE %}<div class="frame-transition complete" role="status" aria-live="polite" aria-atomic="true" data-frame-transition="complete"><span class="transition-mark" aria-hidden="true">✓</span><div><strong>Frame update complete</strong><span>{{ render_photo.filename if render_photo else 'The new image' }} is now on the display.</span></div></div>
+    {% elif render_state.phase == RenderPhase.FAILED %}<div class="frame-transition failed" role="alert" aria-atomic="true" data-frame-transition="failed"><span class="transition-mark" aria-hidden="true">!</span><div><strong>Frame update failed</strong><span>The previous displayed image remains in place. Review the update details below.</span></div></div>
+    {% elif selected_photo %}<div class="frame-transition manual" role="status" aria-live="polite" aria-atomic="true" data-frame-transition="manual-preview"><span class="transition-mark" aria-hidden="true">↗</span><div><strong>Manual preview selected — frame unchanged</strong><span>{{ selected_photo.filename }} is ready to review below. Choose Show now to update the display.</span></div></div>
+    {% elif scheduled_transition_soon %}<div class="frame-transition scheduled" role="status" aria-live="polite" aria-atomic="true" data-frame-transition="scheduled"><span class="transition-spinner" aria-hidden="true"></span><div><strong>Scheduled change approaching</strong><span>{{ next_photo.filename }} is due in {{ seconds_until_change }} seconds.</span></div></div>{% endif %}
+    <div class="digital-frame {{ settings.frame.orientation.value }}">
+      {% if displayed_photo %}<img src="/thumbnail/{{ displayed_photo.id }}" alt="Photo currently represented on the frame">
+      {% else %}<div class="frame-empty"><span>PF</span><p>Your selected photo will appear here</p></div>{% endif %}
+    </div>
+  </div>
+  <div class="frame-foot">
+    <span>{{ settings.frame.orientation.value|title }} frame</span><span>Rotation every {{ (settings.frame.rotation_seconds // 3600)|string + ' hr' if settings.frame.rotation_seconds >= 3600 else (settings.frame.rotation_seconds // 60)|string + ' min' }}</span><span>{{ schedule_order }}</span><span>{{ settings.device.timezone }} · 24-hour</span>
+  </div>
+</section>
