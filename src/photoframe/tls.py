@@ -74,8 +74,7 @@ def _local_names() -> tuple[list[x509.DNSName], list[x509.IPAddress]]:
 
 def _write_new_private(path: Path, payload: bytes) -> None:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-    if hasattr(os, "O_BINARY"):
-        flags |= os.O_BINARY
+    flags |= getattr(os, "O_BINARY", 0)
     descriptor = os.open(path, flags, stat.S_IRUSR | stat.S_IWUSR)
     try:
         with os.fdopen(descriptor, "wb") as handle:
