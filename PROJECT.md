@@ -302,6 +302,34 @@ persisted Uvicorn startup, automatic certificate reuse, incomplete-material refu
 validation/no-overwrite behavior, port errors, confirmation/restart requests, reset behavior, and
 the Advanced settings UI contract.
 
+## Branch and release flow
+
+`develop` is the integration branch and the only branch used for device-soak candidates. `main`
+contains production-ready revisions only. Both branches run the complete `uv run poe check` gate
+in GitHub Actions; changes reach either branch through a reviewed pull request with that check
+passing.
+
+Use this flow for normal changes and releases:
+
+1. Create a short-lived topic branch from current `develop`, make the change, run
+   `uv run poe check`, and open a pull request targeting `develop`.
+2. After review and a passing GitHub Actions check, merge to `develop`. Deploy that exact
+   `develop` revision to the supported Raspberry Pi and Inky hardware and record the soak result,
+   including restarts, scheduled refreshes/renders, and any relevant upgrade or recovery exercise.
+3. Fix soak failures through another reviewed pull request to `develop`. Do not patch `main`
+   directly or promote a different revision from the one that was soaked.
+4. When the candidate has passed its planned device soak, open a pull request from `develop` to
+   `main`. Confirm the release checklist and release notes in that pull request, require the full
+   check and a review, then merge it without adding unrelated changes.
+5. Tag the resulting `main` commit with the approved version and publish the release notes. Start
+   subsequent work from `develop`; if an emergency production fix begins from `main`, merge the
+   released fix back into `develop` immediately so the branches do not diverge.
+
+Repository rules should block direct pushes to `main`, require a pull request and approving review,
+and require the **Quality / Test, lint, format, and security checks** status before merge. Apply the
+same pull-request and status-check gate to `develop` so integration history always represents a
+candidate that passed the repository check.
+
 ## Roadmap
 
 ### P0 — security, recovery, and release confidence

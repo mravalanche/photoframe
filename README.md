@@ -1,5 +1,7 @@
 # Photoframe
 
+[![Quality](https://github.com/mravalanche/photoframe/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/mravalanche/photoframe/actions/workflows/quality.yml?query=branch%3Amain)
+
 Photoframe is a local-first web application for running a provider-backed digital photo frame.
 It connects to Immich, selects and filters an album for the installed display, prepares images at
 the panel's native resolution, and drives supported Pimoroni Inky hardware. A built-in simulator
