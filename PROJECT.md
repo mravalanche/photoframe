@@ -340,6 +340,14 @@ create and label release PRs and their commits can trigger the required **Tests*
 built-in `GITHUB_TOKEN` is intentionally not used because GitHub suppresses workflow runs caused by
 that token, which would leave a release PR unable to satisfy protected `main`.
 
+After any push to `main`, the **Sync main to develop** workflow opens or reuses a pull request from
+`main` into `develop`, waits for **Tests**, and enables GitHub auto-merge only when the pull request
+is conflict-free. A conflict leaves the pull request open for manual resolution, and a merge into
+`develop` cannot retrigger the workflow because it listens only to `main`. The workflow uses the
+same `RELEASE_PLEASE_TOKEN`; until that secret is configured, it exits successfully with a clear
+skip notice and makes no repository change. GitHub repository auto-merge must remain enabled, but
+it does not bypass branch rules, reviews, or required checks.
+
 Repository rules should block direct pushes to `main`, require a pull request and approving review,
 and require the **Tests** status before merge. Apply the
 same pull-request and status-check gate to `develop` so integration history always represents a

@@ -1,0 +1,116 @@
+name: Sync main to develop
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: sync-main-to-develop
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync main to develop
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check synchronization token
+        id: token
+        env:
+          SYNC_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          if [ -z "$SYNC_TOKEN" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::RELEASE_PLEASE_TOKEN is not configured; main-to-develop synchronization was skipped."
+            echo "Main-to-develop synchronization was skipped because RELEASE_PLEASE_TOKEN is not configured." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open or reuse synchronization pull request
+        id: pull-request
+        if: steps.token.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          ahead=$(gh api "repos/$REPOSITORY/compare/develop...main" --jq '.ahead_by')
+          if [ "$ahead" -eq 0 ]; then
+            echo "::notice::develop already contains every commit from main; no synchronization pull request is needed."
+            echo "Develop already contains every commit from main." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          number=$(gh pr list \
+            --repo "$REPOSITORY" \
+            --base develop \
+            --head main \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -z "$number" ]; then
+            url=$(gh pr create \
+              --repo "$REPOSITORY" \
+              --base develop \
+              --head main \
+              --title "Sync main into develop" \
+              --body "Synchronize production changes from \`main\` back into \`develop\`. This pull request is created automatically and will merge only after Tests passes and GitHub reports that it is conflict-free.")
+            number=$(gh pr view "$url" --repo "$REPOSITORY" --json number --jq '.number')
+          fi
+
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          echo "Synchronization pull request: #$number" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for Tests and enable auto-merge
+        if: steps.pull-request.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          PULL_REQUEST: ${{ steps.pull-request.outputs.number }}
+        run: |
+          set -euo pipefail
+
+          mergeable=UNKNOWN
+          for _ in $(seq 1 30); do
+            mergeable=$(gh pr view "$PULL_REQUEST" --repo "$REPOSITORY" --json mergeable --jq '.mergeable')
+            if [ "$mergeable" != "UNKNOWN" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$mergeable" != "MERGEABLE" ]; then
+            echo "::notice::Synchronization pull request #$PULL_REQUEST is not clean; auto-merge was not enabled."
+            echo "Pull request #$PULL_REQUEST is not clean; auto-merge was not enabled." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          for _ in $(seq 1 30); do
+            count=$(gh pr checks "$PULL_REQUEST" --repo "$REPOSITORY" --json name --jq '[.[] | select(.name == "Tests")] | length' 2>/dev/null || true)
+            if [ "${count:-0}" -gt 0 ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "${count:-0}" -eq 0 ]; then
+            echo "::error::Tests did not start for synchronization pull request #$PULL_REQUEST; auto-merge was not enabled."
+            exit 1
+          fi
+
+          gh pr checks "$PULL_REQUEST" --repo "$REPOSITORY" --watch --fail-fast --interval 10
+
+          mergeable=$(gh pr view "$PULL_REQUEST" --repo "$REPOSITORY" --json mergeable --jq '.mergeable')
+          if [ "$mergeable" != "MERGEABLE" ]; then
+            echo "::notice::Synchronization pull request #$PULL_REQUEST is no longer clean; auto-merge was not enabled."
+            exit 0
+          fi
+
+          gh pr merge "$PULL_REQUEST" --repo "$REPOSITORY" --auto --merge
+          echo "Auto-merge enabled for clean, passing synchronization pull request #$PULL_REQUEST." >> "$GITHUB_STEP_SUMMARY"
