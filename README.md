@@ -91,6 +91,7 @@ access.
 
 ```powershell
 uv sync --all-groups
+uv run poe typecheck
 uv run poe check-fast
 uv run poe pre-commit
 uv run poe check
@@ -103,3 +104,10 @@ vulnerability audit, which needs current advisory data.
 ## Roadmap
 
 See the prioritized checkbox-style [Roadmap](PROJECT.md#roadmap).
+
+## License
+
+Photoframe is free software licensed under the
+[GNU Affero General Public License v3.0 or later](LICENSE).
+
+Copyright © 2026 mravalanche

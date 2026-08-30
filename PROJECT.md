@@ -27,8 +27,10 @@ the repository's Git history if historical reference is needed.
 The application is deliberately small and single-process:
 
 - `src/photoframe/__main__.py` resolves the persisted listener and starts Uvicorn.
-- `src/photoframe/web.py` owns the FastAPI routes, Jinja/HTMX UI, runtime coordination, and
-  endpoint-change restart request.
+- `src/photoframe/web/` owns typed HTML-form parsing, FastAPI routes, Jinja/HTMX presentation, and
+  endpoint-change restart requests.
+- `src/photoframe/services/` owns provider-neutral runtime coordination and validated configuration
+  workflows, keeping HTTP handlers away from mutable runtime internals.
 - `src/photoframe/models.py` defines validated application, listener, display, refresh, and status
   models.
 - `src/photoframe/settings.py` performs locked, validated, atomic TOML writes and manages the
@@ -287,13 +289,14 @@ The main tasks are:
 
 ```powershell
 uv run poe test          # pytest suite
+uv run poe typecheck     # Pyright static type checking
 uv run poe check-fast    # deterministic offline commit gate
 uv run poe pre-commit    # repository hooks and reviewed secret baseline
 uv run poe check         # complete pre-push quality and security gate
 ```
 
-The complete gate covers tests, Ruff lint and formatting, explicit unused-name checks, dependency
-declaration and tree checks, Bandit, tracked-file secret detection, and an installed-dependency
+The complete gate covers tests, Ruff lint and formatting, Pyright static type checking, explicit
+unused-name checks, dependency declaration and tree checks, Bandit, tracked-file secret detection, and an installed-dependency
 vulnerability audit. The vulnerability audit needs current advisory data. Run `uv run poe --help`
 for the individual `deps-*` and `security-*` tasks.
 

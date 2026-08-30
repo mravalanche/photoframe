@@ -19,6 +19,8 @@ def test_selection_is_deterministic_and_rotates_from_chosen_start():
     )
     first = active_selection(photos, frame, anchor + timedelta(seconds=59))
     second = active_selection(photos, frame, anchor + timedelta(seconds=60))
+    assert first.photo is not None
+    assert second.photo is not None
     assert (first.photo.id, first.eligible_count, first.position) == ("b", 2, 1)
     assert (second.photo.id, second.position) == ("a", 2)
 
@@ -58,10 +60,11 @@ def test_shuffle_deck_is_stable_complete_and_avoids_boundary_repeat():
         schedule_anchor=anchor,
     )
     frame.shuffle_photo_ids = shuffled_photo_ids(photos, frame)
-    selected = [
-        active_selection(photos, frame, anchor + timedelta(seconds=slot * 60)).photo.id
-        for slot in range(5)
+    selections = [
+        active_selection(photos, frame, anchor + timedelta(seconds=slot * 60)) for slot in range(5)
     ]
+    assert all(selection.photo is not None for selection in selections)
+    selected = [selection.photo.id for selection in selections if selection.photo is not None]
     assert len(set(selected[:4])) == 4
     assert selected[0] == selected[4]
     assert selected[3] != selected[4]

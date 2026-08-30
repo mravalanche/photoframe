@@ -12,11 +12,12 @@ import errno
 import hashlib
 import os
 import shutil
-import tempfile
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
+
+from .persistence import atomic_write
 
 DECODABILITY_VERSION = "v2"
 
@@ -83,18 +84,8 @@ class PhotoCache:
         """Persist an atomic, compact verdict for an immutable provider asset ID."""
         with self._lock:
             target = self._decodability_file(key)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            fd, temporary = tempfile.mkstemp(prefix=".decode-", suffix=".tmp", dir=target.parent)
-            try:
-                with os.fdopen(fd, "w", encoding="ascii") as handle:
-                    verdict = "supported" if supported else "unsupported"
-                    handle.write(f"{verdict}-{DECODABILITY_VERSION}")
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                os.replace(temporary, target)
-            finally:
-                if os.path.exists(temporary):
-                    os.unlink(temporary)
+            verdict = "supported" if supported else "unsupported"
+            atomic_write(target, f"{verdict}-{DECODABILITY_VERSION}".encode("ascii"))
 
     def set_max_bytes(self, value: int) -> None:
         with self._lock:
@@ -141,17 +132,7 @@ class PhotoCache:
         target = self._file(key)
         existing = target.stat().st_size if target.exists() else 0
         self._evict_until(self.max_bytes - len(content) + existing, exclude=target)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        fd, temporary = tempfile.mkstemp(prefix=".photo-", suffix=".tmp", dir=target.parent)
-        try:
-            with os.fdopen(fd, "wb") as handle:
-                handle.write(content)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary, target)
-        finally:
-            if os.path.exists(temporary):
-                os.unlink(temporary)
+        atomic_write(target, content)
 
     def _evict_until(self, permitted_bytes: int, exclude: Path) -> None:
         stats = self.stats()

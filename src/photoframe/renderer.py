@@ -213,11 +213,12 @@ class RenderService:
             if state.active or self.coordinator.hardware_busy:
                 return state
             prepared = self.prepare(photo_id)
-            if self.refresh is None:
+            refresh = self.refresh
+            if refresh is None:
                 return self.coordinator.start(photo_id)
             return self.coordinator.start_hardware(
                 photo_id,
-                lambda: self.refresh(prepared),
+                lambda: refresh(prepared),
                 on_complete=on_complete,
                 on_failure=on_failure,
             )

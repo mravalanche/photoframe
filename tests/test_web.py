@@ -23,10 +23,10 @@ class FakeProvider:
             Photo(id="tall", filename="tall.jpg", width=800, height=1200),
         ]
 
-    def thumbnail(self, photo_id):
+    def thumbnail(self, photo_id: str) -> tuple[bytes, str]:
         return b"image", "image/jpeg"
 
-    def original(self, photo_id):
+    def original(self, photo_id: str) -> tuple[bytes, str]:
         image = Image.new("RGB", (1200, 800), "navy")
         output = BytesIO()
         image.save(output, format="JPEG")
@@ -34,7 +34,7 @@ class FakeProvider:
 
 
 def test_complete_local_web_flow(tmp_path: Path):
-    app = create_app(tmp_path, lambda _url, _key: FakeProvider())
+    app = create_app(tmp_path, lambda _kind: FakeProvider())
     with TestClient(app) as client:
         assert client.get("/").status_code == 200
         response = client.post(
@@ -79,7 +79,7 @@ class MixedFormatProvider(FakeProvider):
             Photo(id="heic", filename="phone.heic", width=1200, height=800),
         ]
 
-    def original(self, photo_id):
+    def original(self, photo_id: str) -> tuple[bytes, str]:
         self.original_calls.append(photo_id)
         if photo_id == "heic":
             return b"HEIC-like bytes Pillow cannot decode", "image/heic"
@@ -91,7 +91,7 @@ class PreviewFallbackProvider(MixedFormatProvider):
         super().__init__()
         self.thumbnail_calls: list[str] = []
 
-    def thumbnail(self, photo_id):
+    def thumbnail(self, photo_id: str) -> tuple[bytes, str]:
         self.thumbnail_calls.append(photo_id)
         if photo_id == "heic":
             return FakeProvider.original(self, photo_id)
@@ -99,7 +99,7 @@ class PreviewFallbackProvider(MixedFormatProvider):
 
 
 def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path):
-    app = create_app(tmp_path, lambda _url, _key: FakeProvider())
+    app = create_app(tmp_path, lambda _kind: FakeProvider())
     with TestClient(app) as client:
         client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
         client.post("/album/select", data={"album_id": "album"})
@@ -133,7 +133,7 @@ def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path)
 
 
 def test_render_requires_native_display_dimensions(tmp_path: Path):
-    app = create_app(tmp_path, lambda _url, _key: FakeProvider())
+    app = create_app(tmp_path, lambda _kind: FakeProvider())
     with TestClient(app) as client:
         client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
         client.post("/album/select", data={"album_id": "album"})
@@ -162,7 +162,7 @@ def test_demo_mode_is_local_and_renderable(tmp_path: Path):
 
 def test_unsupported_assets_are_filtered_once_and_reported_by_category(tmp_path: Path):
     provider = MixedFormatProvider()
-    app = create_app(tmp_path, lambda _url, _key: provider)
+    app = create_app(tmp_path, lambda _kind: provider)
     with TestClient(app) as client:
         client.post(
             "/connection",
@@ -189,7 +189,7 @@ def test_unsupported_assets_are_filtered_once_and_reported_by_category(tmp_path:
 
 def test_decodable_provider_preview_keeps_heic_original_eligible(tmp_path: Path):
     provider = PreviewFallbackProvider()
-    app = create_app(tmp_path, lambda _url, _key: provider)
+    app = create_app(tmp_path, lambda _kind: provider)
     with TestClient(app) as client:
         client.post(
             "/connection",
@@ -448,7 +448,7 @@ def test_shuffle_setting_persists_and_start_here_anchors_new_round(tmp_path: Pat
 
 
 def test_reset_clears_configuration_secret_cache_and_runtime(tmp_path: Path):
-    app = create_app(tmp_path, lambda _url, _key: FakeProvider())
+    app = create_app(tmp_path, lambda _kind: FakeProvider())
     with TestClient(app) as client:
         client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
         client.post("/album/select", data={"album_id": "album"})
@@ -472,7 +472,7 @@ def test_reset_clears_configuration_secret_cache_and_runtime(tmp_path: Path):
 
 
 def test_reset_truthfully_reports_partial_cache_cleanup(tmp_path: Path, monkeypatch):
-    app = create_app(tmp_path, lambda _url, _key: FakeProvider())
+    app = create_app(tmp_path, lambda _kind: FakeProvider())
     with TestClient(app) as client:
         client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
         runtime = app.state.runtime

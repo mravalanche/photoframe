@@ -4,8 +4,8 @@ from threading import Event, Thread
 
 from photoframe.models import DisplayDriver
 from photoframe.providers import DemoProvider
+from photoframe.services.runtime import Runtime
 from photoframe.settings import SecretStore, SettingsRepository
-from photoframe.web import Runtime
 
 
 class ImmediateDisplay:
@@ -62,7 +62,7 @@ def new_runtime(repository: SettingsRepository) -> Runtime:
     runtime = Runtime(
         repository,
         SecretStore(repository.data_dir),
-        lambda *_: DemoProvider(),
+        lambda _kind: DemoProvider(),
         DemoProvider(),
     )
     runtime.display = ImmediateDisplay()  # type: ignore[assignment]
@@ -121,7 +121,7 @@ def test_offline_restart_records_retry_then_recovers_and_renders(tmp_path: Path)
     anchor = datetime(2026, 1, 1, tzinfo=UTC)
     repository = configured_repository(tmp_path, anchor)
     provider = RecoveringProvider()
-    runtime = Runtime(repository, SecretStore(tmp_path), lambda *_: provider, provider)
+    runtime = Runtime(repository, SecretStore(tmp_path), lambda _kind: provider, provider)
     runtime.display = ImmediateDisplay()  # type: ignore[assignment]
 
     assert runtime.refresh_lifecycle(anchor)
@@ -159,7 +159,7 @@ def test_concurrent_lifecycle_calls_coalesce_provider_work(tmp_path: Path):
             return super().list_photos(album_id)
 
     provider = BlockingProvider()
-    runtime = Runtime(repository, SecretStore(tmp_path), lambda *_: provider, provider)
+    runtime = Runtime(repository, SecretStore(tmp_path), lambda _kind: provider, provider)
     first = Thread(target=lambda: runtime.refresh_lifecycle(anchor))
     first.start()
     assert entered.wait(1)
@@ -173,13 +173,13 @@ def test_reboot_during_failure_backoff_does_not_bypass_retry(tmp_path: Path):
     anchor = datetime(2026, 1, 1, tzinfo=UTC)
     repository = configured_repository(tmp_path, anchor)
     provider = RecoveringProvider()
-    first = Runtime(repository, SecretStore(tmp_path), lambda *_: provider, provider)
+    first = Runtime(repository, SecretStore(tmp_path), lambda _kind: provider, provider)
     first.display = ImmediateDisplay()  # type: ignore[assignment]
     first.refresh_lifecycle(anchor)
     deadline = repository.load().refresh_status.next_attempt_at
     assert provider.photo_calls == 1
 
-    rebooted = Runtime(repository, SecretStore(tmp_path), lambda *_: provider, provider)
+    rebooted = Runtime(repository, SecretStore(tmp_path), lambda _kind: provider, provider)
     rebooted.display = ImmediateDisplay()  # type: ignore[assignment]
     provider.offline = False
     rebooted.refresh_lifecycle(anchor + timedelta(seconds=15))
