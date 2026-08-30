@@ -326,7 +326,7 @@ Use this flow for normal changes and releases:
    released fix back into `develop` immediately so the branches do not diverge.
 
 Repository rules should block direct pushes to `main`, require a pull request and approving review,
-and require the **Quality / Test, lint, format, and security checks** status before merge. Apply the
+and require the **Tests** status before merge. Apply the
 same pull-request and status-check gate to `develop` so integration history always represents a
 candidate that passed the repository check.
 

@@ -1,6 +1,6 @@
 # Photoframe
 
-[![Quality](https://github.com/mravalanche/photoframe/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/mravalanche/photoframe/actions/workflows/quality.yml?query=branch%3Amain)
+[![Tests](https://github.com/mravalanche/photoframe/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/mravalanche/photoframe/actions/workflows/tests.yml?query=branch%3Amain)
 
 Photoframe is a local-first web application for running a provider-backed digital photo frame.
 It connects to Immich, selects and filters an album for the installed display, prepares images at
@@ -84,7 +84,7 @@ by browsers automatically, so each client must accept it or be configured to tru
 [Security model and limitations](PROJECT.md#security-model-and-limitations) before enabling LAN
 access.
 
-## Quality checks
+## Tests
 
 ```powershell
 uv sync --all-groups
