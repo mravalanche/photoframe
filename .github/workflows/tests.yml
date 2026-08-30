@@ -1,0 +1,64 @@
+name: Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install locked development dependencies
+        run: uv sync --frozen --all-groups
+
+      - name: Run tests
+        run: uv run pytest
+
+      - name: Run Ruff lint checks
+        run: uv run ruff check .
+
+      - name: Check for unused imports and variables
+        run: uv run ruff check --select F401,F841 src tests
+
+      - name: Verify Ruff formatting
+        run: uv run ruff format --check src tests
+
+      - name: Check dependency declarations
+        run: uv run deptry src
+
+      - name: Print the locked dependency tree
+        run: uv run python scripts/uv_tree.py
+
+      - name: Run Bandit security checks
+        run: uv run bandit -q -r src
+
+      - name: Scan tracked files for secrets
+        run: uv run pre-commit run detect-secrets --all-files
+
+      - name: Audit installed dependencies for vulnerabilities
+        run: uv run pip-audit --local --progress-spinner off
