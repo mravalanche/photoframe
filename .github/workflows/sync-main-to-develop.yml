@@ -91,20 +91,37 @@ jobs:
             exit 0
           fi
 
-          for _ in $(seq 1 30); do
-            count=$(gh pr checks "$PULL_REQUEST" --repo "$REPOSITORY" --json name --jq '[.[] | select(.name == "Tests")] | length' 2>/dev/null || true)
-            if [ "${count:-0}" -gt 0 ]; then
+          tests_state=missing
+          for _ in $(seq 1 60); do
+            tests_state=$(
+              gh pr checks "$PULL_REQUEST" \
+                --repo "$REPOSITORY" \
+                --json name,state \
+                --jq '
+                  [.[] | select(.name == "Tests") | .state] as $tests |
+                  if ($tests | length) == 0 then "missing"
+                  elif any($tests[]; . != "SUCCESS" and . != "IN_PROGRESS" and . != "QUEUED" and . != "PENDING" and . != "WAITING" and . != "REQUESTED") then "failed"
+                  elif all($tests[]; . == "SUCCESS") then "passed"
+                  else "pending"
+                  end
+                ' 2>/dev/null || true
+            )
+            tests_state=${tests_state:-missing}
+
+            if [ "$tests_state" = "passed" ]; then
               break
             fi
-            sleep 2
+            if [ "$tests_state" = "failed" ]; then
+              echo "::error::Tests failed for synchronization pull request #$PULL_REQUEST; auto-merge was not enabled."
+              exit 1
+            fi
+            sleep 10
           done
 
-          if [ "${count:-0}" -eq 0 ]; then
-            echo "::error::Tests did not start for synchronization pull request #$PULL_REQUEST; auto-merge was not enabled."
+          if [ "$tests_state" != "passed" ]; then
+            echo "::error::Tests did not complete successfully for synchronization pull request #$PULL_REQUEST; auto-merge was not enabled."
             exit 1
           fi
-
-          gh pr checks "$PULL_REQUEST" --repo "$REPOSITORY" --watch --fail-fast --interval 10
 
           mergeable=$(gh pr view "$PULL_REQUEST" --repo "$REPOSITORY" --json mergeable --jq '.mergeable')
           if [ "$mergeable" != "MERGEABLE" ]; then
