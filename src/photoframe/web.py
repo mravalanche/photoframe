@@ -603,13 +603,13 @@ def create_app(
                 secrets.set_api_key(api_key)
             message = runtime.provider().validate_connection()
             checked_at = datetime.now(UTC)
-            repository.update(
-                lambda settings: (
-                    setattr(settings.verification, "ok", True),
-                    setattr(settings.verification, "message", message),
-                    setattr(settings.verification, "last_checked_at", checked_at),
-                )
-            )
+
+            def record_connection_success(settings: AppSettings) -> None:
+                settings.verification.ok = True
+                settings.verification.message = message
+                settings.verification.last_checked_at = checked_at
+
+            repository.update(record_connection_success)
             runtime.refresh_albums()
             with runtime._runtime_lock:
                 runtime.photos = []
@@ -617,13 +617,13 @@ def create_app(
         except Exception as exc:
             message = str(exc)
             checked_at = datetime.now(UTC)
-            repository.update(
-                lambda settings: (
-                    setattr(settings.verification, "ok", False),
-                    setattr(settings.verification, "message", message),
-                    setattr(settings.verification, "last_checked_at", checked_at),
-                )
-            )
+
+            def record_connection_failure(settings: AppSettings) -> None:
+                settings.verification.ok = False
+                settings.verification.message = message
+                settings.verification.last_checked_at = checked_at
+
+            repository.update(record_connection_failure)
             return workspace(request, error=str(exc))
 
     @app.post("/albums/refresh", response_class=HTMLResponse)
@@ -804,12 +804,12 @@ def create_app(
                 error="That image is not eligible or cannot be decoded by this PhotoFrame",
             )
         anchor = datetime.now(UTC)
-        repository.update(
-            lambda saved: (
-                setattr(saved.frame, "starting_photo_id", photo_id),
-                setattr(saved.frame, "schedule_anchor", anchor),
-            )
-        )
+
+        def start_from_photo(saved: AppSettings) -> None:
+            saved.frame.starting_photo_id = photo_id
+            saved.frame.schedule_anchor = anchor
+
+        repository.update(start_from_photo)
         if settings.frame.photo_order == PhotoOrder.SHUFFLE:
             runtime.reconcile_shuffle(anchor_id=photo_id, fresh=True)
             message = "A new shuffled round now starts from the selected image"

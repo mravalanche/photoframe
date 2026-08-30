@@ -25,6 +25,7 @@ def test_render_times_out_when_busy_signal_never_clears():
     renderer.start("photo", start)
     state = renderer.update(settings, start + timedelta(seconds=10))
     assert state.phase == RenderPhase.FAILED
+    assert state.message is not None
     assert "busy signal" in state.message
 
 
@@ -49,7 +50,11 @@ def test_hardware_render_uses_blocking_driver_completion():
 def test_timeout_does_not_release_single_flight_lock():
     renderer = MockRenderCoordinator()
     release = Event()
-    renderer.start_hardware("first", lambda: release.wait(2))
+
+    def wait_for_release() -> None:
+        release.wait(2)
+
+    renderer.start_hardware("first", wait_for_release)
     started = renderer.state.started_at
     assert started is not None
     renderer.update(DeviceSettings(render_timeout_seconds=10), started + timedelta(seconds=20))
@@ -70,9 +75,11 @@ def test_simultaneous_manual_and_scheduled_start_only_one_refreshes():
     release = Event()
     start = Barrier(3)
     prepared: list[str] = []
-    service = RenderService(
-        renderer, lambda photo_id: prepared.append(photo_id), lambda _: release.wait(1)
-    )
+
+    def refresh(_prepared: object) -> None:
+        release.wait(1)
+
+    service = RenderService(renderer, lambda photo_id: prepared.append(photo_id), refresh)
 
     def submit(photo_id: str):
         start.wait()
@@ -94,7 +101,11 @@ def test_timeout_persists_failure_then_late_success_reconciles():
     release = Event()
     failures: list[str] = []
     successes: list[str] = []
-    renderer.start_hardware("photo", lambda: release.wait(1), successes.append, failures.append)
+
+    def wait_for_release() -> None:
+        release.wait(1)
+
+    renderer.start_hardware("photo", wait_for_release, successes.append, failures.append)
     started = renderer.snapshot().started_at
     assert started is not None
     renderer.update(DeviceSettings(render_timeout_seconds=10), started + timedelta(seconds=11))

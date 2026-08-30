@@ -48,6 +48,9 @@ jobs:
       - name: Verify Ruff formatting
         run: uv run ruff format --check src tests
 
+      - name: Run Pyright static type checks
+        run: uv run pyright
+
       - name: Check dependency declarations
         run: uv run deptry src
 

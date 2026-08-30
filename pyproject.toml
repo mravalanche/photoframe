@@ -35,6 +35,7 @@ dev = [
   "pip-audit>=2.9",
   "poethepoet>=0.37",
   "pre-commit>=4.3",
+  "pyright>=1.1.405",
   "pytest>=8.3",
   "pytest-cov>=6.0",
   "ruff>=0.9",
@@ -50,6 +51,14 @@ packages = ["src/photoframe"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+include = ["src", "tests"]
+exclude = [".tools", ".venv"]
+venvPath = "."
+venv = ".venv"
 
 [tool.ruff]
 line-length = 100
@@ -72,12 +81,13 @@ test = { cmd = "pytest", help = "Run the test suite" }
 lint = { cmd = "ruff check .", help = "Lint Python, including unused imports and variables" }
 unused = { cmd = "ruff check --select F401,F841 src tests", help = "Report unused imports and local variables explicitly" }
 format-check = { cmd = "ruff format --check src tests", help = "Verify Python formatting without changing files" }
+typecheck = { cmd = "pyright", help = "Run static type checking across application and test code" }
 deps-check = { cmd = "deptry src", help = "Find missing, transitive, and unused dependency declarations" }
 deps-tree = { cmd = "python scripts/uv_tree.py", help = "Print the complete locked UV dependency tree" }
 security-code = { cmd = "bandit -q -r src", help = "Run static application security checks" }
 security-secrets = { cmd = "pre-commit run detect-secrets --all-files", help = "Scan tracked files against the reviewed secrets baseline" }
 security-audit = { cmd = "pip-audit --local --progress-spinner off", help = "Check installed dependencies against published advisories" }
-check-fast = { sequence = ["test", "lint", "unused", "format-check", "deps-check", "deps-tree", "security-code"], help = "Run the deterministic offline commit gate" }
+check-fast = { sequence = ["test", "lint", "unused", "format-check", "typecheck", "deps-check", "deps-tree", "security-code"], help = "Run the deterministic offline commit gate" }
 security = { sequence = ["security-code", "security-secrets", "security-audit"], help = "Run code, secret, and dependency security checks" }
 check = { sequence = ["check-fast", "security-secrets", "security-audit"], help = "Run the complete pre-push quality and security gate" }
 pre-commit = { cmd = "pre-commit run --all-files", help = "Run the configured Git pre-commit hooks" }

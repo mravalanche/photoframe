@@ -60,7 +60,10 @@ def _local_names() -> tuple[list[x509.DNSName], list[x509.IPAddress]]:
     addresses = {ipaddress.ip_address("127.0.0.1")}
     with suppress(OSError):
         for result in socket.getaddrinfo(hostname, None):
-            address = result[4][0].split("%", 1)[0]
+            raw_address = result[4][0]
+            if not isinstance(raw_address, str):
+                continue
+            address = raw_address.split("%", 1)[0]
             with suppress(ValueError):
                 addresses.add(ipaddress.ip_address(address))
     return (

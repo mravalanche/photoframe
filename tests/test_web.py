@@ -23,10 +23,10 @@ class FakeProvider:
             Photo(id="tall", filename="tall.jpg", width=800, height=1200),
         ]
 
-    def thumbnail(self, photo_id):
+    def thumbnail(self, photo_id: str) -> tuple[bytes, str]:
         return b"image", "image/jpeg"
 
-    def original(self, photo_id):
+    def original(self, photo_id: str) -> tuple[bytes, str]:
         image = Image.new("RGB", (1200, 800), "navy")
         output = BytesIO()
         image.save(output, format="JPEG")
@@ -79,7 +79,7 @@ class MixedFormatProvider(FakeProvider):
             Photo(id="heic", filename="phone.heic", width=1200, height=800),
         ]
 
-    def original(self, photo_id):
+    def original(self, photo_id: str) -> tuple[bytes, str]:
         self.original_calls.append(photo_id)
         if photo_id == "heic":
             return b"HEIC-like bytes Pillow cannot decode", "image/heic"
@@ -91,7 +91,7 @@ class PreviewFallbackProvider(MixedFormatProvider):
         super().__init__()
         self.thumbnail_calls: list[str] = []
 
-    def thumbnail(self, photo_id):
+    def thumbnail(self, photo_id: str) -> tuple[bytes, str]:
         self.thumbnail_calls.append(photo_id)
         if photo_id == "heic":
             return FakeProvider.original(self, photo_id)
