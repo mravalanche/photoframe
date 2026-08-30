@@ -4,8 +4,8 @@ from threading import Event, Thread
 
 from photoframe.models import DisplayDriver
 from photoframe.providers import DemoProvider
+from photoframe.services.runtime import Runtime
 from photoframe.settings import SecretStore, SettingsRepository
-from photoframe.web import Runtime
 
 
 class ImmediateDisplay:
