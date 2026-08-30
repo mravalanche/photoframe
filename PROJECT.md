@@ -305,9 +305,9 @@ the Advanced settings UI contract.
 ## Branch and release flow
 
 `develop` is the integration branch and the only branch used for device-soak candidates. `main`
-contains production-ready revisions only. Both branches run the complete `uv run poe check` gate
-in GitHub Actions; changes reach either branch through a reviewed pull request with that check
-passing.
+contains production-ready revisions only. GitHub Actions runs the same complete gate as local
+`uv run poe check`, with each test, lint, formatting, dependency, and security command visible as a
+separate step. Changes reach either branch through a reviewed pull request with that check passing.
 
 Use this flow for normal changes and releases:
 

@@ -36,5 +36,29 @@ jobs:
       - name: Install locked development dependencies
         run: uv sync --frozen --all-groups
 
-      - name: Run the complete repository check
-        run: uv run poe check
+      - name: Run tests
+        run: uv run pytest
+
+      - name: Run Ruff lint checks
+        run: uv run ruff check .
+
+      - name: Check for unused imports and variables
+        run: uv run ruff check --select F401,F841 src tests
+
+      - name: Verify Ruff formatting
+        run: uv run ruff format --check src tests
+
+      - name: Check dependency declarations
+        run: uv run deptry src
+
+      - name: Print the locked dependency tree
+        run: uv run python scripts/uv_tree.py
+
+      - name: Run Bandit security checks
+        run: uv run bandit -q -r src
+
+      - name: Scan tracked files for secrets
+        run: uv run pre-commit run detect-secrets --all-files
+
+      - name: Audit installed dependencies for vulnerabilities
+        run: uv run pip-audit --local --progress-spinner off
