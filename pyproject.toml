@@ -3,6 +3,8 @@ name = "photoframe"
 version = "1.0.0"
 description = "Configure and verify a provider-backed digital photo frame"
 readme = "README.md"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
   "cryptography>=44.0",
@@ -39,7 +41,7 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]

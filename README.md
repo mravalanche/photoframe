@@ -103,3 +103,10 @@ vulnerability audit, which needs current advisory data.
 ## Roadmap
 
 See the prioritized checkbox-style [Roadmap](PROJECT.md#roadmap).
+
+## License
+
+Photoframe is free software licensed under the
+[GNU Affero General Public License v3.0 or later](LICENSE).
+
+Copyright © 2026 mravalanche
