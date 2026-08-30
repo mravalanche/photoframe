@@ -27,8 +27,10 @@ the repository's Git history if historical reference is needed.
 The application is deliberately small and single-process:
 
 - `src/photoframe/__main__.py` resolves the persisted listener and starts Uvicorn.
-- `src/photoframe/web.py` owns the FastAPI routes, Jinja/HTMX UI, runtime coordination, and
-  endpoint-change restart request.
+- `src/photoframe/web/` owns typed HTML-form parsing, FastAPI routes, Jinja/HTMX presentation, and
+  endpoint-change restart requests.
+- `src/photoframe/services/` owns provider-neutral runtime coordination and validated configuration
+  workflows, keeping HTTP handlers away from mutable runtime internals.
 - `src/photoframe/models.py` defines validated application, listener, display, refresh, and status
   models.
 - `src/photoframe/settings.py` performs locked, validated, atomic TOML writes and manages the
