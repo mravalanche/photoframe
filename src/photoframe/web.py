@@ -32,13 +32,17 @@ from .models import (
     ProviderKind,
     WebProtocol,
 )
-from .providers import DemoProvider, ImmichProvider, PhotoProvider, ProviderError
+from .providers import (
+    ConfiguredProviderResolver,
+    DemoProvider,
+    PhotoProvider,
+    ProviderError,
+    ProviderResolver,
+)
 from .renderer import MockRenderCoordinator, RenderPhase, RenderService
 from .selector import EligibilitySummary, active_selection, classify_photos, shuffled_photo_ids
 from .settings import SecretStore, SettingsRepository
 from .tls import tls_paths
-
-ProviderFactory = Callable[[str, str], PhotoProvider]
 
 
 def schedule_label(target: datetime | None, timezone: str, now: datetime | None = None) -> str:
@@ -77,10 +81,11 @@ class Runtime:
         self,
         settings: SettingsRepository,
         secrets: SecretStore,
-        factory: ProviderFactory,
+        provider_resolver: ProviderResolver,
         demo_provider: PhotoProvider | None = None,
     ):
-        self.repository, self.secrets, self.factory = settings, secrets, factory
+        self.repository, self.secrets = settings, secrets
+        self.provider_resolver = provider_resolver
         self.demo_provider = demo_provider
         self.albums: list[Album] = []
         self.photos: list[Photo] = []
@@ -145,11 +150,7 @@ class Runtime:
     def provider(self) -> PhotoProvider:
         if self.demo_provider:
             return self.demo_provider
-        settings = self.repository.load()
-        key = self.secrets.get_api_key()
-        if not settings.provider.server_url or not key:
-            raise ProviderError("Save an Immich server URL and API key first")
-        return self.factory(str(settings.provider.server_url), key)
+        return self.provider_resolver(self.repository.load().provider.kind)
 
     def refresh_albums(self) -> list[Album]:
         albums = self.provider().list_albums()
@@ -419,16 +420,16 @@ class Runtime:
 
 def create_app(
     data_dir: Path | None = None,
-    provider_factory: ProviderFactory | None = None,
+    provider_factory: ProviderResolver | None = None,
     demo_mode: bool | None = None,
     restart_callback: Callable[[], None] | None = None,
 ) -> FastAPI:
     package = Path(__file__).parent
     target = data_dir or Path(os.getenv("PHOTOFRAME_DATA_DIR", "data"))
     repository, secrets = SettingsRepository(target), SecretStore(target)
-    factory = provider_factory or (lambda url, key: ImmichProvider(url, key))
+    provider_resolver = provider_factory or ConfiguredProviderResolver(repository, secrets)
     is_demo = demo_mode if demo_mode is not None else os.getenv("PHOTOFRAME_DEMO_MODE") == "1"
-    runtime = Runtime(repository, secrets, factory, DemoProvider() if is_demo else None)
+    runtime = Runtime(repository, secrets, provider_resolver, DemoProvider() if is_demo else None)
     reset_lock = Lock()
     if not is_demo:
         runtime.initialise_display()
