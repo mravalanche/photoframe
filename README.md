@@ -91,6 +91,7 @@ access.
 
 ```powershell
 uv sync --all-groups
+uv run poe typecheck
 uv run poe check-fast
 uv run poe pre-commit
 uv run poe check
