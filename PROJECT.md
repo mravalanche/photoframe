@@ -321,9 +321,32 @@ Use this flow for normal changes and releases:
 4. When the candidate has passed its planned device soak, open a pull request from `develop` to
    `main`. Confirm the release checklist and release notes in that pull request, require the full
    check and a review, then merge it without adding unrelated changes.
-5. Tag the resulting `main` commit with the approved version and publish the release notes. Start
+5. Review and merge the Release Please pull request, then confirm its tag and GitHub release. Start
    subsequent work from `develop`; if an emergency production fix begins from `main`, merge the
    released fix back into `develop` immediately so the branches do not diverge.
+
+Release Please automates the final version, changelog, tag, and GitHub release. Commit messages that
+reach `main` must follow Conventional Commits: use `fix:` for a patch, `feat:` for a minor release,
+and `feat!:`/`fix!:` or a `BREAKING CHANGE:` footer for a major release. Documentation, test, CI,
+and maintenance-only changes may use `docs:`, `test:`, `ci:`, or `chore:` and do not trigger a
+version bump by themselves. Release Please maintains a protected release pull request against
+`main`; merging that reviewed PR creates the `v<version>` tag and GitHub release. Do not hand-edit
+its `CHANGELOG.md` or release-version changes. `pyproject.toml` is the authoritative version source;
+the Python package version and local entry in `uv.lock` are synchronized in the release PR.
+
+Repository setup requires an Actions secret named `RELEASE_PLEASE_TOKEN`. Use a fine-grained token
+for this repository with Contents, Issues, and Pull requests write access so Release Please can
+create and label release PRs and their commits can trigger the required **Tests** workflow. The
+built-in `GITHUB_TOKEN` is intentionally not used because GitHub suppresses workflow runs caused by
+that token, which would leave a release PR unable to satisfy protected `main`.
+
+After any push to `main`, the **Sync main to develop** workflow opens or reuses a pull request from
+`main` into `develop`, waits for **Tests**, and enables GitHub auto-merge only when the pull request
+is conflict-free. A conflict leaves the pull request open for manual resolution, and a merge into
+`develop` cannot retrigger the workflow because it listens only to `main`. The workflow uses the
+same `RELEASE_PLEASE_TOKEN`; until that secret is configured, it exits successfully with a clear
+skip notice and makes no repository change. GitHub repository auto-merge must remain enabled, but
+it does not bypass branch rules, reviews, or required checks.
 
 Repository rules should block direct pushes to `main`, require a pull request and approving review,
 and require the **Tests** status before merge. Apply the

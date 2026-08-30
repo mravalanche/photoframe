@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from PIL import Image
 
+from . import __version__
 from .cache import CacheStats, PhotoCache
 from .display import InkyDisplay, apply_profile, discover_inky
 from .image_processing import ImageProcessingError, image_is_decodable, prepare_for_display
@@ -453,7 +454,7 @@ def create_app(
         runtime.refresh_photos()
         runtime.refresh_lifecycle()
 
-    app = FastAPI(title="Photoframe", version="1.0.0")
+    app = FastAPI(title="Photoframe", version=__version__)
     app.mount("/static", StaticFiles(directory=package / "static"), name="static")
     app.state.runtime = runtime
     worker = RefreshWorker(runtime.refresh_lifecycle, runtime.record_worker_failure)

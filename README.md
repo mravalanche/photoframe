@@ -1,6 +1,9 @@
 # Photoframe
 
 [![Tests](https://github.com/mravalanche/photoframe/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/mravalanche/photoframe/actions/workflows/tests.yml?query=branch%3Amain)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](https://github.com/mravalanche/photoframe/blob/main/LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![Latest release](https://img.shields.io/github/v/release/mravalanche/photoframe?display_name=tag&sort=semver)](https://github.com/mravalanche/photoframe/releases/latest)
 
 Photoframe is a local-first web application for running a provider-backed digital photo frame.
 It connects to Immich, selects and filters an album for the installed display, prepares images at

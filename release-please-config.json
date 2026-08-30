@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "python",
+  "include-component-in-tag": false,
+  "include-v-in-tag": true,
+  "bootstrap-sha": "c8682bec913f34e353b202bd07d355afccaca409",
+  "packages": {
+    ".": {
+      "package-name": "photoframe",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        "uv.lock"
+      ]
+    }
+  }
+}
