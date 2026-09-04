@@ -9,7 +9,11 @@
       "package-name": "photoframe",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
-        "uv.lock"
+        {
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='photoframe')].version"
+        }
       ]
     }
   }
