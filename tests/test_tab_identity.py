@@ -1,4 +1,5 @@
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -70,5 +71,65 @@ if (!/^[0-9a-f]{{8}}-[0-9a-f]{{4}}-4[0-9a-f]{{3}}-[89ab][0-9a-f]{{3}}-[0-9a-f]{{
   throw new Error('fallback did not create a valid v4 UUID');
 }}
 if (session.currentIntent() !== operation) throw new Error('volatile intent was not retained');
+"""
+    subprocess.run([node, "-e", scenario], check=True)
+
+
+def test_page_initialization_continues_when_theme_storage_property_throws() -> None:
+    if NODE is None:
+        pytest.skip("Node.js is unavailable")
+    node = NODE
+    identity_script = Path("src/photoframe/static/tab-identity.js").resolve()
+    template = Path("src/photoframe/templates/index.html").read_text()
+    inline_scripts = re.findall(r"<script>(.*?)</script>", template, flags=re.DOTALL)
+    assert len(inline_scripts) == 2
+    scenario = f"""
+const vm = require('node:vm');
+const identity = require({json.dumps(str(identity_script))});
+const documentListeners = {{}};
+const windowListeners = {{}};
+const themeButton = {{ dataset: {{ themeChoice: 'dark' }}, setAttribute(name, value) {{ this[name] = value; }} }};
+const notice = {{ dataset: {{ autoDismiss: '6000' }} }};
+const panel = {{
+  open: false,
+  dataset: {{ settingsPanel: 'display', defaultOpen: 'false' }},
+  addEventListener(name, callback) {{ this[name] = callback; }},
+}};
+const documentMock = {{
+  documentElement: {{ dataset: {{ theme: 'dark' }} }},
+  addEventListener(name, callback) {{ documentListeners[name] = callback; }},
+  querySelector() {{ return null; }},
+  querySelectorAll(selector) {{
+    if (selector === '[data-theme-choice]') return [themeButton];
+    if (selector === '[data-notice][data-auto-dismiss]') return [notice];
+    if (selector === '[data-settings-panel]') return [panel];
+    return [];
+  }},
+}};
+let uuidSequence = 0;
+const browser = {{
+  document: documentMock,
+  PhotoframeTabIdentity: identity,
+  crypto: {{ randomUUID: () => `00000000-0000-4000-8000-${{String(++uuidSequence).padStart(12, '0')}}` }},
+  sessionStorage: {{ getItem() {{ return null; }}, setItem() {{}}, removeItem() {{}} }},
+  addEventListener(name, callback) {{ windowListeners[name] = callback; }},
+  setTimeout() {{ return 17; }},
+  clearTimeout() {{}},
+}};
+Object.defineProperty(browser, 'localStorage', {{
+  get() {{ throw new DOMException('blocked', 'SecurityError'); }},
+}});
+global.document = documentMock;
+global.window = browser;
+global.self = browser;
+for (const source of {json.dumps(inline_scripts)}) vm.runInThisContext(source);
+if (typeof documentListeners.DOMContentLoaded !== 'function') throw new Error('interface initializer missing');
+documentListeners.DOMContentLoaded();
+if (notice.dataset.dismissTimer !== '17') throw new Error('notification setup did not continue');
+if (panel.dataset.accordionReady !== 'true') throw new Error('accordion setup did not continue');
+if (typeof windowListeners.pagehide !== 'function' || typeof windowListeners.pageshow !== 'function') {{
+  throw new Error('tab session setup did not continue');
+}}
+if (themeButton['aria-pressed'] !== 'true') throw new Error('theme controls were not synchronized');
 """
     subprocess.run([node, "-e", scenario], check=True)

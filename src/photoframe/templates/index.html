@@ -6,7 +6,8 @@
   <meta name="color-scheme" content="dark light">
   <script>
     (() => {
-      const saved = localStorage.getItem('photoframe-theme');
+      let saved = null;
+      try { saved = window.localStorage.getItem('photoframe-theme'); } catch (_error) { /* unavailable */ }
       document.documentElement.dataset.theme = saved === 'light' ? 'light' : 'dark';
     })();
   </script>
@@ -31,7 +32,7 @@
   <script>
     function setTheme(theme) {
       document.documentElement.dataset.theme = theme;
-      localStorage.setItem('photoframe-theme', theme);
+      try { window.localStorage.setItem('photoframe-theme', theme); } catch (_error) { /* unavailable */ }
       document.querySelectorAll('[data-theme-choice]').forEach(button => {
         button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme));
       });
