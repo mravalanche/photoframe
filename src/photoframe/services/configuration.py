@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets as secure_random
+from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -113,7 +114,8 @@ class ConfigurationService:
         self._reset_lock = Lock()
         self._album_selection_lock = Lock()
         self._next_lock = Lock()
-        self._next_request_ids: set[str] = set()
+        self._next_request_ids: deque[str] = deque()
+        self._next_request_id_set: set[str] = set()
 
     def save_connection(self, form: ConnectionInput) -> str:
         try:
@@ -224,6 +226,7 @@ class ConfigurationService:
                 settings.device.set_display_size(None, None)
             settings.frame.schedule_anchor = anchor
             settings.refresh_status.last_completed_schedule_key = None
+            settings.refresh_status.last_attempted_schedule_key = None
             if not any(
                 photo.id == settings.frame.starting_photo_id
                 and photo.matches(settings.frame.orientation)
@@ -322,12 +325,26 @@ class ConfigurationService:
         photo = self.runtime.photo(self.runtime.preview_id())
         if not photo:
             raise ValueError("Select an image preview before sending it to the frame")
+
+        def completed(photo_id: str) -> None:
+            self.repository.update(
+                lambda saved: setattr(saved.refresh_status, "last_rendered_photo_id", photo_id)
+            )
+
         try:
             if self.runtime.has_display():
-                self.runtime.render_service.start(photo.id, operation_id=operation_id)
+                self.runtime.render_service.start(
+                    photo.id,
+                    operation_id=operation_id,
+                    on_complete=completed,
+                )
             else:
                 self.runtime.prepare_photo(photo.id)
-                self.runtime.renderer.start(photo.id, operation_id=operation_id)
+                self.runtime.renderer.start(
+                    photo.id,
+                    operation_id=operation_id,
+                    on_complete=completed,
+                )
         except ImageProcessingError:
             self.runtime.set_preview(None)
             raise
@@ -337,11 +354,12 @@ class ConfigurationService:
         if not self._next_lock.acquire(blocking=False):
             raise ValueError("Another Next photo request is already being handled")
         try:
-            if request_id in self._next_request_ids:
+            if request_id in self._next_request_id_set:
                 raise ValueError("This Next photo request was already handled")
-            self._next_request_ids.add(request_id)
-            if len(self._next_request_ids) > 500:
-                self._next_request_ids = set(list(self._next_request_ids)[-250:])
+            if len(self._next_request_ids) == 500:
+                self._next_request_id_set.discard(self._next_request_ids.popleft())
+            self._next_request_ids.append(request_id)
+            self._next_request_id_set.add(request_id)
             state = self.runtime.renderer.snapshot()
             if state.active or self.runtime.renderer.hardware_busy:
                 raise ValueError("Wait for the current frame update before choosing Next photo")
@@ -351,8 +369,8 @@ class ConfigurationService:
             _albums, photos = self.runtime.catalog_snapshot()
             eligible = self.runtime.photo_eligibility(settings.frame, photos).eligible
             current_id = (
-                settings.refresh_status.last_rendered_photo_id
-                or self.runtime.renderer.rendered_photo_id()
+                self.runtime.renderer.rendered_photo_id()
+                or settings.refresh_status.last_rendered_photo_id
             )
             if current_id is None:
                 selection = active_selection(eligible, settings.frame)

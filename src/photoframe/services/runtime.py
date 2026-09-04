@@ -352,7 +352,7 @@ class Runtime:
         occurrence = catch_up_occurrence(settings.frame, settings.device.timezone, current)
         if (
             occurrence is None
-            or settings.refresh_status.last_completed_schedule_key == occurrence.key
+            or settings.refresh_status.last_attempted_schedule_key == occurrence.key
         ):
             return
         eligible = self.photo_eligibility(settings.frame, photos).eligible
@@ -372,6 +372,14 @@ class Runtime:
             if not self.has_display():
                 return
             anchor = settings.frame.schedule_anchor
+
+            # Claim the occurrence durably before touching the provider or
+            # display. A failure or restart must never replay the same slot.
+            self.repository.update(
+                lambda saved: setattr(
+                    saved.refresh_status, "last_attempted_schedule_key", occurrence.key
+                )
+            )
 
             def completed(photo_id: str) -> None:
                 def save_completion(saved):

@@ -88,6 +88,10 @@ def latest_occurrence(
     if due > current:
         local_day -= timedelta(days=step)
         due = _resolve_wall_time(local_day, _calendar_time(frame), zone)
+    # The anchor is the activation boundary for a saved calendar schedule.
+    # A newly saved time earlier today must wait for its next future occurrence.
+    if due <= frame.schedule_anchor.astimezone(UTC):
+        return None
     return ScheduleOccurrence(due, f"{frame.schedule_mode.value}:{local_day.isoformat()}")
 
 

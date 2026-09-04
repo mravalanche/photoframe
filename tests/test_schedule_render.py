@@ -21,6 +21,11 @@ class BlockingDisplay:
         self.release.wait(1)
 
 
+class FailingDisplay:
+    def show(self, _image):
+        raise RuntimeError("display failed deterministically")
+
+
 class RecoveringProvider(DemoProvider):
     def __init__(self):
         super().__init__()
@@ -192,3 +197,91 @@ def test_reboot_during_failure_backoff_does_not_bypass_retry(tmp_path: Path):
     recovered = repository.load().refresh_status
     assert recovered.last_error is None
     assert recovered.last_completed_schedule_slot == 10
+
+
+def test_async_schedule_failure_is_attempted_once_across_restart(tmp_path: Path):
+    anchor = datetime(2026, 1, 1, tzinfo=UTC)
+    repository = configured_repository(tmp_path, anchor)
+    runtime = new_runtime(repository)
+    runtime.display = FailingDisplay()  # type: ignore[assignment]
+
+    runtime.refresh_lifecycle(anchor + timedelta(seconds=30))
+    wait_for_display(runtime)
+    failed = repository.load().refresh_status
+    attempted = failed.last_attempted_schedule_key
+    assert attempted and attempted.endswith(":1")
+    assert failed.last_completed_schedule_key is None
+    assert failed.last_render_error == "display failed deterministically"
+
+    restarted = new_runtime(repository)
+    restarted.refresh_lifecycle(anchor + timedelta(seconds=30))
+    assert restarted.renderer.snapshot().photo_id is None
+    assert repository.load().refresh_status.last_attempted_schedule_key == attempted
+
+
+def test_synchronous_schedule_prepare_failure_is_attempted_once_across_restart(tmp_path: Path):
+    anchor = datetime(2026, 1, 1, tzinfo=UTC)
+    repository = configured_repository(tmp_path, anchor)
+    runtime = new_runtime(repository)
+    prepare_calls = 0
+
+    def fail_prepare(_photo_id: str):
+        nonlocal prepare_calls
+        prepare_calls += 1
+        raise RuntimeError("prepare failed deterministically")
+
+    runtime.render_service.prepare = fail_prepare
+    runtime.refresh_lifecycle(anchor + timedelta(seconds=30))
+    runtime.refresh_lifecycle(anchor + timedelta(seconds=30))
+    failed = repository.load().refresh_status
+    attempted = failed.last_attempted_schedule_key
+    assert prepare_calls == 1
+    assert attempted and attempted.endswith(":1")
+    assert failed.last_render_error == "prepare failed deterministically"
+
+    restarted = new_runtime(repository)
+    restarted_prepare_calls = 0
+
+    def count_prepare(_photo_id: str):
+        nonlocal restarted_prepare_calls
+        restarted_prepare_calls += 1
+        raise AssertionError("the attempted occurrence must not replay")
+
+    restarted.render_service.prepare = count_prepare
+    restarted.refresh_lifecycle(anchor + timedelta(seconds=30))
+    assert restarted_prepare_calls == 0
+    assert repository.load().refresh_status.last_attempted_schedule_key == attempted
+
+
+def test_synchronous_schedule_start_failure_is_attempted_once_across_restart(tmp_path: Path):
+    anchor = datetime(2026, 1, 1, tzinfo=UTC)
+    repository = configured_repository(tmp_path, anchor)
+    runtime = new_runtime(repository)
+    start_calls = 0
+
+    def fail_start(*_args, **_kwargs):
+        nonlocal start_calls
+        start_calls += 1
+        raise RuntimeError("start failed deterministically")
+
+    runtime.render_service.start = fail_start  # type: ignore[method-assign]
+    runtime.refresh_lifecycle(anchor + timedelta(seconds=30))
+    runtime.refresh_lifecycle(anchor + timedelta(seconds=30))
+    failed = repository.load().refresh_status
+    attempted = failed.last_attempted_schedule_key
+    assert start_calls == 1
+    assert attempted and attempted.endswith(":1")
+    assert failed.last_render_error == "start failed deterministically"
+
+    restarted = new_runtime(repository)
+    restarted_start_calls = 0
+
+    def count_start(*_args, **_kwargs):
+        nonlocal restarted_start_calls
+        restarted_start_calls += 1
+        raise AssertionError("the attempted occurrence must not replay")
+
+    restarted.render_service.start = count_start  # type: ignore[method-assign]
+    restarted.refresh_lifecycle(anchor + timedelta(seconds=30))
+    assert restarted_start_calls == 0
+    assert repository.load().refresh_status.last_attempted_schedule_key == attempted

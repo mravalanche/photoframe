@@ -205,6 +205,7 @@ class RefreshStatus(BaseModel):
     last_completed_schedule_slot: int | None = None
     last_completed_schedule_anchor: datetime | None = None
     last_completed_schedule_key: str | None = None
+    last_attempted_schedule_key: str | None = None
     last_rendered_photo_id: str | None = None
     last_render_error: str | None = None
 
