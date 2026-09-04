@@ -1,6 +1,8 @@
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event, Thread
+from time import monotonic
 
 from photoframe.models import DisplayDriver, ScheduleMode
 from photoframe.providers import DemoProvider
@@ -41,12 +43,21 @@ class RecoveringProvider(DemoProvider):
         return super().list_photos(album_id)
 
 
+def wait_until(
+    predicate: Callable[[], bool],
+    description: str,
+    timeout_seconds: float = 5,
+) -> None:
+    deadline = monotonic() + timeout_seconds
+    while not predicate():
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise AssertionError(f"timed out waiting for {description}")
+        Event().wait(min(0.01, remaining))
+
+
 def wait_for_display(runtime: Runtime) -> None:
-    for _ in range(100):
-        if not runtime.renderer.hardware_busy:
-            return
-        Event().wait(0.001)
-    raise AssertionError("display worker did not finish")
+    wait_until(lambda: not runtime.renderer.hardware_busy, "display worker")
 
 
 def configured_repository(tmp_path: Path, anchor: datetime) -> SettingsRepository:
@@ -103,6 +114,27 @@ def test_restart_restores_catalog_renders_due_slot_and_suppresses_completed(tmp_
     assert due_after_restart.renderer.snapshot().photo_id is not None
 
 
+def test_display_wait_tolerates_slow_worker_scheduling(tmp_path: Path):
+    anchor = datetime(2026, 1, 1, tzinfo=UTC)
+    repository = configured_repository(tmp_path, anchor)
+    runtime = new_runtime(repository)
+    display = BlockingDisplay()
+    runtime.display = display  # type: ignore[assignment]
+    runtime.refresh_lifecycle(anchor + timedelta(seconds=30))
+
+    def release_after_runner_delay() -> None:
+        Event().wait(0.2)
+        display.release.set()
+
+    releaser = Thread(target=release_after_runner_delay)
+    releaser.start()
+    wait_for_display(runtime)
+    releaser.join(1)
+
+    assert not releaser.is_alive()
+    assert repository.load().refresh_status.last_completed_schedule_slot == 1
+
+
 def test_schedule_timeout_is_persisted_and_late_success_recovers_health(tmp_path: Path):
     anchor = datetime(2026, 1, 1, tzinfo=UTC)
     repository = configured_repository(tmp_path, anchor)
@@ -117,10 +149,10 @@ def test_schedule_timeout_is_persisted_and_late_success_recovers_health(tmp_path
     assert runtime.renderer.hardware_busy
     display.release.set()
     wait_for_display(runtime)
-    for _ in range(100):
-        if repository.load().refresh_status.last_render_error is None:
-            break
-        Event().wait(0.001)
+    wait_until(
+        lambda: repository.load().refresh_status.last_render_error is None,
+        "late display success to clear the recorded timeout",
+    )
     assert repository.load().refresh_status.last_render_error is None
 
 
