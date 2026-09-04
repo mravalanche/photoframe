@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
@@ -34,6 +35,78 @@ class FakeProvider:
         output = BytesIO()
         image.save(output, format="JPEG")
         return output.getvalue(), "image/jpeg"
+
+
+class MultiAlbumProvider(FakeProvider):
+    def list_albums(self):
+        return [
+            Album(id="current", name="Current", asset_count=2),
+            Album(id="new", name="New", asset_count=2),
+        ]
+
+    def list_photos(self, album_id):
+        assert album_id in {"current", "new"}
+        return [
+            Photo(id=f"{album_id}-a", filename=f"{album_id}-a.jpg", width=1200, height=800),
+            Photo(id=f"{album_id}-b", filename=f"{album_id}-b.jpg", width=1200, height=800),
+        ]
+
+
+def test_confirmed_album_then_next_preserves_display_and_schedule(tmp_path: Path):
+    provider = MultiAlbumProvider()
+    app = create_app(tmp_path, lambda _kind: provider)
+    runtime = app.state.runtime
+    with TestClient(app) as client:
+        client.post(
+            "/connection",
+            data={"server_url": "https://immich.test", "api_key": "secret"},
+        )
+        client.post("/album/select", data={"album_id": "current"})
+        anchor = datetime(2026, 1, 2, 3, 4, tzinfo=UTC)
+
+        def configured(settings):
+            settings.frame.schedule_anchor = anchor
+            settings.frame.schedule_mode = "daily"
+            settings.frame.daily_time = "03:00"
+            settings.device.set_display_size(1200, 800)
+            settings.refresh_status.last_completed_schedule_key = "daily:2026-01-01"
+            settings.refresh_status.last_attempted_schedule_key = "daily:2026-01-01"
+
+        runtime.repository.update(configured)
+        runtime.renderer.last_rendered_photo_id = "current-a"
+        before = runtime.repository.load()
+
+        confirmed = client.post("/album/select", data={"album_id": "new"})
+        after_confirm = runtime.repository.load()
+        assert after_confirm.frame.schedule_anchor == before.frame.schedule_anchor
+        assert after_confirm.refresh_status.last_completed_schedule_key == (
+            before.refresh_status.last_completed_schedule_key
+        )
+        assert after_confirm.refresh_status.last_attempted_schedule_key == (
+            before.refresh_status.last_attempted_schedule_key
+        )
+        assert runtime.renderer.rendered_photo_id() == "current-a"
+        assert 'src="/thumbnail/current-a"' in confirmed.text
+
+        request_id = re.search(r'name="request_id" value="([^"]+)"', confirmed.text)
+        assert request_id
+        next_response = client.post(
+            "/photo/next",
+            data={"request_id": request_id.group(1)},
+            headers=RENDER_HEADERS,
+        )
+
+    after_next = runtime.repository.load()
+    assert runtime.renderer.snapshot().photo_id in {"new-a", "new-b"}
+    assert runtime.renderer.rendered_photo_id() == "current-a"
+    assert after_next.frame.schedule_anchor == before.frame.schedule_anchor
+    assert after_next.refresh_status.last_completed_schedule_key == (
+        before.refresh_status.last_completed_schedule_key
+    )
+    assert after_next.refresh_status.last_attempted_schedule_key == (
+        before.refresh_status.last_attempted_schedule_key
+    )
+    assert 'data-frame-transition="updating"' in next_response.text
 
 
 def test_complete_local_web_flow(tmp_path: Path):
@@ -226,6 +299,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     with TestClient(app) as client:
         page = client.get("/")
         workspace = client.get("/partials/workspace")
+        frame_status = client.get("/partials/frame-status")
         selected_workspace = client.post("/photo/preview", data={"photo_id": "coast"})
         htmx = client.get("/static/vendor/htmx-2.0.4.min.js")
         tab_identity = client.get("/static/tab-identity.js")
@@ -278,6 +352,12 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'data-settings-panel="advanced"' in workspace.text
     assert 'data-settings-panel="display" data-default-open="false"' in workspace.text
     assert 'data-settings-panel="display" data-default-open="false" open' not in workspace.text
+    assert 'action="/photo/next"' in workspace.text
+    assert 'action="/photo/next"' not in frame_status.text
+    assert "The scheduled update time will not change." in workspace.text
+    assert workspace.text.index('id="frame-status"') < workspace.text.index(
+        'class="frame-next-action"'
+    )
     assert "Advanced settings" in workspace.text
     assert "Daily at 03:00 · In album order · Landscape" in workspace.text
     assert "Simulator · 24-hour" not in workspace.text
@@ -668,13 +748,13 @@ def test_successful_render_auto_dismisses_but_failure_remains(tmp_path: Path):
         runtime.renderer.start("coast", now)
         runtime.renderer.update(runtime.repository.load().device, now + timedelta(seconds=10))
         failed = client.get("/partials/render-status")
-        failed_frame = client.get("/partials/frame-status")
+        failed_workspace = client.get("/partials/workspace")
 
     assert "Frame update failed" in failed.text
     assert "data-auto-dismiss-render" not in failed.text
     assert 'hx-post="/render/dismiss"' not in failed.text
-    assert "Try next photo" in failed_frame.text
-    assert "Retry Next photo" not in failed_frame.text
+    assert "Try next photo" in failed_workspace.text
+    assert "Retry Next photo" not in failed_workspace.text
     assert ">Done<" in failed.text
 
 
@@ -693,7 +773,22 @@ def test_manual_render_popup_is_correlated_to_the_initiating_browser(tmp_path: P
     assert 'data-frame-transition="updating"' not in unrelated_browser.text
     assert 'data-frame-transition="manual-preview"' not in unrelated_browser.text
     assert "Updating the frame" in initiated.text
-    assert 'id="render-status"' in unrelated_workspace.text
+    assert 'id="render-status"' not in unrelated_workspace.text
+    assert "Frame update in progress" in unrelated_workspace.text
+
+
+def test_scheduled_render_status_remains_global_and_uncorrelated(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    runtime = app.state.runtime
+    runtime.renderer.start("coast")
+
+    with TestClient(app) as client:
+        workspace = client.get("/partials/workspace", headers=RENDER_HEADERS)
+
+    assert runtime.renderer.snapshot().operation_id is None
+    assert 'data-frame-transition="updating"' not in workspace.text
+    assert 'id="render-status"' in workspace.text
+    assert "Updating the frame" in workspace.text
 
 
 def test_completed_render_visibility_uses_fixed_server_deadlines(tmp_path: Path):

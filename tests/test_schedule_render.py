@@ -82,6 +82,7 @@ def test_restart_restores_catalog_renders_due_slot_and_suppresses_completed(tmp_
     runtime = new_runtime(repository)
     assert runtime.catalog_snapshot()[1] == []
     runtime.refresh_lifecycle(anchor + timedelta(seconds=30))
+    assert runtime.renderer.snapshot().operation_id is None
     wait_for_display(runtime)
     saved = repository.load()
     assert runtime.catalog_snapshot()[1]

@@ -781,13 +781,26 @@ body {
 .next-photo-form {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 8px;
-  margin-top: 10px;
+}
+
+.frame-next-action {
+  margin-top: -28px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.next-photo-form p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .next-photo-reason {
-  max-width: 220px;
+  max-width: 420px;
   color: var(--muted);
   font-size: 11px;
   letter-spacing: 0;

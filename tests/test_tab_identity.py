@@ -131,5 +131,14 @@ if (typeof windowListeners.pagehide !== 'function' || typeof windowListeners.pag
   throw new Error('tab session setup did not continue');
 }}
 if (themeButton['aria-pressed'] !== 'true') throw new Error('theme controls were not synchronized');
+const nextEvent = {{ detail: {{ verb: 'post', path: '/photo/next', headers: {{}} }} }};
+documentListeners['htmx:configRequest'](nextEvent);
+const nextIntent = nextEvent.detail.headers['X-Photoframe-Render-Intent'];
+const manualEvent = {{ detail: {{ verb: 'post', path: '/render/start', headers: {{}} }} }};
+documentListeners['htmx:configRequest'](manualEvent);
+const manualIntent = manualEvent.detail.headers['X-Photoframe-Render-Intent'];
+if (!nextIntent || !manualIntent || nextIntent === manualIntent) {{
+  throw new Error('manual render actions did not receive fresh operation identities');
+}}
 """
     subprocess.run([node, "-e", scenario], check=True)

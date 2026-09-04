@@ -15,6 +15,14 @@
 
   {% include "_frame_status.html" %}
 
+  <div class="frame-next-action">
+    <form class="next-photo-form" method="post" action="/photo/next" hx-post="/photo/next" hx-target="#workspace" hx-swap="outerHTML" hx-sync="this:drop">
+      <input type="hidden" name="request_id" value="{{ next_request_id }}">
+      <div><strong>{{ 'Try next photo' if render_state.phase == RenderPhase.FAILED else 'Next photo' }}</strong><p id="next-photo-description">Shows another eligible photo now. The scheduled update time will not change.</p>{% if next_photo_disabled_reason %}<p id="next-photo-disabled-reason" class="next-photo-reason">{{ next_photo_disabled_reason }}</p>{% endif %}</div>
+      <button class="secondary" {% if next_photo_disabled_reason or render_state.active %}disabled{% endif %} aria-describedby="next-photo-description{% if next_photo_disabled_reason %} next-photo-disabled-reason{% endif %}">{{ 'Try next photo' if render_state.phase == RenderPhase.FAILED else 'Next photo' }}</button>
+    </form>
+  </div>
+
   {% if photos %}
   <section class="library-section" aria-labelledby="library-title">
     <div class="section-heading"><div><p class="kicker">LIBRARY</p><h2 id="library-title">Choose a preview</h2></div><p class="eligibility-summary"><strong>{{ eligible|length }} eligible</strong><span>{{ wrong_orientation_count }} wrong orientation</span><span>{{ unsupported_count }} unsupported or unreadable</span></p></div>

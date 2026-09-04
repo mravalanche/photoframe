@@ -349,7 +349,7 @@ class ConfigurationService:
             self.runtime.set_preview(None)
             raise
 
-    def start_next_photo(self, request_id: str) -> str:
+    def start_next_photo(self, request_id: str, operation_id: str | None = None) -> str:
         """Start one manual successor without touching automatic schedule state."""
         if not self._next_lock.acquire(blocking=False):
             raise ValueError("Another Next photo request is already being handled")
@@ -387,10 +387,18 @@ class ConfigurationService:
                 )
 
             if self.runtime.has_display():
-                started = self.runtime.render_service.start(candidate.id, on_complete=completed)
+                started = self.runtime.render_service.start(
+                    candidate.id,
+                    operation_id=operation_id,
+                    on_complete=completed,
+                )
             else:
                 self.runtime.prepare_photo(candidate.id)
-                started = self.runtime.renderer.start(candidate.id, on_complete=completed)
+                started = self.runtime.renderer.start(
+                    candidate.id,
+                    operation_id=operation_id,
+                    on_complete=completed,
+                )
             if started.photo_id != candidate.id:
                 raise ValueError(
                     "Another frame update started first; retry Next photo when it finishes"

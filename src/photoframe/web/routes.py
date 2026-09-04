@@ -138,8 +138,7 @@ def create_app(
         render_state = configuration.current_render_state(current)
         selected_photo = runtime.photo(runtime.preview_id())
         rendered_photo = runtime.photo(
-            runtime.renderer.rendered_photo_id()
-            or settings.refresh_status.last_rendered_photo_id
+            runtime.renderer.rendered_photo_id() or settings.refresh_status.last_rendered_photo_id
         )
         if not rendered_photo:
             rendered_photo = runtime.preserved_display_photo()
@@ -285,6 +284,13 @@ def create_app(
             workspace_context(request, notice=notice, error=error),
         )
 
+    def render_operation_id(request: Request) -> str | None:
+        value = request.headers.get("x-photoframe-render-intent")
+        try:
+            return str(UUID(value)) if value else None
+        except ValueError:
+            return None
+
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "index.html", {})
@@ -387,13 +393,8 @@ def create_app(
 
     @app.post("/render/start", response_class=HTMLResponse)
     def render_start(request: Request) -> HTMLResponse:
-        operation_id = request.headers.get("x-photoframe-render-intent")
         try:
-            operation_id = str(UUID(operation_id)) if operation_id else None
-        except ValueError:
-            operation_id = None
-        try:
-            configuration.start_render(operation_id=operation_id)
+            configuration.start_render(operation_id=render_operation_id(request))
         except (ValueError, ProviderError, RuntimeError) as exc:
             return workspace(request, error=str(exc))
         return workspace(request)
@@ -402,7 +403,13 @@ def create_app(
     async def next_photo_now(request: Request) -> HTMLResponse:
         try:
             form = NextPhotoForm.parse(await request.form())
-            return workspace(request, notice=configuration.start_next_photo(form.request_id))
+            return workspace(
+                request,
+                notice=configuration.start_next_photo(
+                    form.request_id,
+                    operation_id=render_operation_id(request),
+                ),
+            )
         except (ValueError, ProviderError, RuntimeError) as exc:
             return workspace(request, error=str(exc))
 

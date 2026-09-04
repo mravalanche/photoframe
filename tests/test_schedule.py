@@ -165,6 +165,68 @@ def test_next_route_is_distinct_idempotent_and_schedule_neutral(tmp_path: Path):
         assert _schedule_snapshot(runtime.repository.load()) == before
 
 
+def test_next_feedback_is_session_owned_and_expires_from_fixed_completion_time(
+    tmp_path: Path,
+):
+    app = create_app(tmp_path, demo_mode=True)
+    runtime = app.state.runtime
+    owner_intent = "38ebca82-c30a-4727-bb05-37fb455c97d6"
+    owner_headers = {"X-Photoframe-Render-Intent": owner_intent}
+    other_headers = {"X-Photoframe-Render-Intent": "a70cc8a8-fbd9-4b98-8290-011d0eabfa06"}
+    with TestClient(app) as client:
+        page = client.get("/partials/workspace", headers=owner_headers)
+        before = _schedule_snapshot(runtime.repository.load())
+        started = client.post(
+            "/photo/next",
+            data={"request_id": _request_id(page.text)},
+            headers=owner_headers,
+        )
+
+        state = runtime.renderer.snapshot()
+        assert state.operation_id == owner_intent
+        assert 'data-frame-transition="updating"' in started.text
+        unrelated = client.get("/partials/workspace", headers=other_headers)
+        assert 'data-frame-transition="updating"' not in unrelated.text
+        assert 'id="render-status"' not in unrelated.text
+        assert "Frame update in progress" in unrelated.text
+        assert _schedule_snapshot(runtime.repository.load()) == before
+
+        assert state.started_at
+        completed_at = state.started_at + timedelta(
+            seconds=runtime.repository.load().device.expected_refresh_seconds
+        )
+        runtime.renderer.update(runtime.repository.load().device, completed_at)
+        runtime.renderer.state.finished_at = datetime.now(UTC) - timedelta(seconds=2)
+        completed = client.get("/partials/workspace", headers=owner_headers)
+        assert 'data-frame-transition="complete"' in completed.text
+        assert "data-auto-dismiss-render=" in completed.text
+
+        runtime.renderer.state.finished_at = datetime.now(UTC) - timedelta(seconds=10)
+        acknowledged = client.get("/partials/workspace", headers=owner_headers)
+        assert 'data-frame-transition="complete"' not in acknowledged.text
+        assert runtime.renderer.snapshot().phase.value == "complete"
+
+        runtime.renderer.state.finished_at = datetime.now(UTC) - timedelta(seconds=31)
+        expired = client.get("/partials/workspace", headers=owner_headers)
+        assert 'data-frame-transition="complete"' not in expired.text
+        assert runtime.renderer.snapshot().phase.value == "idle"
+
+
+def test_invalid_next_operation_identity_is_not_treated_as_session_owned(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    runtime = app.state.runtime
+    with TestClient(app) as client:
+        page = client.get("/partials/workspace")
+        response = client.post(
+            "/photo/next",
+            data={"request_id": _request_id(page.text)},
+            headers={"X-Photoframe-Render-Intent": "not-a-uuid"},
+        )
+
+    assert runtime.renderer.snapshot().operation_id is None
+    assert 'data-frame-transition="updating"' not in response.text
+
+
 def test_next_failure_preserves_displayed_photo_and_schedule(tmp_path: Path):
     app = create_app(tmp_path, demo_mode=True)
     runtime = app.state.runtime

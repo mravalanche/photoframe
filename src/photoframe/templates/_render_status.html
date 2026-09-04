@@ -1,4 +1,5 @@
-{% if render_state.phase != RenderPhase.IDLE and (render_state.phase != RenderPhase.COMPLETE or (render_completion_visible and render_intent_matches)) %}
+{% set manual_update_owned_elsewhere = render_state.operation_id and not render_intent_matches %}
+{% if render_state.phase != RenderPhase.IDLE and (not manual_update_owned_elsewhere or render_state.phase == RenderPhase.FAILED) and (render_state.phase != RenderPhase.COMPLETE or (render_completion_visible and render_intent_matches)) %}
 <section id="render-status" class="render-state {{ 'failed' if render_state.phase == RenderPhase.FAILED }}" aria-live="polite"{% if render_state.active %} hx-get="/partials/render-status" hx-trigger="every 1s" hx-swap="outerHTML"{% elif render_state.phase == RenderPhase.COMPLETE %} data-auto-dismiss-render="{{ render_ack_delay_ms }}" hx-post="/render/dismiss" hx-trigger="load delay:{{ render_ack_delay_ms }}ms" hx-swap="outerHTML"{% endif %}>
   <div class="render-heading"><div><p class="kicker">FRAME UPDATE</p><h2>{% if render_state.phase == RenderPhase.COMPLETE %}Refresh complete{% elif render_state.phase == RenderPhase.FAILED %}Frame update failed{% else %}Updating the frame{% endif %}</h2></div><span class="elapsed">{{ render_state.elapsed_seconds }} sec elapsed</span></div>
   <div class="phase-track">
