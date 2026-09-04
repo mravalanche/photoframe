@@ -14,7 +14,7 @@
   <title>Photoframe</title>
   <link rel="icon" href="{{ url_for('static', path='/photoframe.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=6">
+  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=7">
   <script src="{{ url_for('static', path='/tab-identity.js') }}"></script>
   <script src="{{ url_for('static', path='/vendor/htmx-2.0.4.min.js') }}" defer></script>
 </head>
@@ -116,6 +116,78 @@
         form.addEventListener('change', () => updateNetworkControls(form));
       });
     }
+    let pendingAlbumSelection = null;
+    function announceAlbum(message) {
+      const region = document.querySelector('[data-album-announcement]');
+      if (region) region.textContent = message;
+    }
+    function renderAlbumSelection(picker) {
+      if (!picker) return;
+      const currentId = picker.dataset.currentAlbumId || '';
+      const choices = Array.from(picker.querySelectorAll('[data-album-choice]'));
+      const pendingChoice = pendingAlbumSelection
+        ? choices.find(choice => choice.dataset.albumId === pendingAlbumSelection.id)
+        : null;
+      if (pendingAlbumSelection && !pendingChoice) {
+        const missingName = pendingAlbumSelection.name;
+        pendingAlbumSelection = null;
+        announceAlbum(`${missingName} is no longer available. Pending selection cleared.`);
+      }
+      choices.forEach(choice => {
+        const input = choice.querySelector('input[type="radio"]');
+        const state = choice.querySelector('[data-album-state]');
+        const isCurrent = choice.dataset.albumId === currentId;
+        const isPending = pendingAlbumSelection?.id === choice.dataset.albumId;
+        choice.classList.toggle('chosen', isCurrent);
+        choice.classList.toggle('pending', isPending);
+        if (input) input.checked = isPending || (!pendingAlbumSelection && isCurrent);
+        if (state) state.textContent = isPending ? 'Pending' : isCurrent ? 'Current' : 'Choose';
+      });
+      const confirmation = document.querySelector('[data-album-confirmation]');
+      if (!confirmation) return;
+      confirmation.hidden = !pendingAlbumSelection;
+      const hiddenInput = confirmation.querySelector('input[name="album_id"]');
+      const confirmButton = confirmation.querySelector('[data-album-confirm-button]');
+      if (hiddenInput) hiddenInput.value = pendingAlbumSelection?.id || '';
+      if (confirmButton) confirmButton.textContent = pendingAlbumSelection
+        ? `Use ${pendingAlbumSelection.name}` : 'Use album';
+      if (pendingAlbumSelection) announceAlbum(
+        `${pendingAlbumSelection.name} selected for review. Confirm to use this album.`,
+      );
+    }
+    function setupAlbumSelection() {
+      const picker = document.querySelector('[data-album-picker]');
+      if (!picker) {
+        pendingAlbumSelection = null;
+        return;
+      }
+      const currentId = picker.dataset.currentAlbumId || '';
+      if (pendingAlbumSelection?.id === currentId) pendingAlbumSelection = null;
+      if (!picker.dataset.albumPickerReady) {
+        picker.dataset.albumPickerReady = 'true';
+        picker.addEventListener('change', event => {
+          const choice = event.target.closest?.('[data-album-choice]');
+          if (!choice) return;
+          pendingAlbumSelection = choice.dataset.albumId === currentId ? null : {
+            id: choice.dataset.albumId,
+            name: choice.dataset.albumName,
+          };
+          renderAlbumSelection(picker);
+          if (!pendingAlbumSelection) announceAlbum(`${choice.dataset.albumName} remains Current.`);
+        });
+      }
+      const cancel = document.querySelector('[data-album-cancel]');
+      if (cancel && !cancel.dataset.albumCancelReady) {
+        cancel.dataset.albumCancelReady = 'true';
+        cancel.addEventListener('click', () => {
+          const name = pendingAlbumSelection?.name;
+          pendingAlbumSelection = null;
+          renderAlbumSelection(picker);
+          announceAlbum(name ? `${name} selection cancelled.` : 'Pending selection cleared.');
+        });
+      }
+      renderAlbumSelection(picker);
+    }
     function confirmNetworkChange(form) {
       updateNetworkControls(form);
       const confirmation = form.elements.confirm_endpoint_change;
@@ -147,6 +219,7 @@
       setupNotifications();
       setupSettingsAccordion();
       setupNetworkSettings();
+      setupAlbumSelection();
     }
     document.addEventListener('DOMContentLoaded', syncInterface);
     document.addEventListener('htmx:afterSwap', syncInterface);
@@ -159,6 +232,10 @@
 
     let previewScrollState = null;
     document.addEventListener('htmx:beforeRequest', event => {
+      const albumForm = event.detail.elt?.closest?.('[data-album-confirm-form]');
+      if (albumForm) {
+        albumForm.querySelectorAll('button').forEach(button => { button.disabled = true; });
+      }
       const settingsPanel = event.detail.elt?.closest?.('[data-settings-panel]');
       if (settingsPanel) {
         const summary = settingsPanel.querySelector(':scope > summary');

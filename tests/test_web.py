@@ -243,6 +243,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'data-theme-choice="light" aria-pressed="false"' in page.text
     assert 'data-theme-choice="dark" aria-pressed="true"' in page.text
     assert "setupNotifications" in page.text
+    assert "setupAlbumSelection" in page.text
     assert ".notification-stack" in responsive_css.text
     assert 'rel="icon" href="http://testserver/static/photoframe.svg"' in page.text
     assert 'class="brand-mark"><img src="http://testserver/static/photoframe.svg"' in page.text
@@ -312,6 +313,86 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert "Reset to defaults" in workspace.text
     assert 'name="photo_order"' in workspace.text
     assert "Controls future scheduled changes" in workspace.text
+
+
+def test_album_picker_is_local_until_confirm_and_exposes_accessible_states(tmp_path: Path):
+    app = create_app(tmp_path, lambda _kind: FakeProvider())
+    with TestClient(app) as client:
+        client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
+        workspace = client.get("/partials/workspace")
+        before = app.state.runtime.repository.load()
+
+    assert app.state.runtime.repository.load() == before
+    assert '<fieldset class="album-list" data-album-picker' in workspace.text
+    assert '<legend class="visually-hidden">Choose an album to review</legend>' in workspace.text
+    assert 'type="radio" name="pending_album" value="album"' in workspace.text
+    assert "data-album-confirmation hidden" in workspace.text
+    assert 'data-album-announcement role="status" aria-live="polite"' in workspace.text
+    assert "data-album-cancel>Cancel</button>" in workspace.text
+    assert 'action="/album/select"' in workspace.text
+    assert workspace.text.count('action="/album/select"') == 1
+
+
+def test_album_confirm_is_the_only_route_mutation_point_and_marks_current(tmp_path: Path):
+    app = create_app(tmp_path, lambda _kind: FakeProvider())
+    with TestClient(app) as client:
+        client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
+        before = app.state.runtime.repository.load()
+        assert before.frame.album_id is None
+
+        response = client.post("/album/select", data={"album_id": "album"})
+
+    saved = app.state.runtime.repository.load()
+    assert saved.frame.album_id == "album"
+    assert saved.frame.album_name == "Family"
+    assert 'data-current-album-id="album"' in response.text
+    assert 'class="album-choice chosen"' in response.text
+    assert "<b data-album-state>Current</b>" in response.text
+
+
+def test_album_confirm_keeps_the_picture_currently_represented_on_frame(tmp_path: Path):
+    app = create_app(tmp_path, lambda _kind: FakeProvider())
+    runtime = app.state.runtime
+    old_photo = Photo(id="old", filename="still-on-frame.jpg", width=1200, height=800)
+    runtime.repository.update(
+        lambda settings: (
+            setattr(settings.frame, "album_id", "old-album"),
+            setattr(settings.frame, "album_name", "Old album"),
+            setattr(settings.verification, "ok", True),
+        )
+    )
+    runtime.albums = [Album(id="album", name="Family")]
+    runtime.photos = [old_photo]
+    runtime.loaded = True
+    runtime.renderer.last_rendered_photo_id = old_photo.id
+
+    with TestClient(app) as client:
+        response = client.post("/album/select", data={"album_id": "album"})
+
+    assert "still-on-frame.jpg" in response.text
+    assert runtime.repository.load().frame.album_id == "album"
+    assert runtime.renderer.rendered_photo_id() == "old"
+
+
+def test_missing_current_album_is_reported_without_automatic_replacement(tmp_path: Path):
+    app = create_app(tmp_path, lambda _kind: FakeProvider())
+    runtime = app.state.runtime
+    runtime.repository.update(
+        lambda settings: (
+            setattr(settings.frame, "album_id", "gone"),
+            setattr(settings.frame, "album_name", "Old family album"),
+            setattr(settings.verification, "ok", True),
+        )
+    )
+    runtime.loaded = True
+    runtime.albums = [Album(id="album", name="Family")]
+
+    with TestClient(app) as client:
+        response = client.get("/partials/workspace")
+
+    assert "Old family album · Unavailable" in response.text
+    assert "will remain selected until you confirm another album" in response.text
+    assert runtime.repository.load().frame.album_id == "gone"
 
 
 def test_network_change_requires_confirmation_and_requests_restart(tmp_path: Path):

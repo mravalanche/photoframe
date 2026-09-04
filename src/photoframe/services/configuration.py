@@ -21,6 +21,7 @@ from ..models import (
     ProviderKind,
 )
 from ..renderer import RenderPhase, RenderState
+from ..selector import active_selection, shuffled_photo_ids
 from ..settings import SecretStore, SettingsRepository
 from ..tls import tls_paths
 from .runtime import Runtime
@@ -141,19 +142,39 @@ class ConfigurationService:
         album = next((item for item in albums if item.id == album_id), None)
         if not album:
             raise ValueError("Choose an album from the loaded list")
-        anchor = datetime.now(UTC)
+
+        previous = self.repository.load()
+        rendered_before = self.runtime.photo(self.runtime.renderer.rendered_photo_id())
+        eligible_before = self.runtime.photo_eligibility(previous.frame, _photos).eligible
+        displayed_before = (
+            rendered_before
+            or active_selection(eligible_before, previous.frame, datetime.now(UTC)).photo
+        )
+        candidate_frame = previous.frame.model_copy(deep=True)
+        candidate_frame.album_id = album.id
+        candidate_frame.album_name = album.name
+        try:
+            photos = self.runtime.provider().list_photos(album.id)
+            eligible = self.runtime.photo_eligibility(candidate_frame, photos).eligible
+        except Exception as exc:
+            raise RuntimeError(
+                f"Could not use {album.name}. Your current album is unchanged; "
+                "check the photo source and try again."
+            ) from exc
 
         def choose_album(settings: AppSettings) -> None:
             settings.frame.album_id = album.id
             settings.frame.album_name = album.name
-            settings.frame.schedule_anchor = anchor
-            settings.frame.starting_photo_id = None
+            if settings.frame.starting_photo_id not in {photo.id for photo in eligible}:
+                settings.frame.starting_photo_id = None
+            if settings.frame.photo_order == PhotoOrder.SHUFFLE:
+                settings.frame.shuffle_photo_ids = shuffled_photo_ids(eligible, settings.frame)
             settings.refresh_status.next_attempt_at = None
 
         self.repository.update(choose_album)
+        self.runtime.preserve_display_photo(displayed_before)
+        self.runtime.replace_photos(photos)
         self.runtime.set_preview(None)
-        photos = self.runtime.refresh_photos()
-        self.runtime.refresh_lifecycle()
         return f"Selected {album.name}; found {len(photos)} images"
 
     def save_workflow(self, form: WorkflowInput) -> str:

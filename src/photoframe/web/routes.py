@@ -118,12 +118,17 @@ def create_app(
                 error = str(exc)
                 runtime.loaded = True
         albums, photos = runtime.catalog_snapshot()
+        current_album_available = bool(
+            settings.frame.album_id and any(album.id == settings.frame.album_id for album in albums)
+        )
         eligibility = runtime.photo_eligibility(settings.frame, photos)
         eligible = eligibility.eligible
         selection = active_selection(eligible, settings.frame, current)
         render_state = configuration.current_render_state(current)
         selected_photo = runtime.photo(runtime.preview_id())
         rendered_photo = runtime.photo(runtime.renderer.rendered_photo_id())
+        if not rendered_photo:
+            rendered_photo = runtime.preserved_display_photo()
         displayed_photo = rendered_photo or selection.photo
         render_photo = runtime.photo(render_state.photo_id)
         completion_age_seconds = (
@@ -173,6 +178,7 @@ def create_app(
             "settings": settings,
             "credential_saved": secrets.exists(),
             "albums": albums,
+            "current_album_available": current_album_available,
             "photos": photos,
             "eligible": eligible,
             "wrong_orientation_count": eligibility.wrong_orientation,

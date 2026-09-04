@@ -34,6 +34,7 @@ class Runtime:
         self.photos: list[Photo] = []
         self._loaded = False
         self.selected_preview_id: str | None = None
+        self._preserved_display_photo: Photo | None = None
         self._prepared_image: Image.Image | None = None
         self.renderer = MockRenderCoordinator()
         self.display: InkyDisplay | None = None
@@ -142,6 +143,20 @@ class Runtime:
         with self._runtime_lock:
             self.photos = []
 
+    def replace_photos(self, photos: list[Photo]) -> None:
+        """Publish a fully loaded catalog after its settings change has committed."""
+        with self._runtime_lock:
+            self.photos = list(photos)
+
+    def preserve_display_photo(self, photo: Photo | None) -> None:
+        """Keep representing the physical frame while its former catalog is replaced."""
+        with self._runtime_lock:
+            self._preserved_display_photo = photo
+
+    def preserved_display_photo(self) -> Photo | None:
+        with self._runtime_lock:
+            return self._preserved_display_photo
+
     def preview_id(self) -> str | None:
         with self._runtime_lock:
             return self.selected_preview_id
@@ -248,6 +263,7 @@ class Runtime:
             self.albums = []
             self.photos = []
             self.selected_preview_id = None
+            self._preserved_display_photo = None
             self._prepared_image = None
             self._loaded = False
             self._startup_catalog_restore_pending = True
