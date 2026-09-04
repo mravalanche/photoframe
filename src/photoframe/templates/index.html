@@ -6,14 +6,16 @@
   <meta name="color-scheme" content="dark light">
   <script>
     (() => {
-      const saved = localStorage.getItem('photoframe-theme');
+      let saved = null;
+      try { saved = window.localStorage.getItem('photoframe-theme'); } catch (_error) { /* unavailable */ }
       document.documentElement.dataset.theme = saved === 'light' ? 'light' : 'dark';
     })();
   </script>
   <title>Photoframe</title>
   <link rel="icon" href="{{ url_for('static', path='/photoframe.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=6">
+  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=8">
+  <script src="{{ url_for('static', path='/tab-identity.js') }}"></script>
   <script src="{{ url_for('static', path='/vendor/htmx-2.0.4.min.js') }}" defer></script>
 </head>
 <body>
@@ -30,7 +32,7 @@
   <script>
     function setTheme(theme) {
       document.documentElement.dataset.theme = theme;
-      localStorage.setItem('photoframe-theme', theme);
+      try { window.localStorage.setItem('photoframe-theme', theme); } catch (_error) { /* unavailable */ }
       document.querySelectorAll('[data-theme-choice]').forEach(button => {
         button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme));
       });
@@ -53,6 +55,11 @@
     }
     let activeSettingsPanel = null;
     let settingsPanelViewState = null;
+    const tabSession = self.PhotoframeTabIdentity.createBrowserSession(self);
+    const currentRenderIntent = () => tabSession.currentIntent();
+    const newRenderIntent = () => tabSession.newIntent();
+    window.addEventListener('pagehide', () => tabSession.release());
+    window.addEventListener('pageshow', () => tabSession.reclaim());
     function setupSettingsAccordion() {
       const panels = Array.from(document.querySelectorAll('[data-settings-panel]'));
       if (!panels.length) return;
@@ -109,6 +116,129 @@
         form.addEventListener('change', () => updateNetworkControls(form));
       });
     }
+    let pendingAlbumSelection = null;
+    function announceAlbum(message) {
+      const region = document.querySelector('[data-album-announcement]');
+      if (region) region.textContent = message;
+    }
+    function setAlbumBusy(busy) {
+      const picker = document.querySelector('[data-album-picker]');
+      const confirmation = document.querySelector('[data-album-confirmation]');
+      const confirmButton = confirmation?.querySelector('[data-album-confirm-button]');
+      const cancelButton = confirmation?.querySelector('[data-album-cancel]');
+      if (picker) {
+        picker.disabled = busy;
+        picker.setAttribute('aria-busy', String(busy));
+      }
+      if (confirmation) confirmation.setAttribute('aria-busy', String(busy));
+      if (confirmButton) {
+        confirmButton.disabled = busy;
+        confirmButton.textContent = busy ? 'Switching album…'
+          : pendingAlbumSelection ? `Use ${pendingAlbumSelection.name}` : 'Use album';
+      }
+      if (cancelButton) cancelButton.disabled = busy;
+    }
+    function renderAlbumSelection(picker) {
+      if (!picker) return;
+      const currentId = picker.dataset.currentAlbumId || '';
+      const choices = Array.from(picker.querySelectorAll('[data-album-choice]'));
+      const pendingChoice = pendingAlbumSelection
+        ? choices.find(choice => choice.dataset.albumId === pendingAlbumSelection.id)
+        : null;
+      if (pendingAlbumSelection && !pendingChoice) {
+        const missingName = pendingAlbumSelection.name;
+        pendingAlbumSelection = null;
+        announceAlbum(`${missingName} is no longer available. Pending selection cleared.`);
+      }
+      choices.forEach(choice => {
+        const input = choice.querySelector('input[type="radio"]');
+        const state = choice.querySelector('[data-album-state]');
+        const isCurrent = choice.dataset.albumId === currentId;
+        const isPending = pendingAlbumSelection?.id === choice.dataset.albumId;
+        choice.classList.toggle('chosen', isCurrent);
+        choice.classList.toggle('pending', isPending);
+        if (input) input.checked = isPending || (!pendingAlbumSelection && isCurrent);
+        if (state) state.textContent = isPending ? 'Pending' : isCurrent ? 'Current' : 'Choose';
+      });
+      const confirmation = document.querySelector('[data-album-confirmation]');
+      if (!confirmation) return;
+      confirmation.hidden = !pendingAlbumSelection;
+      const hiddenInput = confirmation.querySelector('input[name="album_id"]');
+      const confirmButton = confirmation.querySelector('[data-album-confirm-button]');
+      if (hiddenInput) hiddenInput.value = pendingAlbumSelection?.id || '';
+      if (confirmButton) confirmButton.textContent = pendingAlbumSelection
+        ? `Use ${pendingAlbumSelection.name}` : 'Use album';
+      if (pendingAlbumSelection) announceAlbum(
+        `${pendingAlbumSelection.name} selected for review. Confirm to use this album.`,
+      );
+    }
+    function setupAlbumSelection() {
+      const picker = document.querySelector('[data-album-picker]');
+      if (!picker) {
+        pendingAlbumSelection = null;
+        return;
+      }
+      const currentId = picker.dataset.currentAlbumId || '';
+      if (pendingAlbumSelection?.id === currentId) pendingAlbumSelection = null;
+      if (!picker.dataset.albumPickerReady) {
+        picker.dataset.albumPickerReady = 'true';
+        picker.addEventListener('change', event => {
+          const choice = event.target.closest?.('[data-album-choice]');
+          if (!choice) return;
+          pendingAlbumSelection = choice.dataset.albumId === currentId ? null : {
+            id: choice.dataset.albumId,
+            name: choice.dataset.albumName,
+          };
+          renderAlbumSelection(picker);
+          if (!pendingAlbumSelection) announceAlbum(`${choice.dataset.albumName} remains Current.`);
+        });
+      }
+      const cancel = document.querySelector('[data-album-cancel]');
+      if (cancel && !cancel.dataset.albumCancelReady) {
+        cancel.dataset.albumCancelReady = 'true';
+        cancel.addEventListener('click', () => {
+          const name = pendingAlbumSelection?.name;
+          const cancelledId = pendingAlbumSelection?.id;
+          pendingAlbumSelection = null;
+          renderAlbumSelection(picker);
+          const focusId = currentId || cancelledId;
+          const focusTarget = focusId
+            ? picker.querySelector(`[data-album-id="${CSS.escape(focusId)}"] input`)
+            : picker.querySelector('input');
+          focusTarget?.focus({ preventScroll: true });
+          announceAlbum(name ? `${name} selection cancelled.` : 'Pending selection cleared.');
+        });
+      }
+      renderAlbumSelection(picker);
+    }
+    function updateScheduleControls(form) {
+      if (!form) return;
+      const mode = form.elements.schedule_mode?.value || 'interval';
+      form.querySelectorAll('[data-schedule-fields]').forEach(field => {
+        field.hidden = field.dataset.scheduleFields !== mode;
+      });
+      window.clearTimeout(form._schedulePreviewTimer);
+      form._schedulePreviewTimer = window.setTimeout(async () => {
+        try {
+          const response = await fetch('/schedule/preview', {
+            method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'fetch'},
+          });
+          const preview = form.querySelector('[data-schedule-preview]');
+          if (preview) preview.textContent = await response.text();
+        } catch (_error) {
+          // Keep the last authoritative server-rendered value if previewing is unavailable.
+        }
+      }, 150);
+    }
+    function setupScheduleSettings() {
+      document.querySelectorAll('[data-schedule-form]').forEach(form => {
+        updateScheduleControls(form);
+        if (form.dataset.scheduleReady) return;
+        form.dataset.scheduleReady = 'true';
+        form.addEventListener('input', () => updateScheduleControls(form));
+        form.addEventListener('change', () => updateScheduleControls(form));
+      });
+    }
     function confirmNetworkChange(form) {
       updateNetworkControls(form);
       const confirmation = form.elements.confirm_endpoint_change;
@@ -140,12 +270,27 @@
       setupNotifications();
       setupSettingsAccordion();
       setupNetworkSettings();
+      setupAlbumSelection();
+      setupScheduleSettings();
     }
     document.addEventListener('DOMContentLoaded', syncInterface);
     document.addEventListener('htmx:afterSwap', syncInterface);
+    document.addEventListener('htmx:configRequest', event => {
+      const path = event.detail.path?.split('?', 1)[0];
+      let intent = currentRenderIntent();
+      if (event.detail.verb === 'post' && ['/render/start', '/photo/next'].includes(path)) {
+        intent = newRenderIntent();
+      }
+      if (intent) event.detail.headers['X-Photoframe-Render-Intent'] = intent;
+    });
 
     let previewScrollState = null;
     document.addEventListener('htmx:beforeRequest', event => {
+      const albumForm = event.detail.elt?.closest?.('[data-album-confirm-form]');
+      if (albumForm) {
+        setAlbumBusy(true);
+        announceAlbum('Switching album. Please wait.');
+      }
       const settingsPanel = event.detail.elt?.closest?.('[data-settings-panel]');
       if (settingsPanel) {
         const summary = settingsPanel.querySelector(':scope > summary');
@@ -159,6 +304,9 @@
       if (!thumbnail) return;
       const rail = thumbnail.closest('.thumbnail-rail');
       previewScrollState = { pageY: window.scrollY, railX: rail?.scrollLeft || 0 };
+    });
+    document.addEventListener('htmx:afterRequest', event => {
+      if (event.detail.elt?.closest?.('[data-album-confirm-form]')) setAlbumBusy(false);
     });
     document.addEventListener('htmx:afterSettle', () => {
       if (settingsPanelViewState) {

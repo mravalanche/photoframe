@@ -1,7 +1,9 @@
 import os
+import secrets as secure_random
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import BackgroundTasks, FastAPI, Request
@@ -12,14 +14,22 @@ from fastapi.templating import Jinja2Templates
 
 from .. import __version__
 from ..lifecycle import RefreshWorker, health_payload
-from ..models import NetworkAccess, PhotoOrder
+from ..models import NetworkAccess, PhotoOrder, ScheduleMode
 from ..providers import ConfiguredProviderResolver, DemoProvider, ProviderError, ProviderResolver
 from ..renderer import RenderPhase
-from ..selector import active_selection
+from ..schedule import next_occurrence
+from ..selector import active_selection, next_photo
 from ..services.configuration import ConfigurationService, ResetIncompleteError
 from ..services.runtime import Runtime
 from ..settings import SecretStore, SettingsRepository
-from .forms import AlbumForm, ConnectionForm, NetworkForm, PhotoForm, WorkflowForm
+from .forms import (
+    AlbumForm,
+    ConnectionForm,
+    NetworkForm,
+    NextPhotoForm,
+    PhotoForm,
+    WorkflowForm,
+)
 
 
 def schedule_label(target: datetime | None, timezone: str, now: datetime | None = None) -> str:
@@ -117,30 +127,57 @@ def create_app(
                 error = str(exc)
                 runtime.loaded = True
         albums, photos = runtime.catalog_snapshot()
+        current_album_available = bool(
+            settings.frame.album_id and any(album.id == settings.frame.album_id for album in albums)
+        )
         eligibility = runtime.photo_eligibility(settings.frame, photos)
         eligible = eligibility.eligible
         selection = active_selection(eligible, settings.frame, current)
-        render_state = runtime.renderer.update(settings.device, current)
+        automatic_next = next_occurrence(settings.frame, settings.device.timezone, current)
+        selection.next_change_at = automatic_next.due_at
+        render_state = configuration.current_render_state(current)
         selected_photo = runtime.photo(runtime.preview_id())
-        rendered_photo = runtime.photo(runtime.renderer.rendered_photo_id())
+        rendered_photo = runtime.photo(
+            runtime.renderer.rendered_photo_id() or settings.refresh_status.last_rendered_photo_id
+        )
+        if not rendered_photo:
+            rendered_photo = runtime.preserved_display_photo()
         displayed_photo = rendered_photo or selection.photo
         render_photo = runtime.photo(render_state.photo_id)
+        completion_age_seconds = (
+            max(0.0, (current - render_state.finished_at).total_seconds())
+            if render_state.phase == RenderPhase.COMPLETE and render_state.finished_at
+            else None
+        )
+        completion_visible_seconds = configuration.COMPLETED_RENDER_ACKNOWLEDGEMENT_SECONDS
+        render_completion_visible = bool(
+            completion_age_seconds is not None
+            and completion_age_seconds < completion_visible_seconds
+        )
+        render_ack_delay_ms = (
+            max(1, int((completion_visible_seconds - completion_age_seconds) * 1000))
+            if render_completion_visible and completion_age_seconds is not None
+            else 0
+        )
+        request_operation_id = request.headers.get("x-photoframe-render-intent")
+        render_intent_matches = bool(
+            render_state.operation_id and request_operation_id == render_state.operation_id
+        )
         seconds_until_change = (
             max(0, int((selection.next_change_at - current).total_seconds()))
             if selection.next_change_at
             else None
         )
-        next_selection = (
-            active_selection(eligible, settings.frame, selection.next_change_at)
-            if selection.next_change_at
-            else None
+        following_photo = next_photo(
+            eligible,
+            settings.frame,
+            displayed_photo.id if displayed_photo else None,
         )
-        next_photo = next_selection.photo if next_selection else None
         scheduled_transition_soon = bool(
             seconds_until_change is not None
             and seconds_until_change <= 60
-            and next_photo
-            and (not displayed_photo or next_photo.id != displayed_photo.id)
+            and following_photo
+            and (not displayed_photo or following_photo.id != displayed_photo.id)
         )
         phases = [
             (RenderPhase.PREPARING, "Preparing image"),
@@ -151,8 +188,18 @@ def create_app(
         return {
             "request": request,
             "settings": settings,
+            "weekday_names": [
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday",
+            ],
             "credential_saved": secrets.exists(),
             "albums": albums,
+            "current_album_available": current_album_available,
             "photos": photos,
             "eligible": eligible,
             "wrong_orientation_count": eligibility.wrong_orientation,
@@ -161,14 +208,39 @@ def create_app(
             "displayed_photo": displayed_photo,
             "selected_photo": selected_photo,
             "render_photo": render_photo,
-            "next_photo": next_photo,
+            "next_photo": following_photo,
+            "next_photo_disabled_reason": (
+                "Wait for the current frame update to finish"
+                if render_state.active
+                else "Choose an album first"
+                if not settings.frame.album_id
+                else "No eligible photos are available"
+                if not eligible
+                else "Add another eligible photo to use Next photo"
+                if following_photo is None
+                else None
+            ),
             "seconds_until_change": seconds_until_change,
             "scheduled_transition_soon": scheduled_transition_soon,
             "render_state": render_state,
+            "render_completion_visible": render_completion_visible,
+            "render_ack_delay_ms": render_ack_delay_ms,
+            "render_intent_matches": render_intent_matches,
+            "next_request_id": secure_random.token_urlsafe(18),
             "render_phases": phases,
             "RenderPhase": RenderPhase,
             "next_change": schedule_label(
                 selection.next_change_at, settings.device.timezone, current
+            ),
+            "schedule_summary": (
+                f"Every {rotation_interval_label(settings.frame.rotation_seconds)}"
+                if settings.frame.schedule_mode == ScheduleMode.INTERVAL
+                else f"Daily at {settings.frame.daily_time}"
+                if settings.frame.schedule_mode == ScheduleMode.DAILY
+                else ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][
+                    settings.frame.weekly_day
+                ]
+                + f" at {settings.frame.weekly_time}"
             ),
             "source_name": "Demo library" if is_demo else settings.provider.kind.value.title(),
             "source_detail": (
@@ -190,7 +262,14 @@ def create_app(
             ),
             "network_address": settings.network.display_address,
             "display_summary": (
-                f"Every {rotation_interval_label(settings.frame.rotation_seconds)} · "
+                (
+                    f"Every {rotation_interval_label(settings.frame.rotation_seconds)}"
+                    if settings.frame.schedule_mode == ScheduleMode.INTERVAL
+                    else f"Daily at {settings.frame.daily_time}"
+                    if settings.frame.schedule_mode == ScheduleMode.DAILY
+                    else f"Weekly at {settings.frame.weekly_time}"
+                )
+                + " · "
                 f"{'Shuffle' if settings.frame.photo_order == PhotoOrder.SHUFFLE else 'In album order'}"
                 f" · {settings.frame.orientation.value.title()}"
             ),
@@ -204,6 +283,13 @@ def create_app(
             "_workspace.html",
             workspace_context(request, notice=notice, error=error),
         )
+
+    def render_operation_id(request: Request) -> str | None:
+        value = request.headers.get("x-photoframe-render-intent")
+        try:
+            return str(UUID(value)) if value else None
+        except ValueError:
+            return None
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request) -> HTMLResponse:
@@ -308,10 +394,40 @@ def create_app(
     @app.post("/render/start", response_class=HTMLResponse)
     def render_start(request: Request) -> HTMLResponse:
         try:
-            configuration.start_render()
+            configuration.start_render(operation_id=render_operation_id(request))
         except (ValueError, ProviderError, RuntimeError) as exc:
             return workspace(request, error=str(exc))
         return workspace(request)
+
+    @app.post("/photo/next", response_class=HTMLResponse)
+    async def next_photo_now(request: Request) -> HTMLResponse:
+        try:
+            form = NextPhotoForm.parse(await request.form())
+            return workspace(
+                request,
+                notice=configuration.start_next_photo(
+                    form.request_id,
+                    operation_id=render_operation_id(request),
+                ),
+            )
+        except (ValueError, ProviderError, RuntimeError) as exc:
+            return workspace(request, error=str(exc))
+
+    @app.post("/schedule/preview", response_class=HTMLResponse)
+    async def schedule_preview(request: Request) -> HTMLResponse:
+        try:
+            form = await request.form()
+            settings = repository.load()
+            frame = settings.frame.model_copy(deep=True)
+            frame.schedule_mode = ScheduleMode(str(form.get("schedule_mode", "interval")))
+            frame.rotation_seconds = int(str(form.get("rotation_seconds", "3600")))
+            frame.daily_time = str(form.get("daily_time", "03:00"))
+            frame.weekly_day = int(str(form.get("weekly_day", "0")))
+            frame.weekly_time = str(form.get("weekly_time", "03:00"))
+            occurrence = next_occurrence(frame, settings.device.timezone, datetime.now(UTC))
+            return HTMLResponse(schedule_label(occurrence.due_at, settings.device.timezone))
+        except (TypeError, ValueError):
+            return HTMLResponse("Check the schedule values.", status_code=422)
 
     @app.post("/render/reset", response_class=HTMLResponse)
     def render_reset(request: Request) -> HTMLResponse:

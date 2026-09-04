@@ -12,6 +12,7 @@ from ..models import (
     NetworkSettings,
     Orientation,
     PhotoOrder,
+    ScheduleMode,
     WebProtocol,
 )
 
@@ -49,9 +50,25 @@ class PhotoForm:
 
 
 @dataclass(frozen=True)
+class NextPhotoForm:
+    request_id: str
+
+    @classmethod
+    def parse(cls, form: Mapping[str, object]) -> NextPhotoForm:
+        request_id = _text(form, "request_id")
+        if not request_id or len(request_id) > 100:
+            raise ValueError("This Next photo request is invalid; reload and try again")
+        return cls(request_id)
+
+
+@dataclass(frozen=True)
 class WorkflowForm:
     orientation: Orientation
     rotation_seconds: int
+    schedule_mode: ScheduleMode
+    daily_time: str
+    weekly_day: int
+    weekly_time: str
     photo_order: PhotoOrder | None
     timezone: str | None
     expected_refresh_seconds: int
@@ -72,6 +89,10 @@ class WorkflowForm:
         return cls(
             orientation=Orientation(_text(form, "orientation")),
             rotation_seconds=int(_text(form, "rotation_seconds")),
+            schedule_mode=ScheduleMode(_text(form, "schedule_mode", "interval")),
+            daily_time=_text(form, "daily_time", "03:00"),
+            weekly_day=int(_text(form, "weekly_day", "0")),
+            weekly_time=_text(form, "weekly_time", "03:00"),
             photo_order=PhotoOrder(order) if order else None,
             timezone=timezone or None,
             expected_refresh_seconds=int(_text(form, "expected_refresh_seconds")),

@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
@@ -7,6 +8,9 @@ from PIL import Image
 
 from photoframe.models import Album, AppSettings, Photo, PhotoOrder
 from photoframe.web import create_app
+
+RENDER_INTENT = "38ebca82-c30a-4727-bb05-37fb455c97d6"
+RENDER_HEADERS = {"X-Photoframe-Render-Intent": RENDER_INTENT}
 
 
 class FakeProvider:
@@ -31,6 +35,78 @@ class FakeProvider:
         output = BytesIO()
         image.save(output, format="JPEG")
         return output.getvalue(), "image/jpeg"
+
+
+class MultiAlbumProvider(FakeProvider):
+    def list_albums(self):
+        return [
+            Album(id="current", name="Current", asset_count=2),
+            Album(id="new", name="New", asset_count=2),
+        ]
+
+    def list_photos(self, album_id):
+        assert album_id in {"current", "new"}
+        return [
+            Photo(id=f"{album_id}-a", filename=f"{album_id}-a.jpg", width=1200, height=800),
+            Photo(id=f"{album_id}-b", filename=f"{album_id}-b.jpg", width=1200, height=800),
+        ]
+
+
+def test_confirmed_album_then_next_preserves_display_and_schedule(tmp_path: Path):
+    provider = MultiAlbumProvider()
+    app = create_app(tmp_path, lambda _kind: provider)
+    runtime = app.state.runtime
+    with TestClient(app) as client:
+        client.post(
+            "/connection",
+            data={"server_url": "https://immich.test", "api_key": "secret"},
+        )
+        client.post("/album/select", data={"album_id": "current"})
+        anchor = datetime(2026, 1, 2, 3, 4, tzinfo=UTC)
+
+        def configured(settings):
+            settings.frame.schedule_anchor = anchor
+            settings.frame.schedule_mode = "daily"
+            settings.frame.daily_time = "03:00"
+            settings.device.set_display_size(1200, 800)
+            settings.refresh_status.last_completed_schedule_key = "daily:2026-01-01"
+            settings.refresh_status.last_attempted_schedule_key = "daily:2026-01-01"
+
+        runtime.repository.update(configured)
+        runtime.renderer.last_rendered_photo_id = "current-a"
+        before = runtime.repository.load()
+
+        confirmed = client.post("/album/select", data={"album_id": "new"})
+        after_confirm = runtime.repository.load()
+        assert after_confirm.frame.schedule_anchor == before.frame.schedule_anchor
+        assert after_confirm.refresh_status.last_completed_schedule_key == (
+            before.refresh_status.last_completed_schedule_key
+        )
+        assert after_confirm.refresh_status.last_attempted_schedule_key == (
+            before.refresh_status.last_attempted_schedule_key
+        )
+        assert runtime.renderer.rendered_photo_id() == "current-a"
+        assert 'src="/thumbnail/current-a"' in confirmed.text
+
+        request_id = re.search(r'name="request_id" value="([^"]+)"', confirmed.text)
+        assert request_id
+        next_response = client.post(
+            "/photo/next",
+            data={"request_id": request_id.group(1)},
+            headers=RENDER_HEADERS,
+        )
+
+    after_next = runtime.repository.load()
+    assert runtime.renderer.snapshot().photo_id in {"new-a", "new-b"}
+    assert runtime.renderer.rendered_photo_id() == "current-a"
+    assert after_next.frame.schedule_anchor == before.frame.schedule_anchor
+    assert after_next.refresh_status.last_completed_schedule_key == (
+        before.refresh_status.last_completed_schedule_key
+    )
+    assert after_next.refresh_status.last_attempted_schedule_key == (
+        before.refresh_status.last_attempted_schedule_key
+    )
+    assert 'data-frame-transition="updating"' in next_response.text
 
 
 def test_complete_local_web_flow(tmp_path: Path):
@@ -123,7 +199,7 @@ def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path)
         assert "Manual preview selected — frame unchanged" in response.text
         assert "Show now" in response.text
         assert runtime.repository.load().frame.starting_photo_id == original_start
-        response = client.post("/render/start")
+        response = client.post("/render/start", headers=RENDER_HEADERS)
         assert "Preparing image" in response.text
         assert 'data-frame-transition="updating"' in response.text
         assert "Frame changing now" in response.text
@@ -223,8 +299,10 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     with TestClient(app) as client:
         page = client.get("/")
         workspace = client.get("/partials/workspace")
+        frame_status = client.get("/partials/frame-status")
         selected_workspace = client.post("/photo/preview", data={"photo_id": "coast"})
         htmx = client.get("/static/vendor/htmx-2.0.4.min.js")
+        tab_identity = client.get("/static/tab-identity.js")
         responsive_css = client.get("/static/responsive-fixes.css")
         icon = client.get("/static/photoframe.svg")
 
@@ -232,9 +310,14 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert "unpkg.com" not in page.text
     assert htmx.status_code == 200
     assert 'version:"2.0.4"' in htmx.text
+    assert tab_identity.status_code == 200
+    assert "PhotoframeTabIdentity" in tab_identity.text
+    assert "createBrowserSession" in page.text
+    assert "randomUUID: () => self.crypto.randomUUID()" not in page.text
     assert 'data-theme-choice="light" aria-pressed="false"' in page.text
     assert 'data-theme-choice="dark" aria-pressed="true"' in page.text
     assert "setupNotifications" in page.text
+    assert "setupAlbumSelection" in page.text
     assert ".notification-stack" in responsive_css.text
     assert 'rel="icon" href="http://testserver/static/photoframe.svg"' in page.text
     assert 'class="brand-mark"><img src="http://testserver/static/photoframe.svg"' in page.text
@@ -247,6 +330,8 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert workspace.text.count('class="disclosure-icon"') == 5
     assert "setupSettingsAccordion" in page.text
     assert "activeSettingsPanel" in page.text
+    assert "/static/tab-identity.js" in page.text
+    assert "htmx:configRequest" in page.text
     assert ".setting-card[open]" in responsive_css.text
     assert icon.status_code == 200
     assert 'id="mdi-image-frame"' in icon.text
@@ -265,8 +350,16 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     ):
         assert f'name="{name}"' in workspace.text
     assert 'data-settings-panel="advanced"' in workspace.text
+    assert 'data-settings-panel="display" data-default-open="false"' in workspace.text
+    assert 'data-settings-panel="display" data-default-open="false" open' not in workspace.text
+    assert 'action="/photo/next"' in workspace.text
+    assert 'action="/photo/next"' not in frame_status.text
+    assert "The scheduled update time will not change." in workspace.text
+    assert workspace.text.index('id="frame-status"') < workspace.text.index(
+        'class="frame-next-action"'
+    )
     assert "Advanced settings" in workspace.text
-    assert "Every 1 hour · In album order · Landscape" in workspace.text
+    assert "Daily at 03:00 · In album order · Landscape" in workspace.text
     assert "Simulator · 24-hour" not in workspace.text
     assert "Network & web security" in workspace.text
     assert "This device only" in workspace.text
@@ -300,6 +393,99 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert "Reset to defaults" in workspace.text
     assert 'name="photo_order"' in workspace.text
     assert "Controls future scheduled changes" in workspace.text
+
+
+def test_album_picker_is_local_until_confirm_and_exposes_accessible_states(tmp_path: Path):
+    app = create_app(tmp_path, lambda _kind: FakeProvider())
+    with TestClient(app) as client:
+        client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
+        page = client.get("/")
+        workspace = client.get("/partials/workspace")
+        before = app.state.runtime.repository.load()
+
+    assert app.state.runtime.repository.load() == before
+    assert '<fieldset class="album-list" data-album-picker' in workspace.text
+    assert '<legend class="visually-hidden">Choose an album to review</legend>' in workspace.text
+    assert 'type="radio" name="pending_album" value="album"' in workspace.text
+    assert "data-album-confirmation hidden" in workspace.text
+    assert (
+        'data-album-announcement role="status" aria-live="polite" aria-atomic="true"'
+        in workspace.text
+    )
+    announcement = workspace.text.index("data-album-announcement")
+    confirmation = workspace.text.index("data-album-confirmation")
+    assert announcement < confirmation
+    assert "data-album-cancel>Cancel</button>" in workspace.text
+    assert 'action="/album/select"' in workspace.text
+    assert workspace.text.count('action="/album/select"') == 1
+    assert "setAlbumBusy(true)" in page.text
+    assert "picker.disabled = busy" in page.text
+    assert "cancelButton.disabled = busy" in page.text
+    assert "Switching album…" in page.text
+    assert "focusTarget?.focus({ preventScroll: true })" in page.text
+    assert "htmx:afterRequest" in page.text
+
+
+def test_album_confirm_is_the_only_route_mutation_point_and_marks_current(tmp_path: Path):
+    app = create_app(tmp_path, lambda _kind: FakeProvider())
+    with TestClient(app) as client:
+        client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
+        before = app.state.runtime.repository.load()
+        assert before.frame.album_id is None
+
+        response = client.post("/album/select", data={"album_id": "album"})
+
+    saved = app.state.runtime.repository.load()
+    assert saved.frame.album_id == "album"
+    assert saved.frame.album_name == "Family"
+    assert 'data-current-album-id="album"' in response.text
+    assert 'class="album-choice chosen"' in response.text
+    assert "<b data-album-state>Current</b>" in response.text
+
+
+def test_album_confirm_keeps_the_picture_currently_represented_on_frame(tmp_path: Path):
+    app = create_app(tmp_path, lambda _kind: FakeProvider())
+    runtime = app.state.runtime
+    old_photo = Photo(id="old", filename="still-on-frame.jpg", width=1200, height=800)
+    runtime.repository.update(
+        lambda settings: (
+            setattr(settings.frame, "album_id", "old-album"),
+            setattr(settings.frame, "album_name", "Old album"),
+            setattr(settings.verification, "ok", True),
+        )
+    )
+    runtime.albums = [Album(id="album", name="Family")]
+    runtime.photos = [old_photo]
+    runtime.loaded = True
+    runtime.renderer.last_rendered_photo_id = old_photo.id
+
+    with TestClient(app) as client:
+        response = client.post("/album/select", data={"album_id": "album"})
+
+    assert "still-on-frame.jpg" in response.text
+    assert runtime.repository.load().frame.album_id == "album"
+    assert runtime.renderer.rendered_photo_id() == "old"
+
+
+def test_missing_current_album_is_reported_without_automatic_replacement(tmp_path: Path):
+    app = create_app(tmp_path, lambda _kind: FakeProvider())
+    runtime = app.state.runtime
+    runtime.repository.update(
+        lambda settings: (
+            setattr(settings.frame, "album_id", "gone"),
+            setattr(settings.frame, "album_name", "Old family album"),
+            setattr(settings.verification, "ok", True),
+        )
+    )
+    runtime.loaded = True
+    runtime.albums = [Album(id="album", name="Family")]
+
+    with TestClient(app) as client:
+        response = client.get("/partials/workspace")
+
+    assert "Old family album · Unavailable" in response.text
+    assert "will remain selected until you confirm another album" in response.text
+    assert runtime.repository.load().frame.album_id == "gone"
 
 
 def test_network_change_requires_confirmation_and_requests_restart(tmp_path: Path):
@@ -512,6 +698,7 @@ def test_scheduled_transition_is_prominent_in_the_frame_preview(tmp_path: Path):
     now = datetime.now(UTC)
     app.state.runtime.repository.update(
         lambda settings: (
+            setattr(settings.frame, "schedule_mode", "interval"),
             setattr(settings.frame, "rotation_seconds", 30),
             setattr(settings.frame, "schedule_anchor", now),
         )
@@ -530,7 +717,7 @@ def test_successful_render_auto_dismisses_but_failure_remains(tmp_path: Path):
     app = create_app(tmp_path, demo_mode=True)
     with TestClient(app) as client:
         client.post("/photo/preview", data={"photo_id": "coast"})
-        client.post("/render/start")
+        client.post("/render/start", headers=RENDER_HEADERS)
         runtime = app.state.runtime
         started = runtime.renderer.snapshot().started_at
         assert started is not None
@@ -539,11 +726,11 @@ def test_successful_render_auto_dismisses_but_failure_remains(tmp_path: Path):
             settings.device,
             started + timedelta(seconds=settings.device.expected_refresh_seconds),
         )
-        completed = client.get("/partials/render-status")
+        completed = client.get("/partials/render-status", headers=RENDER_HEADERS)
 
         assert 'data-auto-dismiss-render="6000"' in completed.text
         assert 'hx-post="/render/dismiss"' in completed.text
-        assert 'hx-trigger="load delay:6s"' in completed.text
+        assert 'hx-trigger="load delay:6000ms"' in completed.text
         assert "Dismiss now" in completed.text
 
         dismissed = client.post("/render/dismiss")
@@ -561,8 +748,103 @@ def test_successful_render_auto_dismisses_but_failure_remains(tmp_path: Path):
         runtime.renderer.start("coast", now)
         runtime.renderer.update(runtime.repository.load().device, now + timedelta(seconds=10))
         failed = client.get("/partials/render-status")
+        failed_workspace = client.get("/partials/workspace")
 
     assert "Frame update failed" in failed.text
     assert "data-auto-dismiss-render" not in failed.text
     assert 'hx-post="/render/dismiss"' not in failed.text
+    assert "Try next photo" in failed_workspace.text
+    assert "Retry Next photo" not in failed_workspace.text
     assert ">Done<" in failed.text
+
+
+def test_manual_render_popup_is_correlated_to_the_initiating_browser(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    other_browser = {"X-Photoframe-Render-Intent": "a70cc8a8-fbd9-4b98-8290-011d0eabfa06"}
+    with TestClient(app) as client:
+        client.post("/photo/preview", data={"photo_id": "coast"})
+        initiated = client.post("/render/start", headers=RENDER_HEADERS)
+        same_browser = client.get("/partials/frame-status", headers=RENDER_HEADERS)
+        unrelated_browser = client.get("/partials/frame-status", headers=other_browser)
+        unrelated_workspace = client.get("/partials/workspace", headers=other_browser)
+
+    assert 'data-frame-transition="updating"' in initiated.text
+    assert 'data-frame-transition="updating"' in same_browser.text
+    assert 'data-frame-transition="updating"' not in unrelated_browser.text
+    assert 'data-frame-transition="manual-preview"' not in unrelated_browser.text
+    assert "Updating the frame" in initiated.text
+    assert 'id="render-status"' not in unrelated_workspace.text
+    assert "Frame update in progress" in unrelated_workspace.text
+
+
+def test_scheduled_render_status_remains_global_and_uncorrelated(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    runtime = app.state.runtime
+    runtime.renderer.start("coast")
+
+    with TestClient(app) as client:
+        workspace = client.get("/partials/workspace", headers=RENDER_HEADERS)
+
+    assert runtime.renderer.snapshot().operation_id is None
+    assert 'data-frame-transition="updating"' not in workspace.text
+    assert 'id="render-status"' in workspace.text
+    assert "Updating the frame" in workspace.text
+
+
+def test_completed_render_visibility_uses_fixed_server_deadlines(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    runtime = app.state.runtime
+    settings = runtime.repository.load()
+    now = datetime.now(UTC)
+
+    with TestClient(app) as client:
+        client.post("/photo/preview", data={"photo_id": "coast"})
+
+        recently_started = now - timedelta(seconds=settings.device.expected_refresh_seconds + 3)
+        runtime.renderer.start("coast", recently_started, operation_id=RENDER_INTENT)
+        runtime.renderer.update(
+            settings.device,
+            recently_started + timedelta(seconds=settings.device.expected_refresh_seconds),
+        )
+        recent = client.get("/partials/workspace", headers=RENDER_HEADERS)
+        recent_other_browser = client.get(
+            "/partials/workspace",
+            headers={"X-Photoframe-Render-Intent": "a70cc8a8-fbd9-4b98-8290-011d0eabfa06"},
+        )
+
+        assert 'data-frame-transition="complete"' in recent.text
+        assert 'data-auto-dismiss-render="6000"' not in recent.text
+        assert "data-auto-dismiss-render=" in recent.text
+        assert 'id="render-status"' not in recent_other_browser.text
+        assert runtime.renderer.snapshot().phase.value == "complete"
+
+        ten_seconds_ago = datetime.now(UTC) - timedelta(
+            seconds=settings.device.expected_refresh_seconds + 10
+        )
+        runtime.renderer.reset()
+        runtime.renderer.start("coast", ten_seconds_ago, operation_id=RENDER_INTENT)
+        runtime.renderer.update(
+            settings.device,
+            ten_seconds_ago + timedelta(seconds=settings.device.expected_refresh_seconds),
+        )
+        reloaded = client.get("/partials/workspace", headers=RENDER_HEADERS)
+
+        assert 'data-frame-transition="complete"' not in reloaded.text
+        assert 'id="render-status"' not in reloaded.text
+        assert runtime.renderer.snapshot().phase.value == "complete"
+
+        stale_started = datetime.now(UTC) - timedelta(
+            seconds=settings.device.expected_refresh_seconds + 31
+        )
+        runtime.renderer.reset()
+        runtime.renderer.start("coast", stale_started, operation_id=RENDER_INTENT)
+        runtime.renderer.update(
+            settings.device,
+            stale_started + timedelta(seconds=settings.device.expected_refresh_seconds),
+        )
+        expired = client.get("/partials/workspace", headers=RENDER_HEADERS)
+
+    assert 'data-frame-transition="complete"' not in expired.text
+    assert 'id="render-status"' not in expired.text
+    assert runtime.renderer.snapshot().phase.value == "idle"
+    assert runtime.preview_id() is None

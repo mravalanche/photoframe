@@ -15,7 +15,14 @@ from ..lifecycle import RefreshCoordinator
 from ..models import Album, AppSettings, FrameSettings, Photo, PhotoOrder
 from ..providers import PhotoProvider, ProviderError, ProviderResolver
 from ..renderer import MockRenderCoordinator, RenderService
-from ..selector import EligibilitySummary, active_selection, classify_photos, shuffled_photo_ids
+from ..schedule import catch_up_occurrence
+from ..selector import (
+    EligibilitySummary,
+    active_selection,
+    classify_photos,
+    next_photo,
+    shuffled_photo_ids,
+)
 from ..settings import SecretStore, SettingsRepository
 
 
@@ -34,6 +41,7 @@ class Runtime:
         self.photos: list[Photo] = []
         self._loaded = False
         self.selected_preview_id: str | None = None
+        self._preserved_display_photo: Photo | None = None
         self._prepared_image: Image.Image | None = None
         self.renderer = MockRenderCoordinator()
         self.display: InkyDisplay | None = None
@@ -142,6 +150,20 @@ class Runtime:
         with self._runtime_lock:
             self.photos = []
 
+    def replace_photos(self, photos: list[Photo]) -> None:
+        """Publish a fully loaded catalog after its settings change has committed."""
+        with self._runtime_lock:
+            self.photos = list(photos)
+
+    def preserve_display_photo(self, photo: Photo | None) -> None:
+        """Keep representing the physical frame while its former catalog is replaced."""
+        with self._runtime_lock:
+            self._preserved_display_photo = photo
+
+    def preserved_display_photo(self) -> Photo | None:
+        with self._runtime_lock:
+            return self._preserved_display_photo
+
     def preview_id(self) -> str | None:
         with self._runtime_lock:
             return self.selected_preview_id
@@ -248,6 +270,7 @@ class Runtime:
             self.albums = []
             self.photos = []
             self.selected_preview_id = None
+            self._preserved_display_photo = None
             self._prepared_image = None
             self._loaded = False
             self._startup_catalog_restore_pending = True
@@ -318,7 +341,7 @@ class Runtime:
         self.repository.update(record)
 
     def _advance_scheduled_render(self, now: datetime | None = None) -> None:
-        """Render each current schedule slot once, surviving process restarts."""
+        """Render one recent due occurrence, surviving restarts without replay storms."""
         current = now or datetime.now(UTC)
         settings = self.repository.load()
         self.renderer.update(settings.device, current)
@@ -326,16 +349,22 @@ class Runtime:
         _albums, photos = self.catalog_snapshot()
         if self.renderer.snapshot().active or self.renderer.hardware_busy or not photos:
             return
-        elapsed = int((current - settings.frame.schedule_anchor).total_seconds())
-        slot = max(0, elapsed // settings.frame.rotation_seconds)
+        occurrence = catch_up_occurrence(settings.frame, settings.device.timezone, current)
         if (
-            settings.refresh_status.last_completed_schedule_anchor == settings.frame.schedule_anchor
-            and settings.refresh_status.last_completed_schedule_slot == slot
+            occurrence is None
+            or settings.refresh_status.last_attempted_schedule_key == occurrence.key
         ):
             return
         eligible = self.photo_eligibility(settings.frame, photos).eligible
-        selection = active_selection(eligible, settings.frame, current)
-        if not selection.photo:
+        candidate = next_photo(
+            eligible,
+            settings.frame,
+            settings.refresh_status.last_rendered_photo_id,
+        )
+        if candidate is None:
+            selection = active_selection(eligible, settings.frame, current)
+            candidate = selection.photo
+        if not candidate:
             return
         try:
             # Autonomous output is a physical-frame responsibility. Demo and
@@ -344,10 +373,23 @@ class Runtime:
                 return
             anchor = settings.frame.schedule_anchor
 
+            # Claim the occurrence durably before touching the provider or
+            # display. A failure or restart must never replay the same slot.
+            self.repository.update(
+                lambda saved: setattr(
+                    saved.refresh_status, "last_attempted_schedule_key", occurrence.key
+                )
+            )
+
             def completed(photo_id: str) -> None:
                 def save_completion(saved):
                     saved.refresh_status.last_completed_schedule_anchor = anchor
-                    saved.refresh_status.last_completed_schedule_slot = slot
+                    saved.refresh_status.last_completed_schedule_slot = (
+                        int(occurrence.key.rsplit(":", 1)[-1])
+                        if occurrence.key.startswith("interval:")
+                        else None
+                    )
+                    saved.refresh_status.last_completed_schedule_key = occurrence.key
                     saved.refresh_status.last_rendered_photo_id = photo_id
                     saved.refresh_status.last_render_error = None
 
@@ -358,7 +400,7 @@ class Runtime:
                     lambda saved: setattr(saved.refresh_status, "last_render_error", message[:500])
                 )
 
-            self.render_service.start(selection.photo.id, on_complete=completed, on_failure=failed)
+            self.render_service.start(candidate.id, on_complete=completed, on_failure=failed)
         except (ImageProcessingError, ProviderError, RuntimeError) as exc:
             message = str(exc)[:500]
             self.repository.update(

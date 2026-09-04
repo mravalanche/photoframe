@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets as secure_random
+from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,8 +20,10 @@ from ..models import (
     Orientation,
     PhotoOrder,
     ProviderKind,
+    ScheduleMode,
 )
-from ..renderer import RenderPhase
+from ..renderer import RenderPhase, RenderState
+from ..selector import active_selection, next_photo, shuffled_photo_ids
 from ..settings import SecretStore, SettingsRepository
 from ..tls import tls_paths
 from .runtime import Runtime
@@ -40,6 +43,18 @@ class WorkflowInput(Protocol):
 
     @property
     def rotation_seconds(self) -> int: ...
+
+    @property
+    def schedule_mode(self) -> ScheduleMode: ...
+
+    @property
+    def daily_time(self) -> str: ...
+
+    @property
+    def weekly_day(self) -> int: ...
+
+    @property
+    def weekly_time(self) -> str: ...
 
     @property
     def photo_order(self) -> PhotoOrder | None: ...
@@ -82,6 +97,9 @@ class ResetIncompleteError(RuntimeError):
 
 
 class ConfigurationService:
+    COMPLETED_RENDER_RELEVANCE_SECONDS = 30
+    COMPLETED_RENDER_ACKNOWLEDGEMENT_SECONDS = 6
+
     def __init__(
         self,
         repository: SettingsRepository,
@@ -94,6 +112,10 @@ class ConfigurationService:
         self.runtime = runtime
         self.data_dir = data_dir
         self._reset_lock = Lock()
+        self._album_selection_lock = Lock()
+        self._next_lock = Lock()
+        self._next_request_ids: deque[str] = deque()
+        self._next_request_id_set: set[str] = set()
 
     def save_connection(self, form: ConnectionInput) -> str:
         try:
@@ -134,23 +156,50 @@ class ConfigurationService:
         return f"Loaded {len(albums)} albums"
 
     def select_album(self, album_id: str) -> str:
+        with self._album_selection_lock:
+            return self._select_album(album_id)
+
+    def _select_album(self, album_id: str) -> str:
         albums, _photos = self.runtime.catalog_snapshot()
         album = next((item for item in albums if item.id == album_id), None)
         if not album:
             raise ValueError("Choose an album from the loaded list")
-        anchor = datetime.now(UTC)
+
+        previous = self.repository.load()
+        rendered_before = (
+            self.runtime.photo(self.runtime.renderer.rendered_photo_id())
+            or self.runtime.preserved_display_photo()
+        )
+        eligible_before = self.runtime.photo_eligibility(previous.frame, _photos).eligible
+        displayed_before = (
+            rendered_before
+            or active_selection(eligible_before, previous.frame, datetime.now(UTC)).photo
+        )
+        candidate_frame = previous.frame.model_copy(deep=True)
+        candidate_frame.album_id = album.id
+        candidate_frame.album_name = album.name
+        try:
+            photos = self.runtime.provider().list_photos(album.id)
+            eligible = self.runtime.photo_eligibility(candidate_frame, photos).eligible
+        except Exception as exc:
+            raise RuntimeError(
+                f"Could not use {album.name}. Your current album is unchanged; "
+                "check the photo source and try again."
+            ) from exc
 
         def choose_album(settings: AppSettings) -> None:
             settings.frame.album_id = album.id
             settings.frame.album_name = album.name
-            settings.frame.schedule_anchor = anchor
-            settings.frame.starting_photo_id = None
+            if settings.frame.starting_photo_id not in {photo.id for photo in eligible}:
+                settings.frame.starting_photo_id = None
+            if settings.frame.photo_order == PhotoOrder.SHUFFLE:
+                settings.frame.shuffle_photo_ids = shuffled_photo_ids(eligible, settings.frame)
             settings.refresh_status.next_attempt_at = None
 
         self.repository.update(choose_album)
+        self.runtime.preserve_display_photo(displayed_before)
+        self.runtime.replace_photos(photos)
         self.runtime.set_preview(None)
-        photos = self.runtime.refresh_photos()
-        self.runtime.refresh_lifecycle()
         return f"Selected {album.name}; found {len(photos)} images"
 
     def save_workflow(self, form: WorkflowInput) -> str:
@@ -161,6 +210,10 @@ class ConfigurationService:
             previous_order = settings.frame.photo_order
             settings.frame.orientation = form.orientation
             settings.frame.rotation_seconds = form.rotation_seconds
+            settings.frame.schedule_mode = form.schedule_mode
+            settings.frame.daily_time = form.daily_time
+            settings.frame.weekly_day = form.weekly_day
+            settings.frame.weekly_time = form.weekly_time
             settings.frame.photo_order = form.photo_order or settings.frame.photo_order
             settings.device.timezone = form.timezone or settings.device.timezone
             settings.device.expected_refresh_seconds = form.expected_refresh_seconds
@@ -172,6 +225,8 @@ class ConfigurationService:
             else:
                 settings.device.set_display_size(None, None)
             settings.frame.schedule_anchor = anchor
+            settings.refresh_status.last_completed_schedule_key = None
+            settings.refresh_status.last_attempted_schedule_key = None
             if not any(
                 photo.id == settings.frame.starting_photo_id
                 and photo.matches(settings.frame.orientation)
@@ -196,7 +251,7 @@ class ConfigurationService:
             self.runtime.set_preview(None)
         self.runtime.reconcile_shuffle()
         self.runtime.initialise_display()
-        return "Frame settings saved; rotation restarted from now"
+        return "Frame settings saved; the next automatic update is scheduled"
 
     def save_network(self, form: NetworkInput, *, can_restart: bool) -> ServiceResult:
         candidate = form.candidate
@@ -266,19 +321,94 @@ class ConfigurationService:
         finally:
             self._reset_lock.release()
 
-    def start_render(self) -> None:
+    def start_render(self, operation_id: str | None = None) -> None:
         photo = self.runtime.photo(self.runtime.preview_id())
         if not photo:
             raise ValueError("Select an image preview before sending it to the frame")
+
+        def completed(photo_id: str) -> None:
+            self.repository.update(
+                lambda saved: setattr(saved.refresh_status, "last_rendered_photo_id", photo_id)
+            )
+
         try:
             if self.runtime.has_display():
-                self.runtime.render_service.start(photo.id)
+                self.runtime.render_service.start(
+                    photo.id,
+                    operation_id=operation_id,
+                    on_complete=completed,
+                )
             else:
                 self.runtime.prepare_photo(photo.id)
-                self.runtime.renderer.start(photo.id)
+                self.runtime.renderer.start(
+                    photo.id,
+                    operation_id=operation_id,
+                    on_complete=completed,
+                )
         except ImageProcessingError:
             self.runtime.set_preview(None)
             raise
+
+    def start_next_photo(self, request_id: str, operation_id: str | None = None) -> str:
+        """Start one manual successor without touching automatic schedule state."""
+        if not self._next_lock.acquire(blocking=False):
+            raise ValueError("Another Next photo request is already being handled")
+        try:
+            if request_id in self._next_request_id_set:
+                raise ValueError("This Next photo request was already handled")
+            if len(self._next_request_ids) == 500:
+                self._next_request_id_set.discard(self._next_request_ids.popleft())
+            self._next_request_ids.append(request_id)
+            self._next_request_id_set.add(request_id)
+            state = self.runtime.renderer.snapshot()
+            if state.active or self.runtime.renderer.hardware_busy:
+                raise ValueError("Wait for the current frame update before choosing Next photo")
+            settings = self.repository.load()
+            if not settings.frame.album_id:
+                raise ValueError("Choose an album before using Next photo")
+            _albums, photos = self.runtime.catalog_snapshot()
+            eligible = self.runtime.photo_eligibility(settings.frame, photos).eligible
+            current_id = (
+                self.runtime.renderer.rendered_photo_id()
+                or settings.refresh_status.last_rendered_photo_id
+            )
+            if current_id is None:
+                selection = active_selection(eligible, settings.frame)
+                current_id = selection.photo.id if selection.photo else None
+            candidate = next_photo(eligible, settings.frame, current_id)
+            if candidate is None:
+                raise ValueError("Next photo needs at least two distinct eligible photos")
+            cleared_preview = self.runtime.preview_id() is not None
+            self.runtime.set_preview(None)
+
+            def completed(photo_id: str) -> None:
+                self.repository.update(
+                    lambda saved: setattr(saved.refresh_status, "last_rendered_photo_id", photo_id)
+                )
+
+            if self.runtime.has_display():
+                started = self.runtime.render_service.start(
+                    candidate.id,
+                    operation_id=operation_id,
+                    on_complete=completed,
+                )
+            else:
+                self.runtime.prepare_photo(candidate.id)
+                started = self.runtime.renderer.start(
+                    candidate.id,
+                    operation_id=operation_id,
+                    on_complete=completed,
+                )
+            if started.photo_id != candidate.id:
+                raise ValueError(
+                    "Another frame update started first; retry Next photo when it finishes"
+                )
+            prefix = "The pending preview was cleared. " if cleared_preview else ""
+            return prefix + "Showing the next photo now; the automatic schedule is unchanged"
+        except ImageProcessingError:
+            raise
+        finally:
+            self._next_lock.release()
 
     def reset_render(self) -> None:
         self.runtime.renderer.reset()
@@ -287,6 +417,20 @@ class ConfigurationService:
     def dismiss_render(self) -> None:
         if self.runtime.renderer.snapshot().phase == RenderPhase.COMPLETE:
             self.reset_render()
+
+    def current_render_state(self, now: datetime | None = None) -> RenderState:
+        """Return current state, expiring only stale successful acknowledgements."""
+        current = now or datetime.now(UTC)
+        state = self.runtime.renderer.update(self.repository.load().device, current)
+        if (
+            state.phase == RenderPhase.COMPLETE
+            and state.finished_at
+            and (current - state.finished_at).total_seconds()
+            >= self.COMPLETED_RENDER_RELEVANCE_SECONDS
+        ):
+            self.reset_render()
+            return self.runtime.renderer.snapshot()
+        return state
 
     def _require_eligible(self, photo_id: str) -> None:
         settings = self.repository.load()

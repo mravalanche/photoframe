@@ -16,6 +16,12 @@ class PhotoOrder(StrEnum):
     SHUFFLE = "shuffle"
 
 
+class ScheduleMode(StrEnum):
+    INTERVAL = "interval"
+    DAILY = "daily"
+    WEEKLY = "weekly"
+
+
 class ProviderKind(StrEnum):
     IMMICH = "immich"
 
@@ -61,6 +67,10 @@ class FrameSettings(BaseModel):
 
     orientation: Orientation = Orientation.LANDSCAPE
     rotation_seconds: Annotated[int, Field(ge=30, le=2_592_000)] = 3600
+    schedule_mode: ScheduleMode = ScheduleMode.DAILY
+    daily_time: str = "03:00"
+    weekly_day: Annotated[int, Field(ge=0, le=6)] = 0
+    weekly_time: str = "03:00"
     album_id: str | None = None
     album_name: str | None = None
     schedule_anchor: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -68,6 +78,15 @@ class FrameSettings(BaseModel):
     photo_order: PhotoOrder = PhotoOrder.ALBUM
     shuffle_seed: int = 0
     shuffle_photo_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("daily_time", "weekly_time")
+    @classmethod
+    def valid_local_time(cls, value: str) -> str:
+        try:
+            parsed = datetime.strptime(value, "%H:%M")
+        except ValueError as exc:
+            raise ValueError("Use a 24-hour time in HH:MM format") from exc
+        return parsed.strftime("%H:%M")
 
 
 class DeviceSettings(BaseModel):
@@ -185,6 +204,8 @@ class RefreshStatus(BaseModel):
     cached_bytes: Annotated[int, Field(ge=0)] = 0
     last_completed_schedule_slot: int | None = None
     last_completed_schedule_anchor: datetime | None = None
+    last_completed_schedule_key: str | None = None
+    last_attempted_schedule_key: str | None = None
     last_rendered_photo_id: str | None = None
     last_render_error: str | None = None
 
@@ -196,7 +217,7 @@ class Verification(BaseModel):
 
 
 class AppSettings(BaseModel):
-    schema_version: int = 1
+    schema_version: int = 2
     provider: ProviderSettings = Field(default_factory=ProviderSettings)
     frame: FrameSettings = Field(default_factory=FrameSettings)
     device: DeviceSettings = Field(default_factory=DeviceSettings)
