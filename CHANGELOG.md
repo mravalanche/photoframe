@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/mravalanche/photoframe/compare/v1.2.0...v1.2.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* keep release lockfile versions synchronized ([16e2328](https://github.com/mravalanche/photoframe/commit/16e2328b8ea12d78d20662aedfcb4dc077d05b4a))
+
 ## [1.2.0](https://github.com/mravalanche/photoframe/compare/v1.1.0...v1.2.0) (2026-09-04)
 
 
