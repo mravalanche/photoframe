@@ -1,5 +1,7 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Event, Lock
 
 import pytest
 
@@ -77,7 +79,11 @@ class AlbumProvider(ServiceProvider):
         self.fail_album: str | None = None
 
     def list_albums(self) -> list[Album]:
-        return [Album(id="current", name="Current album"), Album(id="new", name="New album")]
+        return [
+            Album(id="current", name="Current album"),
+            Album(id="new", name="New album"),
+            Album(id="third", name="Third album"),
+        ]
 
     def list_photos(self, album_id: str) -> list[Photo]:
         self.photo_calls.append(album_id)
@@ -151,3 +157,79 @@ def test_select_album_rejects_missing_pending_album_without_mutation(tmp_path: P
 
     assert runtime.repository.load() == before
     assert provider.photo_calls == []
+
+
+def test_successive_album_changes_keep_the_photo_actually_on_the_frame(tmp_path: Path):
+    provider = AlbumProvider()
+    service, runtime = service_for(tmp_path, provider)
+    runtime.albums = provider.list_albums()
+    displayed = Photo(id="current-photo", filename="current.jpg")
+    runtime.photos = [displayed]
+    runtime.renderer.last_rendered_photo_id = displayed.id
+
+    def configure_current(settings):
+        settings.frame.album_id = "current"
+        settings.frame.album_name = "Current album"
+
+    runtime.repository.update(configure_current)
+
+    service.select_album("new")
+    service.select_album("third")
+
+    assert runtime.repository.load().frame.album_id == "third"
+    assert runtime.catalog_snapshot()[1] == [Photo(id="third-photo", filename="third.jpg")]
+    assert runtime.preserved_display_photo() == displayed
+
+
+class TrackingLock:
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self.acquire_count = 0
+        self.second_waiting = Event()
+
+    def __enter__(self):
+        self.acquire_count += 1
+        if self.acquire_count == 2:
+            self.second_waiting.set()
+        self._lock.acquire()
+        return self
+
+    def __exit__(self, *_args) -> None:
+        self._lock.release()
+
+
+def test_concurrent_album_changes_publish_matching_settings_and_catalog(
+    tmp_path: Path, monkeypatch
+):
+    provider = AlbumProvider()
+    service, runtime = service_for(tmp_path, provider)
+    runtime.albums = provider.list_albums()
+    tracking_lock = TrackingLock()
+    monkeypatch.setattr(service, "_album_selection_lock", tracking_lock)
+    first_loading = Event()
+    release_first = Event()
+    original_list_photos = provider.list_photos
+
+    def controlled_list_photos(album_id: str) -> list[Photo]:
+        if album_id == "new":
+            first_loading.set()
+            assert release_first.wait(timeout=5)
+        return original_list_photos(album_id)
+
+    monkeypatch.setattr(provider, "list_photos", controlled_list_photos)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(service.select_album, "new")
+        assert first_loading.wait(timeout=5)
+        second = executor.submit(service.select_album, "third")
+        assert tracking_lock.second_waiting.wait(timeout=5)
+        assert provider.photo_calls == []
+        release_first.set()
+        first.result(timeout=5)
+        second.result(timeout=5)
+
+    saved = runtime.repository.load()
+    assert saved.frame.album_id == "third"
+    assert saved.frame.album_name == "Third album"
+    assert runtime.catalog_snapshot()[1] == [Photo(id="third-photo", filename="third.jpg")]
+    assert provider.photo_calls == ["new", "third"]

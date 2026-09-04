@@ -98,6 +98,7 @@ class ConfigurationService:
         self.runtime = runtime
         self.data_dir = data_dir
         self._reset_lock = Lock()
+        self._album_selection_lock = Lock()
 
     def save_connection(self, form: ConnectionInput) -> str:
         try:
@@ -138,13 +139,20 @@ class ConfigurationService:
         return f"Loaded {len(albums)} albums"
 
     def select_album(self, album_id: str) -> str:
+        with self._album_selection_lock:
+            return self._select_album(album_id)
+
+    def _select_album(self, album_id: str) -> str:
         albums, _photos = self.runtime.catalog_snapshot()
         album = next((item for item in albums if item.id == album_id), None)
         if not album:
             raise ValueError("Choose an album from the loaded list")
 
         previous = self.repository.load()
-        rendered_before = self.runtime.photo(self.runtime.renderer.rendered_photo_id())
+        rendered_before = (
+            self.runtime.photo(self.runtime.renderer.rendered_photo_id())
+            or self.runtime.preserved_display_photo()
+        )
         eligible_before = self.runtime.photo_eligibility(previous.frame, _photos).eligible
         displayed_before = (
             rendered_before
