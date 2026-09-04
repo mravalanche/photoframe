@@ -54,11 +54,7 @@
     }
     let activeSettingsPanel = null;
     let settingsPanelViewState = null;
-    const tabSession = self.PhotoframeTabIdentity.createSession({
-      localStorage,
-      sessionStorage,
-      randomUUID: () => self.crypto.randomUUID(),
-    });
+    const tabSession = self.PhotoframeTabIdentity.createBrowserSession(self);
     const currentRenderIntent = () => tabSession.currentIntent();
     const newRenderIntent = () => tabSession.newIntent();
     window.addEventListener('pagehide', () => tabSession.release());

@@ -9,6 +9,29 @@
     try { return raw ? JSON.parse(raw) : null; } catch (_) { return null; }
   }
 
+  function fallbackUUID() {
+    const hex = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
+    return hex.replace(/[xy]/g, character => {
+      const random = Math.floor(Math.random() * 16);
+      const value = character === 'x' ? random : (random & 0x3) | 0x8;
+      return value.toString(16);
+    });
+  }
+
+  function browserUUID(browser) {
+    try {
+      if (typeof browser.crypto?.randomUUID === 'function') return browser.crypto.randomUUID();
+      if (typeof browser.crypto?.getRandomValues === 'function') {
+        const bytes = browser.crypto.getRandomValues(new Uint8Array(16));
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        const hex = Array.from(bytes, value => value.toString(16).padStart(2, '0'));
+        return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10).join('')}`;
+      }
+    } catch (_) { /* unavailable */ }
+    return fallbackUUID();
+  }
+
   function createSession(options) {
     const local = options.localStorage;
     const session = options.sessionStorage;
@@ -89,7 +112,19 @@
     };
   }
 
-  const api = { createSession, claimPrefix, intentKey, tabKey };
+  function createBrowserSession(browser) {
+    let local = null;
+    let session = null;
+    try { local = browser.localStorage; } catch (_) { /* unavailable */ }
+    try { session = browser.sessionStorage; } catch (_) { /* unavailable */ }
+    return createSession({
+      localStorage: local,
+      sessionStorage: session,
+      randomUUID: () => browserUUID(browser),
+    });
+  }
+
+  const api = { createBrowserSession, createSession, claimPrefix, intentKey, tabKey };
   global.PhotoframeTabIdentity = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 }(globalThis));

@@ -50,3 +50,25 @@ duplicate.release();
 replacement.release();
 """
     subprocess.run([node, "-e", scenario], check=True)
+
+
+def test_browser_session_survives_blocked_storage_and_crypto_access() -> None:
+    if NODE is None:
+        pytest.skip("Node.js is unavailable")
+    node = NODE
+    script = Path("src/photoframe/static/tab-identity.js").resolve()
+    scenario = f"""
+const identity = require({json.dumps(str(script))});
+const blocked = {{
+  get localStorage() {{ throw new DOMException('blocked', 'SecurityError'); }},
+  get sessionStorage() {{ throw new DOMException('blocked', 'SecurityError'); }},
+  get crypto() {{ throw new DOMException('blocked', 'SecurityError'); }},
+}};
+const session = identity.createBrowserSession(blocked);
+const operation = session.newIntent();
+if (!/^[0-9a-f]{{8}}-[0-9a-f]{{4}}-4[0-9a-f]{{3}}-[89ab][0-9a-f]{{3}}-[0-9a-f]{{12}}$/.test(operation)) {{
+  throw new Error('fallback did not create a valid v4 UUID');
+}}
+if (session.currentIntent() !== operation) throw new Error('volatile intent was not retained');
+"""
+    subprocess.run([node, "-e", scenario], check=True)

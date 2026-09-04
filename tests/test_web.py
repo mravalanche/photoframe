@@ -238,6 +238,8 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'version:"2.0.4"' in htmx.text
     assert tab_identity.status_code == 200
     assert "PhotoframeTabIdentity" in tab_identity.text
+    assert "createBrowserSession" in page.text
+    assert "randomUUID: () => self.crypto.randomUUID()" not in page.text
     assert 'data-theme-choice="light" aria-pressed="false"' in page.text
     assert 'data-theme-choice="dark" aria-pressed="true"' in page.text
     assert "setupNotifications" in page.text
