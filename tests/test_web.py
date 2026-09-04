@@ -228,6 +228,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
         workspace = client.get("/partials/workspace")
         selected_workspace = client.post("/photo/preview", data={"photo_id": "coast"})
         htmx = client.get("/static/vendor/htmx-2.0.4.min.js")
+        tab_identity = client.get("/static/tab-identity.js")
         responsive_css = client.get("/static/responsive-fixes.css")
         icon = client.get("/static/photoframe.svg")
 
@@ -235,6 +236,8 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert "unpkg.com" not in page.text
     assert htmx.status_code == 200
     assert 'version:"2.0.4"' in htmx.text
+    assert tab_identity.status_code == 200
+    assert "PhotoframeTabIdentity" in tab_identity.text
     assert 'data-theme-choice="light" aria-pressed="false"' in page.text
     assert 'data-theme-choice="dark" aria-pressed="true"' in page.text
     assert "setupNotifications" in page.text
@@ -250,7 +253,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert workspace.text.count('class="disclosure-icon"') == 5
     assert "setupSettingsAccordion" in page.text
     assert "activeSettingsPanel" in page.text
-    assert "photoframe-render-intent" in page.text
+    assert "/static/tab-identity.js" in page.text
     assert "htmx:configRequest" in page.text
     assert ".setting-card[open]" in responsive_css.text
     assert icon.status_code == 200

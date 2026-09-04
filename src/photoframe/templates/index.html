@@ -14,6 +14,7 @@
   <link rel="icon" href="{{ url_for('static', path='/photoframe.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=6">
+  <script src="{{ url_for('static', path='/tab-identity.js') }}"></script>
   <script src="{{ url_for('static', path='/vendor/htmx-2.0.4.min.js') }}" defer></script>
 </head>
 <body>
@@ -53,16 +54,15 @@
     }
     let activeSettingsPanel = null;
     let settingsPanelViewState = null;
-    const renderIntentKey = 'photoframe-render-intent';
-    function currentRenderIntent() {
-      try { return sessionStorage.getItem(renderIntentKey); } catch (_) { return null; }
-    }
-    function newRenderIntent() {
-      const value = self.crypto?.randomUUID?.();
-      if (!value) return null;
-      try { sessionStorage.setItem(renderIntentKey, value); } catch (_) { return null; }
-      return value;
-    }
+    const tabSession = self.PhotoframeTabIdentity.createSession({
+      localStorage,
+      sessionStorage,
+      randomUUID: () => self.crypto.randomUUID(),
+    });
+    const currentRenderIntent = () => tabSession.currentIntent();
+    const newRenderIntent = () => tabSession.newIntent();
+    window.addEventListener('pagehide', () => tabSession.release());
+    window.addEventListener('pageshow', () => tabSession.reclaim());
     function setupSettingsAccordion() {
       const panels = Array.from(document.querySelectorAll('[data-settings-panel]'));
       if (!panels.length) return;
