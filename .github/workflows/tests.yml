@@ -33,6 +33,9 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
+      - name: Check lockfile consistency
+        run: uv lock --check
+
       - name: Install locked development dependencies
         run: uv sync --frozen --all-groups
 
