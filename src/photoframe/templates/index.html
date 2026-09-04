@@ -53,6 +53,16 @@
     }
     let activeSettingsPanel = null;
     let settingsPanelViewState = null;
+    const renderIntentKey = 'photoframe-render-intent';
+    function currentRenderIntent() {
+      try { return sessionStorage.getItem(renderIntentKey); } catch (_) { return null; }
+    }
+    function newRenderIntent() {
+      const value = self.crypto?.randomUUID?.();
+      if (!value) return null;
+      try { sessionStorage.setItem(renderIntentKey, value); } catch (_) { return null; }
+      return value;
+    }
     function setupSettingsAccordion() {
       const panels = Array.from(document.querySelectorAll('[data-settings-panel]'));
       if (!panels.length) return;
@@ -143,6 +153,12 @@
     }
     document.addEventListener('DOMContentLoaded', syncInterface);
     document.addEventListener('htmx:afterSwap', syncInterface);
+    document.addEventListener('htmx:configRequest', event => {
+      const path = event.detail.path?.split('?', 1)[0];
+      let intent = currentRenderIntent();
+      if (event.detail.verb === 'post' && path === '/render/start') intent = newRenderIntent();
+      if (intent) event.detail.headers['X-Photoframe-Render-Intent'] = intent;
+    });
 
     let previewScrollState = null;
     document.addEventListener('htmx:beforeRequest', event => {

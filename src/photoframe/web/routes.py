@@ -2,6 +2,7 @@ import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import BackgroundTasks, FastAPI, Request
@@ -120,11 +121,30 @@ def create_app(
         eligibility = runtime.photo_eligibility(settings.frame, photos)
         eligible = eligibility.eligible
         selection = active_selection(eligible, settings.frame, current)
-        render_state = runtime.renderer.update(settings.device, current)
+        render_state = configuration.current_render_state(current)
         selected_photo = runtime.photo(runtime.preview_id())
         rendered_photo = runtime.photo(runtime.renderer.rendered_photo_id())
         displayed_photo = rendered_photo or selection.photo
         render_photo = runtime.photo(render_state.photo_id)
+        completion_age_seconds = (
+            max(0.0, (current - render_state.finished_at).total_seconds())
+            if render_state.phase == RenderPhase.COMPLETE and render_state.finished_at
+            else None
+        )
+        completion_visible_seconds = configuration.COMPLETED_RENDER_ACKNOWLEDGEMENT_SECONDS
+        render_completion_visible = bool(
+            completion_age_seconds is not None
+            and completion_age_seconds < completion_visible_seconds
+        )
+        render_ack_delay_ms = (
+            max(1, int((completion_visible_seconds - completion_age_seconds) * 1000))
+            if render_completion_visible and completion_age_seconds is not None
+            else 0
+        )
+        request_operation_id = request.headers.get("x-photoframe-render-intent")
+        render_intent_matches = bool(
+            render_state.operation_id and request_operation_id == render_state.operation_id
+        )
         seconds_until_change = (
             max(0, int((selection.next_change_at - current).total_seconds()))
             if selection.next_change_at
@@ -165,6 +185,9 @@ def create_app(
             "seconds_until_change": seconds_until_change,
             "scheduled_transition_soon": scheduled_transition_soon,
             "render_state": render_state,
+            "render_completion_visible": render_completion_visible,
+            "render_ack_delay_ms": render_ack_delay_ms,
+            "render_intent_matches": render_intent_matches,
             "render_phases": phases,
             "RenderPhase": RenderPhase,
             "next_change": schedule_label(
@@ -307,8 +330,13 @@ def create_app(
 
     @app.post("/render/start", response_class=HTMLResponse)
     def render_start(request: Request) -> HTMLResponse:
+        operation_id = request.headers.get("x-photoframe-render-intent")
         try:
-            configuration.start_render()
+            operation_id = str(UUID(operation_id)) if operation_id else None
+        except ValueError:
+            operation_id = None
+        try:
+            configuration.start_render(operation_id=operation_id)
         except (ValueError, ProviderError, RuntimeError) as exc:
             return workspace(request, error=str(exc))
         return workspace(request)

@@ -20,7 +20,7 @@ from ..models import (
     PhotoOrder,
     ProviderKind,
 )
-from ..renderer import RenderPhase
+from ..renderer import RenderPhase, RenderState
 from ..settings import SecretStore, SettingsRepository
 from ..tls import tls_paths
 from .runtime import Runtime
@@ -82,6 +82,9 @@ class ResetIncompleteError(RuntimeError):
 
 
 class ConfigurationService:
+    COMPLETED_RENDER_RELEVANCE_SECONDS = 30
+    COMPLETED_RENDER_ACKNOWLEDGEMENT_SECONDS = 6
+
     def __init__(
         self,
         repository: SettingsRepository,
@@ -266,16 +269,16 @@ class ConfigurationService:
         finally:
             self._reset_lock.release()
 
-    def start_render(self) -> None:
+    def start_render(self, operation_id: str | None = None) -> None:
         photo = self.runtime.photo(self.runtime.preview_id())
         if not photo:
             raise ValueError("Select an image preview before sending it to the frame")
         try:
             if self.runtime.has_display():
-                self.runtime.render_service.start(photo.id)
+                self.runtime.render_service.start(photo.id, operation_id=operation_id)
             else:
                 self.runtime.prepare_photo(photo.id)
-                self.runtime.renderer.start(photo.id)
+                self.runtime.renderer.start(photo.id, operation_id=operation_id)
         except ImageProcessingError:
             self.runtime.set_preview(None)
             raise
@@ -287,6 +290,20 @@ class ConfigurationService:
     def dismiss_render(self) -> None:
         if self.runtime.renderer.snapshot().phase == RenderPhase.COMPLETE:
             self.reset_render()
+
+    def current_render_state(self, now: datetime | None = None) -> RenderState:
+        """Return current state, expiring only stale successful acknowledgements."""
+        current = now or datetime.now(UTC)
+        state = self.runtime.renderer.update(self.repository.load().device, current)
+        if (
+            state.phase == RenderPhase.COMPLETE
+            and state.finished_at
+            and (current - state.finished_at).total_seconds()
+            >= self.COMPLETED_RENDER_RELEVANCE_SECONDS
+        ):
+            self.reset_render()
+            return self.runtime.renderer.snapshot()
+        return state
 
     def _require_eligible(self, photo_id: str) -> None:
         settings = self.repository.load()

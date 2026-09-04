@@ -20,6 +20,7 @@ class RenderPhase(StrEnum):
 
 class RenderState(BaseModel):
     phase: RenderPhase = RenderPhase.IDLE
+    operation_id: str | None = None
     photo_id: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -56,12 +57,18 @@ class MockRenderCoordinator:
         self._on_failure: Callable[[str], None] | None = None
         self._timeout_reported = False
 
-    def start(self, photo_id: str, now: datetime | None = None) -> RenderState:
+    def start(
+        self,
+        photo_id: str,
+        now: datetime | None = None,
+        operation_id: str | None = None,
+    ) -> RenderState:
         with self._state_lock:
             if self.state.active or self._display_lock.locked():
                 return self.state.model_copy(deep=True)
             self.state = RenderState(
                 phase=RenderPhase.PREPARING,
+                operation_id=operation_id,
                 photo_id=photo_id,
                 started_at=now or datetime.now(UTC),
             )
@@ -114,6 +121,7 @@ class MockRenderCoordinator:
         refresh: Callable[[], None],
         on_complete: Callable[[str], None] | None = None,
         on_failure: Callable[[str], None] | None = None,
+        operation_id: str | None = None,
     ) -> RenderState:
         """Run Inky's blocking refresh outside the request thread.
 
@@ -126,6 +134,7 @@ class MockRenderCoordinator:
                 return self.state.model_copy(deep=True)
             self.state = RenderState(
                 phase=RenderPhase.SENDING,
+                operation_id=operation_id,
                 photo_id=photo_id,
                 started_at=datetime.now(UTC),
             )
@@ -207,6 +216,7 @@ class RenderService:
         photo_id: str,
         on_complete: Callable[[str], None] | None = None,
         on_failure: Callable[[str], None] | None = None,
+        operation_id: str | None = None,
     ) -> RenderState:
         with self._start_lock:
             state = self.coordinator.snapshot()
@@ -215,10 +225,11 @@ class RenderService:
             prepared = self.prepare(photo_id)
             refresh = self.refresh
             if refresh is None:
-                return self.coordinator.start(photo_id)
+                return self.coordinator.start(photo_id, operation_id=operation_id)
             return self.coordinator.start_hardware(
                 photo_id,
                 lambda: refresh(prepared),
                 on_complete=on_complete,
                 on_failure=on_failure,
+                operation_id=operation_id,
             )

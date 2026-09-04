@@ -8,6 +8,9 @@ from PIL import Image
 from photoframe.models import Album, AppSettings, Photo, PhotoOrder
 from photoframe.web import create_app
 
+RENDER_INTENT = "38ebca82-c30a-4727-bb05-37fb455c97d6"
+RENDER_HEADERS = {"X-Photoframe-Render-Intent": RENDER_INTENT}
+
 
 class FakeProvider:
     def validate_connection(self):
@@ -123,7 +126,7 @@ def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path)
         assert "Manual preview selected — frame unchanged" in response.text
         assert "Show now" in response.text
         assert runtime.repository.load().frame.starting_photo_id == original_start
-        response = client.post("/render/start")
+        response = client.post("/render/start", headers=RENDER_HEADERS)
         assert "Preparing image" in response.text
         assert 'data-frame-transition="updating"' in response.text
         assert "Frame changing now" in response.text
@@ -247,6 +250,8 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert workspace.text.count('class="disclosure-icon"') == 5
     assert "setupSettingsAccordion" in page.text
     assert "activeSettingsPanel" in page.text
+    assert "photoframe-render-intent" in page.text
+    assert "htmx:configRequest" in page.text
     assert ".setting-card[open]" in responsive_css.text
     assert icon.status_code == 200
     assert 'id="mdi-image-frame"' in icon.text
@@ -265,6 +270,8 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     ):
         assert f'name="{name}"' in workspace.text
     assert 'data-settings-panel="advanced"' in workspace.text
+    assert 'data-settings-panel="display" data-default-open="false"' in workspace.text
+    assert 'data-settings-panel="display" data-default-open="false" open' not in workspace.text
     assert "Advanced settings" in workspace.text
     assert "Every 1 hour · In album order · Landscape" in workspace.text
     assert "Simulator · 24-hour" not in workspace.text
@@ -530,7 +537,7 @@ def test_successful_render_auto_dismisses_but_failure_remains(tmp_path: Path):
     app = create_app(tmp_path, demo_mode=True)
     with TestClient(app) as client:
         client.post("/photo/preview", data={"photo_id": "coast"})
-        client.post("/render/start")
+        client.post("/render/start", headers=RENDER_HEADERS)
         runtime = app.state.runtime
         started = runtime.renderer.snapshot().started_at
         assert started is not None
@@ -539,11 +546,11 @@ def test_successful_render_auto_dismisses_but_failure_remains(tmp_path: Path):
             settings.device,
             started + timedelta(seconds=settings.device.expected_refresh_seconds),
         )
-        completed = client.get("/partials/render-status")
+        completed = client.get("/partials/render-status", headers=RENDER_HEADERS)
 
         assert 'data-auto-dismiss-render="6000"' in completed.text
         assert 'hx-post="/render/dismiss"' in completed.text
-        assert 'hx-trigger="load delay:6s"' in completed.text
+        assert 'hx-trigger="load delay:6000ms"' in completed.text
         assert "Dismiss now" in completed.text
 
         dismissed = client.post("/render/dismiss")
@@ -566,3 +573,79 @@ def test_successful_render_auto_dismisses_but_failure_remains(tmp_path: Path):
     assert "data-auto-dismiss-render" not in failed.text
     assert 'hx-post="/render/dismiss"' not in failed.text
     assert ">Done<" in failed.text
+
+
+def test_manual_render_popup_is_correlated_to_the_initiating_browser(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    other_browser = {"X-Photoframe-Render-Intent": "a70cc8a8-fbd9-4b98-8290-011d0eabfa06"}
+    with TestClient(app) as client:
+        client.post("/photo/preview", data={"photo_id": "coast"})
+        initiated = client.post("/render/start", headers=RENDER_HEADERS)
+        same_browser = client.get("/partials/frame-status", headers=RENDER_HEADERS)
+        unrelated_browser = client.get("/partials/frame-status", headers=other_browser)
+        unrelated_workspace = client.get("/partials/workspace", headers=other_browser)
+
+    assert 'data-frame-transition="updating"' in initiated.text
+    assert 'data-frame-transition="updating"' in same_browser.text
+    assert 'data-frame-transition="updating"' not in unrelated_browser.text
+    assert "Updating the frame" in initiated.text
+    assert 'id="render-status"' in unrelated_workspace.text
+
+
+def test_completed_render_visibility_uses_fixed_server_deadlines(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    runtime = app.state.runtime
+    settings = runtime.repository.load()
+    now = datetime.now(UTC)
+
+    with TestClient(app) as client:
+        client.post("/photo/preview", data={"photo_id": "coast"})
+
+        recently_started = now - timedelta(seconds=settings.device.expected_refresh_seconds + 3)
+        runtime.renderer.start("coast", recently_started, operation_id=RENDER_INTENT)
+        runtime.renderer.update(
+            settings.device,
+            recently_started + timedelta(seconds=settings.device.expected_refresh_seconds),
+        )
+        recent = client.get("/partials/workspace", headers=RENDER_HEADERS)
+        recent_other_browser = client.get(
+            "/partials/workspace",
+            headers={"X-Photoframe-Render-Intent": "a70cc8a8-fbd9-4b98-8290-011d0eabfa06"},
+        )
+
+        assert 'data-frame-transition="complete"' in recent.text
+        assert 'data-auto-dismiss-render="6000"' not in recent.text
+        assert "data-auto-dismiss-render=" in recent.text
+        assert 'id="render-status"' not in recent_other_browser.text
+        assert runtime.renderer.snapshot().phase.value == "complete"
+
+        ten_seconds_ago = datetime.now(UTC) - timedelta(
+            seconds=settings.device.expected_refresh_seconds + 10
+        )
+        runtime.renderer.reset()
+        runtime.renderer.start("coast", ten_seconds_ago, operation_id=RENDER_INTENT)
+        runtime.renderer.update(
+            settings.device,
+            ten_seconds_ago + timedelta(seconds=settings.device.expected_refresh_seconds),
+        )
+        reloaded = client.get("/partials/workspace", headers=RENDER_HEADERS)
+
+        assert 'data-frame-transition="complete"' not in reloaded.text
+        assert 'id="render-status"' not in reloaded.text
+        assert runtime.renderer.snapshot().phase.value == "complete"
+
+        stale_started = datetime.now(UTC) - timedelta(
+            seconds=settings.device.expected_refresh_seconds + 31
+        )
+        runtime.renderer.reset()
+        runtime.renderer.start("coast", stale_started, operation_id=RENDER_INTENT)
+        runtime.renderer.update(
+            settings.device,
+            stale_started + timedelta(seconds=settings.device.expected_refresh_seconds),
+        )
+        expired = client.get("/partials/workspace", headers=RENDER_HEADERS)
+
+    assert 'data-frame-transition="complete"' not in expired.text
+    assert 'id="render-status"' not in expired.text
+    assert runtime.renderer.snapshot().phase.value == "idle"
+    assert runtime.preview_id() is None
