@@ -668,10 +668,13 @@ def test_successful_render_auto_dismisses_but_failure_remains(tmp_path: Path):
         runtime.renderer.start("coast", now)
         runtime.renderer.update(runtime.repository.load().device, now + timedelta(seconds=10))
         failed = client.get("/partials/render-status")
+        failed_frame = client.get("/partials/frame-status")
 
     assert "Frame update failed" in failed.text
     assert "data-auto-dismiss-render" not in failed.text
     assert 'hx-post="/render/dismiss"' not in failed.text
+    assert "Try next photo" in failed_frame.text
+    assert "Retry Next photo" not in failed_frame.text
     assert ">Done<" in failed.text
 
 

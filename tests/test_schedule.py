@@ -188,7 +188,8 @@ def test_next_failure_preserves_displayed_photo_and_schedule(tmp_path: Path):
     assert runtime.repository.load().refresh_status.last_rendered_photo_id == "coast"
     assert _schedule_snapshot(runtime.repository.load()) == before
     assert "Frame update failed" in failed.text
-    assert "Retry Next photo" in failed.text
+    assert "Try next photo" in failed.text
+    assert "Retry Next photo" not in failed.text
 
 
 def test_next_prefers_live_display_over_stale_persisted_cursor(tmp_path: Path):
