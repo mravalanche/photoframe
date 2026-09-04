@@ -588,6 +588,7 @@ def test_manual_render_popup_is_correlated_to_the_initiating_browser(tmp_path: P
     assert 'data-frame-transition="updating"' in initiated.text
     assert 'data-frame-transition="updating"' in same_browser.text
     assert 'data-frame-transition="updating"' not in unrelated_browser.text
+    assert 'data-frame-transition="manual-preview"' not in unrelated_browser.text
     assert "Updating the frame" in initiated.text
     assert 'id="render-status"' in unrelated_workspace.text
 
