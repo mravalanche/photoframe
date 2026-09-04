@@ -91,5 +91,5 @@
     <form method="dialog" class="reset-dialog-card"><div><p class="kicker">RESET & RECOVERY</p><h2 id="reset-dialog-title">Reset Photoframe to defaults?</h2><p id="reset-dialog-description">This permanently deletes the saved photo-provider credential, server and album configuration, frame and timing settings, display overrides, current selection, and downloaded photo cache. Network settings return to HTTP on 127.0.0.1:8000, so Photoframe may restart at that address. Photoframe, its system service, and your colour theme will remain installed. You’ll need your server URL and API key to reconnect.</p></div><div class="reset-dialog-actions"><button type="submit" value="cancel" class="secondary" autofocus>Keep current settings</button><button type="button" class="danger-button" onclick="confirmPhotoframeReset(this)">Reset to defaults</button></div></form>
     <form data-reset-form method="post" action="/reset" hx-post="/reset" hx-target="#workspace" hx-swap="outerHTML" hx-sync="this:drop"></form>
   </dialog>
-  <footer class="app-footer">Photoframe v1 · Local preview and configuration · Hardware output remains simulated</footer>
+  <footer class="app-footer">Photoframe {{ app_version }} · Local preview and configuration{% if demo_mode %} · Hardware output remains simulated{% endif %}</footer>
 </div>

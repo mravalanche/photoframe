@@ -251,6 +251,7 @@ def create_app(
             "notice": notice,
             "error": error,
             "demo_mode": is_demo,
+            "app_version": __version__,
             "schedule_order": (
                 "Scheduled shuffle"
                 if settings.frame.photo_order == PhotoOrder.SHUFFLE
@@ -454,7 +455,7 @@ def create_app(
         # Uptime Kuma can use the HTTP code, while the JSON body gives an
         # operator the retry, cache, and stale-health context.
         settings = repository.load()
-        body, healthy = health_payload(settings)
+        body, healthy = health_payload(settings, version=__version__)
         return JSONResponse(jsonable_encoder(body), status_code=200 if healthy else 503)
 
     return app
