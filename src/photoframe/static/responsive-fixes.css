@@ -766,6 +766,48 @@ body {
   color: var(--text);
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.next-photo-form {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.next-photo-reason {
+  max-width: 220px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.schedule-preview {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.schedule-preview small {
+  color: var(--muted);
+}
+
 @media (max-width: 960px) {
   .advanced-card-body {
     padding: 26px 24px;
@@ -773,6 +815,25 @@ body {
 }
 
 @media (max-width: 760px) {
+  .frame-meta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .frame-meta .schedule {
+    width: 100%;
+    text-align: left;
+  }
+
+  .next-photo-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .next-photo-form button {
+    width: 100%;
+    min-height: 48px;
+  }
   .frame-transition {
     top: 12px;
     right: 12px;

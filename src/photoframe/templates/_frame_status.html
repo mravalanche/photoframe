@@ -1,7 +1,7 @@
 <section id="frame-status" class="frame-section" hx-get="/partials/frame-status" hx-trigger="{{ 'every 1s' if render_state.active or scheduled_transition_soon else 'every 15s' }}" hx-swap="outerHTML">
   <div class="frame-meta">
     <div><span>ON FRAME</span><strong>{{ displayed_photo.filename if displayed_photo else 'Nothing selected yet' }}</strong></div>
-    <div class="schedule"><span>NEXT CHANGE</span><strong>{{ next_change if selection.photo else 'Not scheduled' }}</strong></div>
+    <div class="schedule"><span>NEXT UPDATE</span><strong>{{ next_change if selection.photo else 'Not scheduled' }}</strong><form class="next-photo-form" method="post" action="/photo/next" hx-post="/photo/next" hx-target="#workspace" hx-swap="outerHTML" hx-sync="this:drop"><input type="hidden" name="request_id" value="{{ next_request_id }}"><button class="secondary" {% if next_photo_disabled_reason or render_state.active %}disabled{% endif %} aria-describedby="next-photo-description{% if next_photo_disabled_reason %} next-photo-disabled-reason{% endif %}">{{ 'Retry Next photo' if render_state.phase == RenderPhase.FAILED else 'Next photo' }}</button><span id="next-photo-description" class="visually-hidden">Show the next photo now without changing the scheduled update time.</span>{% if next_photo_disabled_reason %}<span id="next-photo-disabled-reason" class="next-photo-reason">{{ next_photo_disabled_reason }}</span>{% endif %}</form></div>
   </div>
   <div class="frame-canvas {{ 'transition-visible' if (render_intent_matches and (render_state.active or render_completion_visible)) or render_state.phase == RenderPhase.FAILED or (render_state.phase == RenderPhase.IDLE and (selected_photo or scheduled_transition_soon)) }}">
     {% if render_state.active and render_intent_matches %}<div class="frame-transition updating" role="status" aria-live="assertive" aria-atomic="true" data-frame-transition="updating"><span class="transition-spinner" aria-hidden="true"></span><div><strong>Frame changing now</strong><span>{{ render_photo.filename if render_photo else 'The selected image' }} is being prepared and sent to the display.</span></div></div>
@@ -15,6 +15,6 @@
     </div>
   </div>
   <div class="frame-foot">
-    <span>{{ settings.frame.orientation.value|title }} frame</span><span>Rotation every {{ (settings.frame.rotation_seconds // 3600)|string + ' hr' if settings.frame.rotation_seconds >= 3600 else (settings.frame.rotation_seconds // 60)|string + ' min' }}</span><span>{{ schedule_order }}</span><span>{{ settings.device.timezone }} · 24-hour</span>
+    <span>{{ settings.frame.orientation.value|title }} frame</span><span>{{ schedule_summary }}</span><span>{{ schedule_order }}</span><span>{{ settings.device.timezone }} · 24-hour</span>
   </div>
 </section>

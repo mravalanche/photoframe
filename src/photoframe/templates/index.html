@@ -211,6 +211,34 @@
       }
       renderAlbumSelection(picker);
     }
+    function updateScheduleControls(form) {
+      if (!form) return;
+      const mode = form.elements.schedule_mode?.value || 'interval';
+      form.querySelectorAll('[data-schedule-fields]').forEach(field => {
+        field.hidden = field.dataset.scheduleFields !== mode;
+      });
+      window.clearTimeout(form._schedulePreviewTimer);
+      form._schedulePreviewTimer = window.setTimeout(async () => {
+        try {
+          const response = await fetch('/schedule/preview', {
+            method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'fetch'},
+          });
+          const preview = form.querySelector('[data-schedule-preview]');
+          if (preview) preview.textContent = await response.text();
+        } catch (_error) {
+          // Keep the last authoritative server-rendered value if previewing is unavailable.
+        }
+      }, 150);
+    }
+    function setupScheduleSettings() {
+      document.querySelectorAll('[data-schedule-form]').forEach(form => {
+        updateScheduleControls(form);
+        if (form.dataset.scheduleReady) return;
+        form.dataset.scheduleReady = 'true';
+        form.addEventListener('input', () => updateScheduleControls(form));
+        form.addEventListener('change', () => updateScheduleControls(form));
+      });
+    }
     function confirmNetworkChange(form) {
       updateNetworkControls(form);
       const confirmation = form.elements.confirm_endpoint_change;
@@ -243,6 +271,7 @@
       setupSettingsAccordion();
       setupNetworkSettings();
       setupAlbumSelection();
+      setupScheduleSettings();
     }
     document.addEventListener('DOMContentLoaded', syncInterface);
     document.addEventListener('htmx:afterSwap', syncInterface);

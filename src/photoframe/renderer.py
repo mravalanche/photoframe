@@ -55,6 +55,7 @@ class MockRenderCoordinator:
         self._state_lock = RLock()
         self._display_lock = Lock()
         self._on_failure: Callable[[str], None] | None = None
+        self._on_complete: Callable[[str], None] | None = None
         self._timeout_reported = False
 
     def start(
@@ -62,6 +63,8 @@ class MockRenderCoordinator:
         photo_id: str,
         now: datetime | None = None,
         operation_id: str | None = None,
+        on_complete: Callable[[str], None] | None = None,
+        on_failure: Callable[[str], None] | None = None,
     ) -> RenderState:
         with self._state_lock:
             if self.state.active or self._display_lock.locked():
@@ -72,9 +75,13 @@ class MockRenderCoordinator:
                 photo_id=photo_id,
                 started_at=now or datetime.now(UTC),
             )
+            self._on_complete = on_complete
+            self._on_failure = on_failure
             return self.state.model_copy(deep=True)
 
     def update(self, settings: DeviceSettings, now: datetime | None = None) -> RenderState:
+        complete_callback: Callable[[str], None] | None = None
+        complete_photo_id: str | None = None
         timeout_callback: Callable[[str], None] | None = None
         timeout_message: str | None = None
         with self._state_lock:
@@ -99,6 +106,10 @@ class MockRenderCoordinator:
                     state.phase = RenderPhase.FAILED
                     state.finished_at = current
                     state.message = "The frame did not clear its busy signal before the timeout."
+                    if not self._timeout_reported:
+                        self._timeout_reported = True
+                        timeout_callback = self._on_failure
+                        timeout_message = state.message
                 elif elapsed < self.prepare_seconds:
                     state.phase = RenderPhase.PREPARING
                 elif elapsed < self.prepare_seconds + self.send_seconds:
@@ -110,9 +121,15 @@ class MockRenderCoordinator:
                     state.finished_at = current
                     state.message = "The frame refresh completed."
                     self.last_rendered_photo_id = state.photo_id
+                    complete_callback = self._on_complete
+                    complete_photo_id = state.photo_id
+                    self._on_complete = None
+                    self._on_failure = None
                 result = state.model_copy(deep=True)
         if timeout_callback and timeout_message:
             timeout_callback(timeout_message)
+        if complete_callback and complete_photo_id:
+            complete_callback(complete_photo_id)
         return result
 
     def start_hardware(
@@ -140,6 +157,7 @@ class MockRenderCoordinator:
             )
             self._hardware_refresh = True
             self._on_failure = on_failure
+            self._on_complete = on_complete
             self._timeout_reported = False
 
         def run() -> None:
@@ -155,6 +173,7 @@ class MockRenderCoordinator:
                     self.state.message = message
                     self._hardware_refresh = False
                     self._on_failure = None
+                    self._on_complete = None
                 if on_failure:
                     on_failure(message)
             else:
@@ -165,6 +184,7 @@ class MockRenderCoordinator:
                     self.last_rendered_photo_id = photo_id
                     self._hardware_refresh = False
                     self._on_failure = None
+                    self._on_complete = None
                 if on_complete:
                     on_complete(photo_id)
             finally:
@@ -182,6 +202,7 @@ class MockRenderCoordinator:
             self.state = RenderState()
             self._hardware_refresh = False
             self._on_failure = None
+            self._on_complete = None
             self._timeout_reported = False
 
     @property
@@ -225,7 +246,12 @@ class RenderService:
             prepared = self.prepare(photo_id)
             refresh = self.refresh
             if refresh is None:
-                return self.coordinator.start(photo_id, operation_id=operation_id)
+                return self.coordinator.start(
+                    photo_id,
+                    operation_id=operation_id,
+                    on_complete=on_complete,
+                    on_failure=on_failure,
+                )
             return self.coordinator.start_hardware(
                 photo_id,
                 lambda: refresh(prepared),

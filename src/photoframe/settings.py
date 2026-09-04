@@ -27,7 +27,19 @@ class SettingsRepository:
                 self.save(settings)
                 return settings
             with self.path.open("rb") as handle:
-                return AppSettings.model_validate(tomllib.load(handle))
+                raw = tomllib.load(handle)
+            # Version 1 installations only had an interval and anchor. Migrate
+            # them explicitly so a model-default change can never alter an
+            # existing frame's cadence on upgrade.
+            frame = raw.setdefault("frame", {})
+            migrated = "schedule_mode" not in frame
+            if migrated:
+                frame["schedule_mode"] = "interval"
+                raw["schema_version"] = 2
+            settings = AppSettings.model_validate(raw)
+            if migrated:
+                self.save(settings)
+            return settings
 
     def save(self, settings: AppSettings) -> None:
         with self._lock:

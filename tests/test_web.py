@@ -279,7 +279,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'data-settings-panel="display" data-default-open="false"' in workspace.text
     assert 'data-settings-panel="display" data-default-open="false" open' not in workspace.text
     assert "Advanced settings" in workspace.text
-    assert "Every 1 hour · In album order · Landscape" in workspace.text
+    assert "Daily at 03:00 · In album order · Landscape" in workspace.text
     assert "Simulator · 24-hour" not in workspace.text
     assert "Network & web security" in workspace.text
     assert "This device only" in workspace.text
@@ -618,6 +618,7 @@ def test_scheduled_transition_is_prominent_in_the_frame_preview(tmp_path: Path):
     now = datetime.now(UTC)
     app.state.runtime.repository.update(
         lambda settings: (
+            setattr(settings.frame, "schedule_mode", "interval"),
             setattr(settings.frame, "rotation_seconds", 30),
             setattr(settings.frame, "schedule_anchor", now),
         )

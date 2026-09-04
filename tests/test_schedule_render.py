@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event, Thread
 
-from photoframe.models import DisplayDriver
+from photoframe.models import DisplayDriver, ScheduleMode
 from photoframe.providers import DemoProvider
 from photoframe.services.runtime import Runtime
 from photoframe.settings import SecretStore, SettingsRepository
@@ -50,6 +50,7 @@ def configured_repository(tmp_path: Path, anchor: datetime) -> SettingsRepositor
     settings.frame.album_id = "demo-album"
     settings.frame.schedule_anchor = anchor
     settings.frame.rotation_seconds = 30
+    settings.frame.schedule_mode = ScheduleMode.INTERVAL
     settings.device.display_driver = DisplayDriver.MOCK
     settings.device.expected_refresh_seconds = 5
     settings.device.set_display_size(1200, 750)
@@ -75,16 +76,16 @@ def test_restart_restores_catalog_renders_due_slot_and_suppresses_completed(tmp_
 
     runtime = new_runtime(repository)
     assert runtime.catalog_snapshot()[1] == []
-    runtime.refresh_lifecycle(anchor)
+    runtime.refresh_lifecycle(anchor + timedelta(seconds=30))
     wait_for_display(runtime)
     saved = repository.load()
     assert runtime.catalog_snapshot()[1]
-    assert saved.refresh_status.last_completed_schedule_slot == 0
+    assert saved.refresh_status.last_completed_schedule_slot == 1
     assert saved.refresh_status.last_rendered_photo_id
 
     restarted = new_runtime(repository)
     assert restarted.catalog_snapshot()[1] == []
-    restarted.refresh_lifecycle(anchor + timedelta(seconds=7))
+    restarted.refresh_lifecycle(anchor + timedelta(seconds=37))
     assert restarted.catalog_snapshot()[1]
     assert restarted.renderer.snapshot().photo_id is None
 
@@ -92,7 +93,7 @@ def test_restart_restores_catalog_renders_due_slot_and_suppresses_completed(tmp_
         lambda settings: setattr(settings.frame, "schedule_anchor", anchor + timedelta(seconds=10))
     )
     due_after_restart = new_runtime(repository)
-    due_after_restart.refresh_lifecycle(anchor + timedelta(seconds=10))
+    due_after_restart.refresh_lifecycle(anchor + timedelta(seconds=40))
     assert due_after_restart.renderer.snapshot().photo_id is not None
 
 
@@ -102,7 +103,7 @@ def test_schedule_timeout_is_persisted_and_late_success_recovers_health(tmp_path
     runtime = new_runtime(repository)
     display = BlockingDisplay()
     runtime.display = display  # type: ignore[assignment]
-    runtime.refresh_lifecycle(anchor)
+    runtime.refresh_lifecycle(anchor + timedelta(seconds=30))
     started = runtime.renderer.snapshot().started_at
     assert started is not None
     runtime._advance_scheduled_render(started + timedelta(seconds=91))

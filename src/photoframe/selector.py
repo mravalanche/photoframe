@@ -79,3 +79,22 @@ def active_selection(
         position=index + 1,
         next_change_at=anchor + timedelta(seconds=(slot + 1) * frame.rotation_seconds),
     )
+
+
+def next_photo(
+    photos: list[Photo], frame: FrameSettings, current_photo_id: str | None
+) -> Photo | None:
+    """Choose one distinct successor using the configured stable ordering."""
+    eligible = eligible_photos(photos, frame)
+    if frame.photo_order == PhotoOrder.SHUFFLE:
+        by_id = {photo.id: photo for photo in eligible}
+        eligible = [by_id[photo_id] for photo_id in shuffled_photo_ids(eligible, frame)]
+    if len(eligible) < 2:
+        return None
+    current_index = next(
+        (index for index, photo in enumerate(eligible) if photo.id == current_photo_id), -1
+    )
+    candidate = eligible[(current_index + 1) % len(eligible)]
+    if candidate.id == current_photo_id:
+        return None
+    return candidate

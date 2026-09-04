@@ -19,9 +19,10 @@ from ..models import (
     Orientation,
     PhotoOrder,
     ProviderKind,
+    ScheduleMode,
 )
 from ..renderer import RenderPhase, RenderState
-from ..selector import active_selection, shuffled_photo_ids
+from ..selector import active_selection, next_photo, shuffled_photo_ids
 from ..settings import SecretStore, SettingsRepository
 from ..tls import tls_paths
 from .runtime import Runtime
@@ -41,6 +42,18 @@ class WorkflowInput(Protocol):
 
     @property
     def rotation_seconds(self) -> int: ...
+
+    @property
+    def schedule_mode(self) -> ScheduleMode: ...
+
+    @property
+    def daily_time(self) -> str: ...
+
+    @property
+    def weekly_day(self) -> int: ...
+
+    @property
+    def weekly_time(self) -> str: ...
 
     @property
     def photo_order(self) -> PhotoOrder | None: ...
@@ -99,6 +112,8 @@ class ConfigurationService:
         self.data_dir = data_dir
         self._reset_lock = Lock()
         self._album_selection_lock = Lock()
+        self._next_lock = Lock()
+        self._next_request_ids: set[str] = set()
 
     def save_connection(self, form: ConnectionInput) -> str:
         try:
@@ -193,6 +208,10 @@ class ConfigurationService:
             previous_order = settings.frame.photo_order
             settings.frame.orientation = form.orientation
             settings.frame.rotation_seconds = form.rotation_seconds
+            settings.frame.schedule_mode = form.schedule_mode
+            settings.frame.daily_time = form.daily_time
+            settings.frame.weekly_day = form.weekly_day
+            settings.frame.weekly_time = form.weekly_time
             settings.frame.photo_order = form.photo_order or settings.frame.photo_order
             settings.device.timezone = form.timezone or settings.device.timezone
             settings.device.expected_refresh_seconds = form.expected_refresh_seconds
@@ -204,6 +223,7 @@ class ConfigurationService:
             else:
                 settings.device.set_display_size(None, None)
             settings.frame.schedule_anchor = anchor
+            settings.refresh_status.last_completed_schedule_key = None
             if not any(
                 photo.id == settings.frame.starting_photo_id
                 and photo.matches(settings.frame.orientation)
@@ -228,7 +248,7 @@ class ConfigurationService:
             self.runtime.set_preview(None)
         self.runtime.reconcile_shuffle()
         self.runtime.initialise_display()
-        return "Frame settings saved; rotation restarted from now"
+        return "Frame settings saved; the next automatic update is scheduled"
 
     def save_network(self, form: NetworkInput, *, can_restart: bool) -> ServiceResult:
         candidate = form.candidate
@@ -311,6 +331,58 @@ class ConfigurationService:
         except ImageProcessingError:
             self.runtime.set_preview(None)
             raise
+
+    def start_next_photo(self, request_id: str) -> str:
+        """Start one manual successor without touching automatic schedule state."""
+        if not self._next_lock.acquire(blocking=False):
+            raise ValueError("Another Next photo request is already being handled")
+        try:
+            if request_id in self._next_request_ids:
+                raise ValueError("This Next photo request was already handled")
+            self._next_request_ids.add(request_id)
+            if len(self._next_request_ids) > 500:
+                self._next_request_ids = set(list(self._next_request_ids)[-250:])
+            state = self.runtime.renderer.snapshot()
+            if state.active or self.runtime.renderer.hardware_busy:
+                raise ValueError("Wait for the current frame update before choosing Next photo")
+            settings = self.repository.load()
+            if not settings.frame.album_id:
+                raise ValueError("Choose an album before using Next photo")
+            _albums, photos = self.runtime.catalog_snapshot()
+            eligible = self.runtime.photo_eligibility(settings.frame, photos).eligible
+            current_id = (
+                settings.refresh_status.last_rendered_photo_id
+                or self.runtime.renderer.rendered_photo_id()
+            )
+            if current_id is None:
+                selection = active_selection(eligible, settings.frame)
+                current_id = selection.photo.id if selection.photo else None
+            candidate = next_photo(eligible, settings.frame, current_id)
+            if candidate is None:
+                raise ValueError("Next photo needs at least two distinct eligible photos")
+            cleared_preview = self.runtime.preview_id() is not None
+            self.runtime.set_preview(None)
+
+            def completed(photo_id: str) -> None:
+                self.repository.update(
+                    lambda saved: setattr(saved.refresh_status, "last_rendered_photo_id", photo_id)
+                )
+
+            if self.runtime.has_display():
+                started = self.runtime.render_service.start(candidate.id, on_complete=completed)
+            else:
+                self.runtime.prepare_photo(candidate.id)
+                started = self.runtime.renderer.start(candidate.id, on_complete=completed)
+            if started.photo_id != candidate.id:
+                raise ValueError(
+                    "Another frame update started first; retry Next photo when it finishes"
+                )
+            prefix = "The pending preview was cleared. " if cleared_preview else ""
+            return prefix + "Showing the next photo now; the automatic schedule is unchanged"
+        except ImageProcessingError:
+            raise
+        finally:
+            self._next_lock.release()
 
     def reset_render(self) -> None:
         self.runtime.renderer.reset()
