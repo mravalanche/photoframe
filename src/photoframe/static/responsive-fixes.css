@@ -356,6 +356,18 @@ body {
   background: var(--surface-2);
 }
 
+.album-announcement {
+  min-height: 1.45em;
+  margin: 0 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.album-announcement:empty {
+  min-height: 0;
+}
+
 .album-confirmation p,
 .album-unavailable {
   color: var(--muted);

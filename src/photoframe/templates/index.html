@@ -121,6 +121,23 @@
       const region = document.querySelector('[data-album-announcement]');
       if (region) region.textContent = message;
     }
+    function setAlbumBusy(busy) {
+      const picker = document.querySelector('[data-album-picker]');
+      const confirmation = document.querySelector('[data-album-confirmation]');
+      const confirmButton = confirmation?.querySelector('[data-album-confirm-button]');
+      const cancelButton = confirmation?.querySelector('[data-album-cancel]');
+      if (picker) {
+        picker.disabled = busy;
+        picker.setAttribute('aria-busy', String(busy));
+      }
+      if (confirmation) confirmation.setAttribute('aria-busy', String(busy));
+      if (confirmButton) {
+        confirmButton.disabled = busy;
+        confirmButton.textContent = busy ? 'Switching album…'
+          : pendingAlbumSelection ? `Use ${pendingAlbumSelection.name}` : 'Use album';
+      }
+      if (cancelButton) cancelButton.disabled = busy;
+    }
     function renderAlbumSelection(picker) {
       if (!picker) return;
       const currentId = picker.dataset.currentAlbumId || '';
@@ -181,8 +198,14 @@
         cancel.dataset.albumCancelReady = 'true';
         cancel.addEventListener('click', () => {
           const name = pendingAlbumSelection?.name;
+          const cancelledId = pendingAlbumSelection?.id;
           pendingAlbumSelection = null;
           renderAlbumSelection(picker);
+          const focusId = currentId || cancelledId;
+          const focusTarget = focusId
+            ? picker.querySelector(`[data-album-id="${CSS.escape(focusId)}"] input`)
+            : picker.querySelector('input');
+          focusTarget?.focus({ preventScroll: true });
           announceAlbum(name ? `${name} selection cancelled.` : 'Pending selection cleared.');
         });
       }
@@ -234,7 +257,8 @@
     document.addEventListener('htmx:beforeRequest', event => {
       const albumForm = event.detail.elt?.closest?.('[data-album-confirm-form]');
       if (albumForm) {
-        albumForm.querySelectorAll('button').forEach(button => { button.disabled = true; });
+        setAlbumBusy(true);
+        announceAlbum('Switching album. Please wait.');
       }
       const settingsPanel = event.detail.elt?.closest?.('[data-settings-panel]');
       if (settingsPanel) {
@@ -249,6 +273,9 @@
       if (!thumbnail) return;
       const rail = thumbnail.closest('.thumbnail-rail');
       previewScrollState = { pageY: window.scrollY, railX: rail?.scrollLeft || 0 };
+    });
+    document.addEventListener('htmx:afterRequest', event => {
+      if (event.detail.elt?.closest?.('[data-album-confirm-form]')) setAlbumBusy(false);
     });
     document.addEventListener('htmx:afterSettle', () => {
       if (settingsPanelViewState) {

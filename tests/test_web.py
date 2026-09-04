@@ -319,6 +319,7 @@ def test_album_picker_is_local_until_confirm_and_exposes_accessible_states(tmp_p
     app = create_app(tmp_path, lambda _kind: FakeProvider())
     with TestClient(app) as client:
         client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
+        page = client.get("/")
         workspace = client.get("/partials/workspace")
         before = app.state.runtime.repository.load()
 
@@ -327,10 +328,22 @@ def test_album_picker_is_local_until_confirm_and_exposes_accessible_states(tmp_p
     assert '<legend class="visually-hidden">Choose an album to review</legend>' in workspace.text
     assert 'type="radio" name="pending_album" value="album"' in workspace.text
     assert "data-album-confirmation hidden" in workspace.text
-    assert 'data-album-announcement role="status" aria-live="polite"' in workspace.text
+    assert (
+        'data-album-announcement role="status" aria-live="polite" aria-atomic="true"'
+        in workspace.text
+    )
+    announcement = workspace.text.index("data-album-announcement")
+    confirmation = workspace.text.index("data-album-confirmation")
+    assert announcement < confirmation
     assert "data-album-cancel>Cancel</button>" in workspace.text
     assert 'action="/album/select"' in workspace.text
     assert workspace.text.count('action="/album/select"') == 1
+    assert "setAlbumBusy(true)" in page.text
+    assert "picker.disabled = busy" in page.text
+    assert "cancelButton.disabled = busy" in page.text
+    assert "Switching album…" in page.text
+    assert "focusTarget?.focus({ preventScroll: true })" in page.text
+    assert "htmx:afterRequest" in page.text
 
 
 def test_album_confirm_is_the_only_route_mutation_point_and_marks_current(tmp_path: Path):
