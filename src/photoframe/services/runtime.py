@@ -24,6 +24,7 @@ from ..selector import (
     shuffled_photo_ids,
 )
 from ..settings import SecretStore, SettingsRepository
+from ..updater.maintenance import MaintenanceError, MaintenanceGate
 
 
 class Runtime:
@@ -33,10 +34,12 @@ class Runtime:
         secrets: SecretStore,
         provider_resolver: ProviderResolver,
         demo_provider: PhotoProvider | None = None,
+        maintenance_gate: MaintenanceGate | None = None,
     ):
         self.repository, self.secrets = settings, secrets
         self.provider_resolver = provider_resolver
         self.demo_provider = demo_provider
+        self.maintenance_gate = maintenance_gate or MaintenanceGate()
         self.albums: list[Album] = []
         self.photos: list[Photo] = []
         self._loaded = False
@@ -279,6 +282,13 @@ class Runtime:
         return failures
 
     def refresh_lifecycle(self, now: datetime | None = None) -> bool:
+        try:
+            with self.maintenance_gate.operation():
+                return self._refresh_lifecycle(now)
+        except MaintenanceError:
+            return False
+
+    def _refresh_lifecycle(self, now: datetime | None = None) -> bool:
         with self._claim_lock:
             if self._lifecycle_inflight:
                 return False
@@ -342,6 +352,8 @@ class Runtime:
 
     def _advance_scheduled_render(self, now: datetime | None = None) -> None:
         """Render one recent due occurrence, surviving restarts without replay storms."""
+        if self.maintenance_gate.maintenance:
+            return
         current = now or datetime.now(UTC)
         settings = self.repository.load()
         self.renderer.update(settings.device, current)

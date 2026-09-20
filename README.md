@@ -1,5 +1,9 @@
 # Photoframe
 
+Software updates: see the [managed web updater and one-time migration guide](docs/managed-updates.md).
+Managed release installation requires the signing setup described there; existing source installs
+continue to work without it.
+
 [![Tests](https://github.com/mravalanche/photoframe/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/mravalanche/photoframe/actions/workflows/tests.yml?query=branch%3Amain)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](https://github.com/mravalanche/photoframe/blob/main/LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)

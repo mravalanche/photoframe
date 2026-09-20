@@ -22,6 +22,7 @@ from ..selector import active_selection, next_photo
 from ..services.configuration import ConfigurationService, ResetIncompleteError
 from ..services.runtime import Runtime
 from ..settings import SecretStore, SettingsRepository
+from ..updater.maintenance import MaintenanceError
 from .forms import (
     AlbumForm,
     ConnectionForm,
@@ -30,6 +31,7 @@ from .forms import (
     PhotoForm,
     WorkflowForm,
 )
+from .updates import register_updates
 
 
 def schedule_label(target: datetime | None, timezone: str, now: datetime | None = None) -> str:
@@ -103,6 +105,18 @@ def create_app(
     app = FastAPI(title="Photoframe", version=__version__)
     app.mount("/static", StaticFiles(directory=package / "static"), name="static")
     app.state.runtime = runtime
+    register_updates(app, templates, runtime, target)
+
+    @app.middleware("http")
+    async def maintenance_guard(request: Request, call_next):
+        if not request.url.path.startswith(("/api/updates/", "/updates", "/health", "/static/")):
+            try:
+                with runtime.maintenance_gate.operation():
+                    return await call_next(request)
+            except MaintenanceError as exc:
+                return JSONResponse({"message": str(exc)}, status_code=503)
+        return await call_next(request)
+
     worker = RefreshWorker(runtime.refresh_lifecycle, runtime.record_worker_failure)
 
     @app.on_event("startup")
@@ -118,7 +132,11 @@ def create_app(
     ) -> dict:
         current = datetime.now(UTC)
         settings = repository.load()
-        if not runtime.loaded and settings.verification.ok:
+        if (
+            not runtime.maintenance_gate.maintenance
+            and not runtime.loaded
+            and settings.verification.ok
+        ):
             try:
                 runtime.refresh_albums()
                 if settings.frame.album_id:

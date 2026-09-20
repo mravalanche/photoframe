@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en-GB" data-theme="dark">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Software updates · Photoframe</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/updates.css">
+  <script src="/static/updates.js" defer></script>
+</head>
+<body>
+<header class="app-header"><a class="brand" href="/">← Photoframe</a></header>
+<main class="update-shell">
+  <h1>Software updates</h1>
+  <p>Running <strong>v{{ version }}</strong> · Stable releases</p>
+  <section class="update-card" aria-labelledby="status-title">
+    <h2 id="status-title">Update status</h2>
+    <p id="update-status" role="status" aria-live="polite">Checking installation…</p>
+    <progress id="update-progress" max="100" value="0" hidden aria-label="Update progress"></progress>
+    <p id="update-release"></p><p id="release-notes"></p>
+    <p id="update-error" role="alert"></p>
+    <button id="reconnect" type="button" hidden>Reconnect</button>
+    <div id="unmanaged" hidden><button id="public-check" type="button">Check latest stable release</button><p>This installation cannot update from the browser. Your files and configuration are preserved.</p><p>Ask your administrator to follow the <a href="https://github.com/mravalanche/photoframe/blob/develop/docs/managed-updates.md">managed installation migration guide</a>.</p></div>
+  </section>
+  <section class="update-card" id="managed-controls" hidden aria-labelledby="controls-title">
+    <h2 id="controls-title">Manage updates</h2>
+    <form id="unlock-form">
+      <label for="update-pin">Administrator update PIN</label>
+      <input id="update-pin" type="password" autocomplete="current-password" minlength="8" maxlength="128" required aria-describedby="pin-help">
+      <p id="pin-help">Use the PIN configured during installation. Update controls lock after 15 minutes.</p>
+      <button type="submit">Unlock update controls</button>
+    </form>
+    <div id="unlocked" hidden>
+      <label class="update-checkbox"><input id="weekly-checks" type="checkbox"> Check for stable updates weekly</label>
+      <p>Checks only look for releases. Downloading and restarting always require your choice.</p>
+      <div class="update-actions">
+        <button id="check-update" type="button">Check now</button>
+        <button id="stage-update" type="button" disabled>Download & verify</button>
+        <button id="apply-update" type="button" disabled>Apply & restart</button>
+        <button id="rollback-update" type="button" hidden>Restore previous version</button>
+        <button id="lock-update" type="button">Lock controls</button>
+      </div>
+    </div>
+  </section>
+  <section class="update-card"><h2>During an update</h2><p>Your photos, settings and schedule are kept. The displayed image remains on the frame while Photoframe restarts. This page reconnects automatically. If the new version cannot start, the updater restores the previous version.</p><details><summary>Recovery and diagnostics</summary><p id="update-diagnostics">No update in progress.</p><p>If reconnection fails, wait a few minutes, then choose Reconnect. If the device remains unavailable, ask your administrator to inspect the photoframe and photoframe-updater service logs.</p></details></section>
+  <dialog id="apply-dialog"><form method="dialog"><h2 id="confirm-title">Apply update and restart?</h2><p id="confirm-detail">Your frame will pause briefly. Your saved settings and photos will be kept.</p><div class="update-actions"><button value="cancel">Cancel</button><button id="confirm-action" value="confirm">Apply & restart</button></div></form></dialog>
+</main>
+</body></html>
