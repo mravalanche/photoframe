@@ -11,7 +11,7 @@
 <header class="app-header"><a class="brand" href="/">← Photoframe</a></header>
 <main class="update-shell">
   <h1>Software updates</h1>
-  <p>Running <strong>v{{ version }}</strong> · Stable releases</p>
+  <p>Running <strong>v{{ version }}</strong></p>
   <section class="update-card" aria-labelledby="status-title">
     <h2 id="status-title">Update status</h2>
     <p id="update-status" role="status" aria-live="polite">Checking installation…</p>
@@ -24,7 +24,10 @@
   <section class="update-card" id="managed-controls" hidden aria-labelledby="controls-title">
     <h2 id="controls-title">Manage updates</h2>
     <div>
-      <label class="update-checkbox"><input id="weekly-checks" type="checkbox"> Check for stable updates weekly</label>
+      <label for="update-channel">Update channel</label>
+      <select id="update-channel"><option value="stable">Stable</option><option value="develop">Develop — testing builds</option></select>
+      <p id="channel-description">Stable is recommended for everyday use. Develop contains signed test builds. Changing channels does not install anything or downgrade the app.</p>
+      <label class="update-checkbox"><input id="weekly-checks" type="checkbox"> Check this channel weekly</label>
       <p>Checks only look for releases. Downloading and restarting always require your choice.</p>
       <div class="update-actions">
         <button id="check-update" type="button">Check now</button>

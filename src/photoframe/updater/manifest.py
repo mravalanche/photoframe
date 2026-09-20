@@ -19,20 +19,37 @@ SUPPORTED_PROTOCOL = 1
 SUPPORTED_SETTINGS_SCHEMA = 2
 MAX_MANIFEST_BYTES = 256 * 1024
 MAX_BUNDLE_BYTES = 512 * 1024 * 1024
-_SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+_SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\.dev(0|[1-9]\d*))?$")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
-_BUNDLE = re.compile(r"^photoframe-(\d+\.\d+\.\d+)-linux-aarch64\.tar\.gz$")
+_BUNDLE = re.compile(r"^photoframe-(\d+\.\d+\.\d+(?:\.dev\d+)?)-linux-aarch64\.tar\.gz$")
 
 
 class ManifestError(ValueError):
     """A release is malformed, untrusted, or incompatible."""
 
 
-def semver(value: str) -> tuple[int, int, int]:
+def semver(value: str) -> tuple[int, int, int, int, int]:
     match = _SEMVER.fullmatch(value)
     if not match:
-        raise ManifestError("only stable semantic versions are accepted")
-    return tuple(int(part) for part in match.groups())  # type: ignore[return-value]
+        raise ManifestError("only stable or .devN release versions are accepted")
+    major, minor, patch, development = match.groups()
+    return (int(major), int(minor), int(patch), int(development is None), int(development or 0))
+
+
+def release_channel(version: str) -> str:
+    semver(version)
+    return "develop" if ".dev" in version else "stable"
+
+
+def validate_channel(channel: str) -> str:
+    if not isinstance(channel, str) or channel not in {"stable", "develop"}:
+        raise ManifestError("choose the stable or develop update channel")
+    return channel
+
+
+def require_channel(version: str, channel: str) -> None:
+    if release_channel(version) != validate_channel(channel):
+        raise ManifestError("release does not belong to the selected channel")
 
 
 def canonical_json(value: object) -> bytes:

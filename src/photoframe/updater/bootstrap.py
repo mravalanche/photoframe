@@ -27,7 +27,7 @@ from .helper import (
     restore_owned_file,
     safe_extract,
 )
-from .manifest import SignedManifest
+from .manifest import SignedManifest, require_channel
 from .state import StateStore, UpdaterState
 
 
@@ -259,6 +259,7 @@ def bootstrap(args: argparse.Namespace, *, layout: InstallLayout | None = None) 
         serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
     )
     signed = SignedManifest.verify(args.manifest.read_bytes(), public_key)
+    require_channel(signed.manifest.version, getattr(args, "channel", "stable"))
     signed.verify_bundle(args.bundle)
     units = service_units(root, data, args.user, group, python)
     unit_path = layout.units / "photoframe.service"
@@ -357,6 +358,7 @@ def bootstrap(args: argparse.Namespace, *, layout: InstallLayout | None = None) 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--channel", choices=("stable", "develop"), default="stable")
     parser.add_argument("--user", required=True)
     parser.add_argument("--data-dir", type=Path, required=True)
     parser.add_argument("--root", type=Path, default=Path("/opt/photoframe"))

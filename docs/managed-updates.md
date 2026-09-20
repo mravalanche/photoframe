@@ -77,7 +77,7 @@ idle; a busy frame leaves the current version running. Other writes are temporar
 rejected while activation is underway.
 
 The helper verifies the pinned signature, repository, version, platform, compatibility,
-download size and digest before installing. It rejects prereleases, downgrades,
+download size and digest before installing. It rejects releases outside the selected channel, downgrades,
 arbitrary paths, unexpected archive contents and insufficient disk space. Installation
 and switching are serialized. Repeated requests cannot create concurrent updates.
 
@@ -135,7 +135,7 @@ keys or broken artifacts to the production channel.
 2. Check manually and with simulated weekly due time; turn checks off. Disconnect
    networking and confirm the cached authenticated release and clear offline state.
    No check may stage or restart the app.
-3. Reject a wrong-key/wrong-repository manifest, corrupted archive, prerelease,
+3. Reject a wrong-key/wrong-repository manifest, corrupted archive, a develop build on the stable channel,
    downgrade, traversal archive and low-disk stage without affecting the app.
 4. Start an Inky render, then request an update from two browsers. Verify safe busy
    handling, one operation only, responsive status, and rejection of concurrent writes.
@@ -152,3 +152,63 @@ keys or broken artifacts to the production channel.
 
 Automated tests simulate these failure boundaries and Linux systemd commands;
 they do not replace this physical Pi/Inky acceptance drill.
+
+## Signed develop channel
+
+Stable is the default. Managed frames can explicitly choose **Develop — testing builds**
+on Software updates, then **Check now**, **Download & verify**, and **Apply & restart**.
+Changing the channel does not download, restart, or downgrade the frame. Weekly checks
+use the chosen channel. Both channels use the same independently pinned production key;
+the signed version identifies the channel. Only canonical `X.Y.Z.devN` versions belong
+to Develop. Stable excludes them even when their signatures are valid.
+
+Develop builds are immutable GitHub prereleases from reviewed commits reachable from
+`develop`. They are not marked Latest. Discovery selects the greatest valid develop
+version among the latest 100 releases with a manifest asset, verifies the signature,
+and checks the manifest matches that exact tag. In-progress builds without manifests
+are skipped. Cached checks never cross channels. Other prerelease formats are rejected.
+
+Version ordering is `1.2.1 < 1.3.0.dev1 < 1.3.0.dev2 < 1.3.0`. To leave Develop,
+select Stable and install its release when it is newer. Choosing Stable does not install
+an older version; use Restore previous version only when that retained slot is suitable.
+
+### Cutting a develop candidate
+
+1. Merge the reviewed change into develop and wait for Tests to pass on the exact commit.
+2. Choose an unused version for the next stable version, such as `1.3.0.dev1`.
+3. Create an immutable `v1.3.0.dev1` tag at that exact develop commit and publish it as a
+   GitHub **prerelease**, with `--latest=false`. Never move or reuse a published tag.
+4. The Managed release bundle workflow checks develop ancestry, stamps that version into
+   the package and local-project lock entry without changing dependencies, runs the quality
+   gate on ARM64, builds its offline wheelhouse, and signs the assets. Approve the protected
+   `managed-releases` environment for the reviewed tag if prompted.
+5. Wait for the archive, `photoframe-manifest.json`, and `SHA256SUMS`. Verify the manifest
+   with the independently pinned public key and confirm its exact commit and bundle digest.
+   Only then is the candidate installable. A failed candidate gets a new version if code changes.
+
+Example, after replacing COMMIT with the reviewed green develop commit:
+
+```bash
+git tag v1.3.0.dev1 COMMIT
+git push origin v1.3.0.dev1
+gh release create v1.3.0.dev1 --verify-tag --prerelease --latest=false   --title "Develop 1.3.0.dev1" --notes-file candidate-notes.md
+```
+
+### First frame installation
+
+The first develop candidate still needs the one-time migration above. Use a reviewed
+checkout of the channel-capable bootstrap and add **`--channel develop`** to that command.
+Without this explicit flag, bootstrap rejects develop bundles. Use the existing source
+installation's actual interpreter (often `DATA_DIR/venv/bin/python`), not an assumed `.venv`.
+The `--python` interpreter for the managed installation must still be root-owned CPython 3.12.
+After migration, select Develop on Software updates to opt into subsequent candidates.
+Keep the source checkout, original environment and private data backup until acceptance passes.
+
+The independent helper must include this channel support; merely replacing an old web app
+cannot upgrade a privileged helper. No managed release predates the introduction of this
+channel. Any manually provisioned earlier helper needs an explicit administrator migration.
+
+First validate the candidate's startup, existing settings, album switching, scheduled render,
+and reboot on the physical frame. A later develop candidate exercises download/apply and
+retained-version rollback. Follow the complete acceptance drill before the first stable release.
+The separate photo-control feature branch is not included until explicitly merged later.

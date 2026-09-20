@@ -10,9 +10,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from .manifest import _SEMVER, require_channel, validate_channel
+
 MAX_MESSAGE_BYTES = 64 * 1024
 _JOB_ID = re.compile(r"^[0-9a-f]{32}$")
-_VERSION = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+_VERSION = _SEMVER
 Action = Literal["status", "check", "stage", "activate", "rollback"]
 
 
@@ -27,6 +29,7 @@ class Request:
     token: str
     request_id: str
     release: str | None = None
+    channel: str = "stable"
 
     @classmethod
     def parse(cls, raw: bytes, expected_token: str) -> Request:
@@ -42,6 +45,7 @@ class Request:
             "token",
             "request_id",
             "release",
+            "channel",
         }:
             raise ProtocolError("request fields are invalid")
         try:
@@ -68,11 +72,16 @@ class Request:
             raise ProtocolError("helper authentication failed")
         if not _JOB_ID.fullmatch(request.request_id):
             raise ProtocolError("request ID is invalid")
+        if not isinstance(request.channel, str):
+            raise ProtocolError("channel must be a string")
+        validate_channel(request.channel)
         needs_release = request.action in {"stage", "activate"}
         if needs_release != (request.release is not None):
             raise ProtocolError("release ID is required only for stage and activate")
         if request.release is not None and not _VERSION.fullmatch(request.release):
             raise ProtocolError("release ID is invalid")
+        if request.release is not None:
+            require_channel(request.release, request.channel)
         return request
 
 
@@ -82,10 +91,15 @@ class HelperClient:
         self.token_path = token_path
         self.timeout = timeout
 
-    def call(self, action: Action, request_id: str, release: str | None = None) -> dict[str, Any]:
+    def call(
+        self, action: Action, request_id: str, release: str | None = None, channel: str = "stable"
+    ) -> dict[str, Any]:
         token = self.token_path.read_text().strip()
-        request = Request(1, action, token, request_id, release)
-        payload = json.dumps(request.__dict__, separators=(",", ":")).encode() + b"\n"
+        request = Request(1, action, token, request_id, release, channel)
+        fields = request.__dict__.copy()
+        if channel == "stable":
+            fields.pop("channel")  # Preserve the original stable helper wire format.
+        payload = json.dumps(fields, separators=(",", ":")).encode() + b"\n"
         if len(payload) > MAX_MESSAGE_BYTES:
             raise ProtocolError("request is too large")
         with socket.socket(getattr(socket, "AF_UNIX"), socket.SOCK_STREAM) as connection:  # noqa: B009

@@ -9,6 +9,7 @@ import time
 from contextlib import suppress
 from pathlib import Path
 from threading import RLock
+from typing import Any
 from uuid import uuid4
 
 import httpx
@@ -16,7 +17,7 @@ import httpx
 from .. import __version__
 from ..persistence import atomic_write
 from .managed import detect_managed_installation
-from .manifest import semver
+from .manifest import release_channel, require_channel, semver, validate_channel
 from .protocol import HelperClient
 
 
@@ -45,6 +46,9 @@ class UpdateController:
             }
         except (ValueError, OSError):
             self.preferences = {"weekly": False, "next_check": 0}
+        self.preferences.setdefault("channel", "stable")
+        if self.preferences["channel"] not in {"stable", "develop"}:
+            self.preferences["channel"] = "stable"
         self.last_error = None
         self.activation_job = self.preferences.get("activation_job")
         self.public_release = None
@@ -74,7 +78,7 @@ class UpdateController:
             return self._status()
 
     def _status(self):
-        result = {"phase": "idle", "message": self.installation.reason}
+        result: dict[str, Any] = {"phase": "idle", "message": self.installation.reason}
         if self.installation.enabled:
             try:
                 result = self.helper.call("status", uuid4().hex)
@@ -86,8 +90,23 @@ class UpdateController:
                     self._finish_activation()
             except (OSError, ValueError) as exc:
                 result = {"phase": "unavailable", "message": f"Updater unavailable: {exc}"}
+        channel = self.preferences["channel"]
+        if result.get("latest_channel", "stable") != channel:
+            result["latest_manifest"] = None
+        if result.get("staged_version") and release_channel(result["staged_version"]) != channel:
+            result["staged_version"] = None
+        latest = result.get("latest_manifest")
+        upgrade_available = False
+        if latest:
+            try:
+                require_channel(latest["version"], channel)
+                upgrade_available = semver(latest["version"]) > semver(__version__)
+            except (ValueError, KeyError, TypeError):
+                result["latest_manifest"] = None
         return {
             **result,
+            "channel": channel,
+            "upgrade_available": upgrade_available,
             "running_version": __version__,
             "managed": self.installation.enabled,
             "weekly": self.preferences.get("weekly", False),
@@ -121,8 +140,26 @@ class UpdateController:
                 self.last_error = f"Could not check releases: {exc}"
             return self.status()
 
-    def configure(self, enabled):
+    def configure(self, enabled, channel=None):
         with self.lock:
+            channel = validate_channel(
+                channel if channel is not None else self.preferences["channel"]
+            )
+            if self.activation_job or self.status().get("phase") in {
+                "queued",
+                "checking",
+                "staging",
+                "activating",
+                "rolling_back",
+            }:
+                raise ValueError(
+                    "Wait for the current update operation before changing preferences"
+                )
+            if channel != self.preferences["channel"]:
+                self.public_release = None
+                self.public_checked_at = 0
+                self.last_error = None
+            self.preferences["channel"] = channel
             self.preferences["weekly"] = enabled
             self.preferences["next_check"] = time.time() + 7 * 86400 + secrets.randbelow(43201)
             self.save()
@@ -141,7 +178,7 @@ class UpdateController:
                 and status.get("job_id") != self.activation_job
             ):
                 with suppress(OSError, ValueError):
-                    result = self.helper.call(
+                    result = self._helper_action(
                         self.preferences["activation_action"],
                         self.activation_job,
                         self.preferences.get("activation_release"),
@@ -168,6 +205,11 @@ class UpdateController:
             self.last_error = str(exc)
         return True
 
+    def _helper_action(self, action, request_id, release=None):
+        if self.preferences["channel"] == "stable":
+            return self.helper.call(action, request_id, release)
+        return self.helper.call(action, request_id, release, "develop")
+
     def action(self, action, release=None, request_id=None):
         if not self.installation.enabled:
             raise ValueError(
@@ -175,8 +217,8 @@ class UpdateController:
             )
         if action in {"stage", "activate"}:
             if not isinstance(release, str):
-                raise ValueError("A stable release version is required")
-            semver(release)
+                raise ValueError("A release version is required")
+            require_channel(release, self.preferences["channel"])
         elif release is not None:
             raise ValueError("A release version is only allowed for stage and activate")
         with self.lock:
@@ -214,7 +256,7 @@ class UpdateController:
                     self.runtime.maintenance_gate.cancel()
                     raise
             try:
-                result = self.helper.call(action, request_id, release)
+                result = self._helper_action(action, request_id, release)
                 if result.get("ok") is False:
                     if self.activation_job:
                         self._finish_activation()
