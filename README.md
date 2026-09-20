@@ -68,6 +68,17 @@ The API key is stored locally and is never rendered back into the browser. Nativ
 and height must both be known before an image can be rendered; supported Inky hardware is detected
 at startup when possible.
 
+Frame updates and album changes appear in a pinned activity bar, so their status stays visible
+while you scroll on a phone. Album changes run in the background: the bar first reports loading,
+then the number of photos checked for the frame. The current album remains selected until the
+new album is ready. Keep the page open to see completion, or reopen it to see the running job.
+Other changes wait until the album job finishes.
+
+To limit memory use on the frame, Immich responses are capped at 32 MiB and albums at 20,000
+assets. Large JPEGs are downsampled before decoding; images that still exceed the decoding limit
+use the provider preview when available. Unsupported images are excluded from the frame's photo
+list.
+
 ## Basic configuration
 
 The collapsed **Advanced settings** panel controls the web listener:

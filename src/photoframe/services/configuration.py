@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import secrets as secure_random
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -157,9 +158,16 @@ class ConfigurationService:
 
     def select_album(self, album_id: str) -> str:
         with self._album_selection_lock:
-            return self._select_album(album_id)
+            self.runtime.claim_album_change()
+            try:
+                return self._select_album(album_id)
+            finally:
+                self.runtime.release_album_change()
 
-    def _select_album(self, album_id: str) -> str:
+    def _select_album(
+        self, album_id: str, progress: Callable[[int, int], None] | None = None
+    ) -> str:
+        self.runtime.wait_for_refresh()
         albums, _photos = self.runtime.catalog_snapshot()
         album = next((item for item in albums if item.id == album_id), None)
         if not album:
@@ -180,7 +188,7 @@ class ConfigurationService:
         candidate_frame.album_name = album.name
         try:
             photos = self.runtime.provider().list_photos(album.id)
-            eligible = self.runtime.photo_eligibility(candidate_frame, photos).eligible
+            eligible = self.runtime.photo_eligibility(candidate_frame, photos, progress).eligible
         except Exception as exc:
             raise RuntimeError(
                 f"Could not use {album.name}. Your current album is unchanged; "
@@ -188,6 +196,8 @@ class ConfigurationService:
             ) from exc
 
         def choose_album(settings: AppSettings) -> None:
+            if settings.provider != previous.provider or settings.frame != previous.frame:
+                raise ValueError("Configuration changed while loading the album; try again")
             settings.frame.album_id = album.id
             settings.frame.album_name = album.name
             if settings.frame.starting_photo_id not in {photo.id for photo in eligible}:
@@ -196,10 +206,7 @@ class ConfigurationService:
                 settings.frame.shuffle_photo_ids = shuffled_photo_ids(eligible, settings.frame)
             settings.refresh_status.next_attempt_at = None
 
-        self.repository.update(choose_album)
-        self.runtime.preserve_display_photo(displayed_before)
-        self.runtime.replace_photos(photos)
-        self.runtime.set_preview(None)
+        self.runtime.commit_album(photos, displayed_before, choose_album)
         return f"Selected {album.name}; found {len(photos)} images"
 
     def save_workflow(self, form: WorkflowInput) -> str:

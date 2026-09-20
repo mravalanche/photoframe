@@ -139,6 +139,7 @@ class MockRenderCoordinator:
         on_complete: Callable[[str], None] | None = None,
         on_failure: Callable[[str], None] | None = None,
         operation_id: str | None = None,
+        prepare: Callable[[], None] | None = None,
     ) -> RenderState:
         """Run Inky's blocking refresh outside the request thread.
 
@@ -150,7 +151,7 @@ class MockRenderCoordinator:
             if self.state.active or not self._display_lock.acquire(blocking=False):
                 return self.state.model_copy(deep=True)
             self.state = RenderState(
-                phase=RenderPhase.SENDING,
+                phase=RenderPhase.PREPARING if prepare else RenderPhase.SENDING,
                 operation_id=operation_id,
                 photo_id=photo_id,
                 started_at=datetime.now(UTC),
@@ -161,9 +162,13 @@ class MockRenderCoordinator:
             self._timeout_reported = False
 
         def run() -> None:
-            with self._state_lock:
-                self.state.phase = RenderPhase.WAITING
             try:
+                if prepare:
+                    prepare()
+                with self._state_lock:
+                    if self.state.phase == RenderPhase.FAILED:
+                        return
+                    self.state.phase = RenderPhase.WAITING
                 refresh()
             except Exception as exc:
                 message = str(exc)
@@ -190,9 +195,26 @@ class MockRenderCoordinator:
             finally:
                 # A UI timeout must never release this lock. Only the blocking
                 # driver returning (successfully or exceptionally) does so.
+                with self._state_lock:
+                    self._hardware_refresh = False
+                    self._on_failure = None
+                    self._on_complete = None
                 self._display_lock.release()
 
-        Thread(target=run, name="photoframe-inky", daemon=True).start()
+        try:
+            Thread(target=run, name="photoframe-inky", daemon=True).start()
+        except Exception:
+            with self._state_lock:
+                self.state.phase = RenderPhase.FAILED
+                self.state.finished_at = datetime.now(UTC)
+                self.state.message = "Could not start the frame update worker."
+                self._hardware_refresh = False
+                self._on_failure = None
+                self._on_complete = None
+            self._display_lock.release()
+            if on_failure:
+                on_failure("Could not start the frame update worker.")
+            raise
         return self.snapshot()
 
     def reset(self) -> None:
@@ -243,19 +265,26 @@ class RenderService:
             state = self.coordinator.snapshot()
             if state.active or self.coordinator.hardware_busy:
                 return state
-            prepared = self.prepare(photo_id)
             refresh = self.refresh
             if refresh is None:
+                self.prepare(photo_id)
                 return self.coordinator.start(
                     photo_id,
                     operation_id=operation_id,
                     on_complete=on_complete,
                     on_failure=on_failure,
                 )
+            prepared: Any = None
+
+            def prepare() -> None:
+                nonlocal prepared
+                prepared = self.prepare(photo_id)
+
             return self.coordinator.start_hardware(
                 photo_id,
                 lambda: refresh(prepared),
                 on_complete=on_complete,
                 on_failure=on_failure,
                 operation_id=operation_id,
+                prepare=prepare,
             )

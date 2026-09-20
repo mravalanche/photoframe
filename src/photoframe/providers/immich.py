@@ -1,4 +1,6 @@
 from datetime import UTC, datetime
+from threading import BoundedSemaphore
+from time import monotonic
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -21,23 +23,58 @@ class ImmichProvider:
 
     def __init__(self, server_url: str, api_key: str, client: httpx.Client | None = None):
         self.base_url = _api_root(server_url)
-        self.client = client or httpx.Client(
+        self.client = client
+        self._api_key = api_key
+
+    MAX_RESPONSE_BYTES = 32 * 1024 * 1024
+    MAX_ALBUM_PHOTOS = 20_000
+    _request_slots = BoundedSemaphore(2)
+
+    def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        if not self._request_slots.acquire(timeout=15):
+            raise ProviderError("The photo source is busy; try again shortly")
+        try:
+            return self._bounded_request(method, path, **kwargs)
+        finally:
+            self._request_slots.release()
+
+    def _bounded_request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        client = self.client or httpx.Client(
             base_url=self.base_url + "/",
-            headers={"x-api-key": api_key, "accept": "application/json"},
+            headers={"x-api-key": self._api_key, "accept": "application/json"},
             timeout=15,
             follow_redirects=True,
         )
-
-    def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         try:
-            response = self.client.request(method, path.lstrip("/"), **kwargs)
-            response.raise_for_status()
-            return response
+            started = monotonic()
+            with client.stream(method, path.lstrip("/"), **kwargs) as response:
+                response.raise_for_status()
+                content = bytearray()
+                for chunk in response.iter_bytes(chunk_size=64 * 1024):
+                    if len(content) + len(chunk) > self.MAX_RESPONSE_BYTES:
+                        raise ProviderError(
+                            "Immich response exceeds the frame's safe download limit"
+                        )
+                    if monotonic() - started > 60:
+                        raise ProviderError("Immich download took too long; try again")
+                    content.extend(chunk)
+                return httpx.Response(
+                    response.status_code,
+                    headers={
+                        key: value
+                        for key, value in response.headers.items()
+                        if key.lower() not in {"content-encoding", "content-length"}
+                    },
+                    content=bytes(content),
+                    request=response.request,
+                )
         except httpx.HTTPStatusError as exc:
-            detail = exc.response.text[:240]
-            raise ProviderError(f"Immich returned {exc.response.status_code}: {detail}") from exc
+            raise ProviderError(f"Immich returned {exc.response.status_code}") from exc
         except httpx.HTTPError as exc:
             raise ProviderError(f"Could not reach Immich: {exc}") from exc
+        finally:
+            if self.client is None:
+                client.close()
 
     def validate_connection(self) -> str:
         albums = self.list_albums()
@@ -69,6 +106,8 @@ class ImmichProvider:
             raise ProviderError(
                 "Immich assets response was not a list; check server API compatibility"
             )
+        if len(assets) > self.MAX_ALBUM_PHOTOS:
+            raise ProviderError("This album exceeds the frame's safe photo limit")
         photos = [self._photo(item) for item in assets if item.get("type", "IMAGE") == "IMAGE"]
         earliest = datetime.min.replace(tzinfo=UTC)
         return sorted(photos, key=lambda p: ((p.taken_at or earliest).isoformat(), p.id))
@@ -87,10 +126,15 @@ class ImmichProvider:
             if not isinstance(items, list):
                 raise ProviderError("Immich metadata search shape is unsupported")
             found.extend(items)
+            if len(found) > self.MAX_ALBUM_PHOTOS:
+                raise ProviderError("This album exceeds the frame's safe photo limit")
             next_page = section.get("nextPage") if isinstance(section, dict) else None
             if not next_page or not items:
                 break
-            page = int(next_page)
+            following_page = int(next_page)
+            if following_page <= page:
+                raise ProviderError("Immich metadata search repeated a page")
+            page = following_page
         return found
 
     @staticmethod
