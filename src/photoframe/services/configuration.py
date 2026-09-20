@@ -322,6 +322,8 @@ class ConfigurationService:
             self._reset_lock.release()
 
     def start_render(self, operation_id: str | None = None) -> None:
+        if self.runtime.maintenance_gate.maintenance:
+            raise ValueError("Photoframe is preparing to restart for an update")
         photo = self.runtime.photo(self.runtime.preview_id())
         if not photo:
             raise ValueError("Select an image preview before sending it to the frame")
@@ -351,6 +353,8 @@ class ConfigurationService:
 
     def start_next_photo(self, request_id: str, operation_id: str | None = None) -> str:
         """Start one manual successor without touching automatic schedule state."""
+        if self.runtime.maintenance_gate.maintenance:
+            raise ValueError("Photoframe is preparing to restart for an update")
         if not self._next_lock.acquire(blocking=False):
             raise ValueError("Another Next photo request is already being handled")
         try:

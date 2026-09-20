@@ -1,0 +1,16 @@
+.update-shell { width: min(48rem, calc(100% - 2rem)); margin: 2rem auto; }
+.update-card { padding: 1.5rem; margin-block: 1rem; border: 1px solid #77889966; border-radius: 1rem; }
+.update-card h2 { margin-top: 0; }
+.update-actions { display:flex; flex-wrap:wrap; gap:.75rem; margin-block:1rem; }
+.update-shell input[type=password] { display:block; width:100%; max-width:24rem; margin-top:.5rem; }
+.update-checkbox { display:flex; align-items:center; gap:.6rem; }
+.update-checkbox input { width:auto; }
+.update-shell progress { width:100%; }
+.update-shell button { min-height:44px; white-space:normal; }
+.update-shell button:disabled { opacity:.5; cursor:not-allowed; }
+.update-shell [hidden] { display:none !important; }
+#update-error { color: #f4a6a6; }
+#update-diagnostics { overflow-wrap:anywhere; }
+dialog { max-width:min(30rem, calc(100% - 2rem)); border-radius:1rem; padding:1.5rem; background:#18202c; color:#f4f5f7; }
+dialog::backdrop { background:#0009; }
+@media(max-width:480px) { .update-card { padding:1rem; } .update-actions button { width:100%; } }

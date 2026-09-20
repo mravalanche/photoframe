@@ -358,6 +358,12 @@ candidate that passed the repository check.
 
 ## Roadmap
 
+The managed web updater, privileged helper boundary, signed bundle pipeline, one-time migration,
+and device acceptance drill are documented in [Managed updates](docs/managed-updates.md).
+This integration does not itself publish a production signing key or claim a completed Pi soak.
+The normal reviewed, green-CI path into develop still applies; promotion to main requires the
+recorded physical-device update and rollback drill.
+
 ### P0 — security, recovery, and release confidence
 
 - [ ] Define and implement an optional authentication model before recommending access beyond a
