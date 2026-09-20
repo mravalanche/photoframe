@@ -1,5 +1,6 @@
 """Validate immutable release identity and stamp only develop build metadata."""
 
+import json
 import os
 import re
 import tomllib
@@ -24,6 +25,14 @@ def prepare(root: Path, tag: str, prerelease: bool) -> str:
         return version
     if base <= tuple(map(int, current.split("."))):
         raise ValueError("develop builds must target a future stable version")
+    # Stamp all local release metadata in the disposable CI checkout. Nothing is
+    # committed back, so Release Please continues to track the last stable release.
+    release_path = root / ".release-please-manifest.json"
+    release_metadata = json.loads(release_path.read_text(encoding="utf-8"))
+    if release_metadata.get(".") != current:
+        raise ValueError("release metadata does not match source")
+    release_metadata["."] = version
+    release_path.write_text(json.dumps(release_metadata, indent=2) + "\n", encoding="utf-8")
     # Dependencies remain exactly locked. Only the local project's version changes.
     project_text = project.read_text(encoding="utf-8")
     old = f'version = "{current}"'

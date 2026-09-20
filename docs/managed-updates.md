@@ -179,7 +179,7 @@ an older version; use Restore previous version only when that retained slot is s
 3. Create an immutable `v1.3.0.dev1` tag at that exact develop commit and publish it as a
    GitHub **prerelease**, with `--latest=false`. Never move or reuse a published tag.
 4. The Managed release bundle workflow checks develop ancestry, stamps that version into
-   the package and local-project lock entry without changing dependencies, runs the quality
+   the package, local-project lock entry and build-only release metadata without changing dependencies, runs the quality
    gate on ARM64, builds its offline wheelhouse, and signs the assets. Approve the protected
    `managed-releases` environment for the reviewed tag if prompted.
 5. Wait for the archive, `photoframe-manifest.json`, and `SHA256SUMS`. Verify the manifest

@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ spec.loader.exec_module(module)
 
 
 def checkout(tmp_path, version="1.2.1"):
+    (tmp_path / ".release-please-manifest.json").write_text(json.dumps({".": version}))
     (tmp_path / "pyproject.toml").write_text(
         f'[project]\nname = "photoframe"\nversion = "{version}"\n'
     )
@@ -25,6 +27,7 @@ def test_develop_stamp_changes_only_project_identity(tmp_path):
     root = checkout(tmp_path)
     assert module.prepare(root, "v1.3.0.dev1", True) == "1.3.0.dev1"
     assert 'version = "1.3.0.dev1"' in (root / "pyproject.toml").read_text()
+    assert json.loads((root / ".release-please-manifest.json").read_text())["."] == "1.3.0.dev1"
     assert 'name = "example"\nversion = "3.0.0"' in (root / "uv.lock").read_text()
 
 
