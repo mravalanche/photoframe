@@ -18,8 +18,10 @@ class ImmediateDisplay:
 class BlockingDisplay:
     def __init__(self):
         self.release = Event()
+        self.entered = Event()
 
     def show(self, _image):
+        self.entered.set()
         self.release.wait(1)
 
 
@@ -142,6 +144,7 @@ def test_schedule_timeout_is_persisted_and_late_success_recovers_health(tmp_path
     display = BlockingDisplay()
     runtime.display = display  # type: ignore[assignment]
     runtime.refresh_lifecycle(anchor + timedelta(seconds=30))
+    assert display.entered.wait(1)
     started = runtime.renderer.snapshot().started_at
     assert started is not None
     runtime._advance_scheduled_render(started + timedelta(seconds=91))

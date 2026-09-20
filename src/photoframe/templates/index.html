@@ -14,7 +14,7 @@
   <title>Photoframe</title>
   <link rel="icon" href="{{ url_for('static', path='/photoframe.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=8">
+  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=9">
   <script src="{{ url_for('static', path='/tab-identity.js') }}"></script>
   <script src="{{ url_for('static', path='/vendor/htmx-2.0.4.min.js') }}" defer></script>
 </head>
@@ -328,5 +328,11 @@
       window.scrollTo(0, saved.pageY);
     });
   </script>
+  <aside id="activity-dock" class="activity-dock" aria-label="Current activity" hidden>
+    <div><strong data-activity-title role="status" aria-live="polite" aria-atomic="true"></strong><p data-activity-detail></p></div>
+    <button type="button" class="quiet" data-activity-dismiss aria-label="Dismiss activity status" hidden>×</button>
+    <progress aria-label="Current operation progress" hidden></progress>
+  </aside>
+  <script src="{{ url_for('static', path='/activity.js') }}" defer></script>
 </body>
 </html>

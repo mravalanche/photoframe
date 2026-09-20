@@ -7,6 +7,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import BackgroundTasks, FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -19,6 +20,7 @@ from ..providers import ConfiguredProviderResolver, DemoProvider, ProviderError,
 from ..renderer import RenderPhase
 from ..schedule import next_occurrence
 from ..selector import active_selection, next_photo
+from ..services.album_change import AlbumChangeJob
 from ..services.configuration import ConfigurationService, ResetIncompleteError
 from ..services.runtime import Runtime
 from ..settings import SecretStore, SettingsRepository
@@ -78,6 +80,7 @@ def create_app(
     is_demo = demo_mode if demo_mode is not None else os.getenv("PHOTOFRAME_DEMO_MODE") == "1"
     runtime = Runtime(repository, secrets, provider_resolver, DemoProvider() if is_demo else None)
     configuration = ConfigurationService(repository, secrets, runtime, target)
+    album_change = AlbumChangeJob(configuration)
     if not is_demo:
         runtime.initialise_display()
     templates = Jinja2Templates(directory=package / "templates")
@@ -105,17 +108,32 @@ def create_app(
     app = FastAPI(title="Photoframe", version=__version__)
     app.mount("/static", StaticFiles(directory=package / "static"), name="static")
     app.state.runtime = runtime
+    app.state.album_change = album_change
     register_updates(app, templates, runtime, target)
 
     @app.middleware("http")
     async def maintenance_guard(request: Request, call_next):
-        if not request.url.path.startswith(("/api/updates/", "/updates", "/health", "/static/")):
+        async def admitted_request():
+            if request.method == "POST" and request.url.path not in {
+                "/album/select",
+                "/api/album/select",
+            }:
+                try:
+                    with runtime.interactive_operation():
+                        return await call_next(request)
+                except ValueError as exc:
+                    return JSONResponse({"message": str(exc)}, status_code=409)
+            return await call_next(request)
+
+        if not request.url.path.startswith(
+            ("/api/updates/", "/api/activity", "/updates", "/health", "/static/")
+        ):
             try:
                 with runtime.maintenance_gate.operation():
-                    return await call_next(request)
+                    return await admitted_request()
             except MaintenanceError as exc:
                 return JSONResponse({"message": str(exc)}, status_code=503)
-        return await call_next(request)
+        return await admitted_request()
 
     worker = RefreshWorker(runtime.refresh_lifecycle, runtime.record_worker_failure)
 
@@ -144,7 +162,7 @@ def create_app(
             except (ProviderError, RuntimeError) as exc:
                 error = str(exc)
                 runtime.loaded = True
-        albums, photos = runtime.catalog_snapshot()
+        settings, albums, photos = runtime.workspace_snapshot()
         current_album_available = bool(
             settings.frame.album_id and any(album.id == settings.frame.album_id for album in albums)
         )
@@ -347,9 +365,33 @@ def create_app(
     async def select_album(request: Request) -> HTMLResponse:
         try:
             form = AlbumForm.parse(await request.form())
-            return workspace(request, notice=configuration.select_album(form.album_id))
+            notice = await run_in_threadpool(configuration.select_album, form.album_id)
+            return await run_in_threadpool(workspace, request, notice=notice)
         except Exception as exc:
             return workspace(request, error=str(exc))
+
+    @app.post("/api/album/select")
+    async def start_album_change(request: Request) -> JSONResponse:
+        try:
+            payload = await request.json()
+            if not isinstance(payload, dict) or not isinstance(payload.get("album_id"), str):
+                raise ValueError("Choose an album from the loaded list")
+            state = album_change.start(payload["album_id"])
+        except ValueError as exc:
+            return JSONResponse({"message": str(exc)}, status_code=409)
+        return JSONResponse(state, status_code=202)
+
+    @app.get("/api/activity")
+    def activity_status() -> JSONResponse:
+        state = configuration.current_render_state()
+        return JSONResponse(
+            jsonable_encoder(
+                {
+                    "album": album_change.snapshot(),
+                    "render": {**state.model_dump(), "active": state.active},
+                }
+            )
+        )
 
     @app.post("/workflow", response_class=HTMLResponse)
     async def save_workflow(request: Request) -> HTMLResponse:
@@ -422,13 +464,12 @@ def create_app(
     async def next_photo_now(request: Request) -> HTMLResponse:
         try:
             form = NextPhotoForm.parse(await request.form())
-            return workspace(
-                request,
-                notice=configuration.start_next_photo(
-                    form.request_id,
-                    operation_id=render_operation_id(request),
-                ),
+            notice = await run_in_threadpool(
+                configuration.start_next_photo,
+                form.request_id,
+                operation_id=render_operation_id(request),
             )
+            return await run_in_threadpool(workspace, request, notice=notice)
         except (ValueError, ProviderError, RuntimeError) as exc:
             return workspace(request, error=str(exc))
 
