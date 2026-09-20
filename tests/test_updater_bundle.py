@@ -105,8 +105,8 @@ def test_long_platform_wheel_names_are_deterministic_and_extract_safely(tmp_path
     assert len(name) > 100
     with zipfile.ZipFile(wheels / name, "w") as wheel:
         wheel.writestr("dependency/__init__.py", "")
-    first = build_bundle(wheels, tmp_path / "first", "1.3.0.dev3", "a" * 40)
-    second = build_bundle(wheels, tmp_path / "second", "1.3.0.dev3", "a" * 40)
+    first = build_bundle(wheels, tmp_path / "first", "1.3.0", "a" * 40)
+    second = build_bundle(wheels, tmp_path / "second", "1.3.0", "a" * 40)
     assert first.read_bytes() == second.read_bytes()
     destination = tmp_path / "extracted"
     destination.mkdir()
