@@ -14,7 +14,7 @@
   <title>Photoframe</title>
   <link rel="icon" href="{{ url_for('static', path='/photoframe.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=9">
+  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=10">
   <script src="{{ url_for('static', path='/tab-identity.js') }}"></script>
   <script src="{{ url_for('static', path='/vendor/htmx-2.0.4.min.js') }}" defer></script>
 </head>
@@ -212,20 +212,72 @@
       }
       renderAlbumSelection(picker);
     }
+    document.addEventListener('change', event => {
+      const form = event.target.closest?.('.framing-form');
+      if (!form) return;
+      const editor = form.closest('.photo-editor');
+      const image = editor.querySelector('.selected-image img');
+      const mode = form.elements.fit_mode.value;
+      const matte = form.elements.matte.value;
+      const dirty = mode !== form.dataset.savedFit || matte !== form.dataset.savedMatte;
+      const url = new URL(image.src);
+      url.searchParams.set('fit_mode', mode);
+      url.searchParams.set('matte', matte);
+      image.src = url.href;
+      editor.querySelectorAll('.selected-actions .primary, .rotation-action button').forEach(button => {
+        button.disabled = dirty || !!editor.querySelector('.framing-required');
+      });
+      form.querySelector('[data-framing-hint]').textContent = dirty ? 'Preview only — save framing before showing this photo.' : editor.querySelector('.framing-required') ? 'Save to include this photo in rotation.' : 'Framing ready for this photo.';
+    });
+    const intervalSteps = [30, 60, 300, 900, 1800, 3600, 10800, 21600, 43200, 86400];
+    const intervalLabels = ['30 seconds', '1 minute', '5 minutes', '15 minutes', '30 minutes', '1 hour', '3 hours', '6 hours', '12 hours', '1 day'];
+    const intervalFactors = {seconds: 1, minutes: 60, hours: 3600, days: 86400};
+    function syncIntervalEditor(form) {
+      const slider = form.querySelector('[data-interval-slider]');
+      const custom = form.querySelector('[data-interval-custom]');
+      if (!slider || !custom) return;
+      const label = intervalLabels[Number(slider.value)];
+      slider.setAttribute('aria-valuetext', label);
+      slider.disabled = custom.checked || form.elements.schedule_mode.value !== 'interval';
+      form.querySelector('[data-interval-custom-fields]').hidden = !custom.checked;
+      form.querySelector('[data-interval-label]').textContent = custom.checked
+        ? (form.elements.interval_value.value ? `${form.elements.interval_value.value} ${form.elements.interval_unit.value}` : 'custom interval')
+        : label;
+    }
+    function setIntervalFromSlider(form) {
+      const seconds = intervalSteps[Number(form.querySelector('[data-interval-slider]').value)];
+      const unit = seconds % 86400 === 0 ? 'days' : seconds % 3600 === 0 ? 'hours' : seconds % 60 === 0 ? 'minutes' : 'seconds';
+      form.elements.interval_value.value = String(seconds / intervalFactors[unit]);
+      form.elements.interval_unit.value = unit;
+      form.elements.interval_unit.dataset.previousUnit = unit;
+      form.querySelector('[data-interval-conversion]').textContent = '';
+    }
     function updateScheduleControls(form) {
       if (!form) return;
       const mode = form.elements.schedule_mode?.value || 'interval';
       form.querySelectorAll('[data-schedule-fields]').forEach(field => {
         field.hidden = field.dataset.scheduleFields !== mode;
+        field.querySelectorAll('input, select').forEach(input => { input.disabled = field.hidden; });
       });
+      const interval = form.elements.interval_value;
+      const factors = {seconds: 1, minutes: 60, hours: 3600, days: 86400};
+      const factor = factors[form.elements.interval_unit?.value] || 1;
+      if (interval) {
+        interval.min = factor === 1 ? '30' : '1';
+        interval.max = String(2592000 / factor);
+      }
+      syncIntervalEditor(form);
       window.clearTimeout(form._schedulePreviewTimer);
+      const previewVersion = (form._schedulePreviewVersion || 0) + 1;
+      form._schedulePreviewVersion = previewVersion;
       form._schedulePreviewTimer = window.setTimeout(async () => {
         try {
           const response = await fetch('/schedule/preview', {
             method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'fetch'},
           });
           const preview = form.querySelector('[data-schedule-preview]');
-          if (preview) preview.textContent = await response.text();
+          const text = await response.text();
+          if (preview && form._schedulePreviewVersion === previewVersion) preview.textContent = text;
         } catch (_error) {
           // Keep the last authoritative server-rendered value if previewing is unavailable.
         }
@@ -233,11 +285,55 @@
     }
     function setupScheduleSettings() {
       document.querySelectorAll('[data-schedule-form]').forEach(form => {
-        updateScheduleControls(form);
-        if (form.dataset.scheduleReady) return;
+        if (form.dataset.scheduleReady) {
+          updateScheduleControls(form);
+          return;
+        }
         form.dataset.scheduleReady = 'true';
+        const slider = form.querySelector('[data-interval-slider]');
+        const custom = form.querySelector('[data-interval-custom]');
+        if (slider && custom) {
+          const seconds = Number(form.elements.interval_value.value) * intervalFactors[form.elements.interval_unit.value];
+          if (custom.checked) {
+            slider.value = String(intervalSteps.reduce((best, value, index) =>
+              Math.abs(Math.log(seconds / value)) < Math.abs(Math.log(seconds / intervalSteps[best])) ? index : best, 0));
+          }
+          slider.addEventListener('input', () => setIntervalFromSlider(form));
+          custom.addEventListener('change', () => {
+            if (custom.checked) {
+              if (form._customInterval) {
+                form.elements.interval_value.value = form._customInterval.value;
+                form.elements.interval_unit.value = form._customInterval.unit;
+                form.elements.interval_unit.dataset.previousUnit = form._customInterval.unit;
+              }
+            } else {
+              form._customInterval = {value: form.elements.interval_value.value, unit: form.elements.interval_unit.value};
+              setIntervalFromSlider(form);
+            }
+          });
+        }
         form.addEventListener('input', () => updateScheduleControls(form));
+        const unit = form.elements.interval_unit;
+        if (unit) {
+          unit.dataset.previousUnit = unit.value;
+          unit.addEventListener('change', () => {
+            const factors = {seconds: 1, minutes: 60, hours: 3600, days: 86400};
+            const input = form.elements.interval_value;
+            const converted = Number(input.value) * factors[unit.dataset.previousUnit] / factors[unit.value];
+            const hint = form.querySelector('[data-interval-conversion]');
+            if (Number.isInteger(converted) && converted >= 1 && converted <= 2592000 / factors[unit.value]) {
+              input.value = String(converted);
+              if (hint) hint.textContent = '';
+            } else {
+              input.value = '';
+              if (hint) hint.textContent = 'Enter a whole number in the new unit.';
+              input.focus();
+            }
+            unit.dataset.previousUnit = unit.value;
+          });
+        }
         form.addEventListener('change', () => updateScheduleControls(form));
+        updateScheduleControls(form);
       });
     }
     function confirmNetworkChange(form) {

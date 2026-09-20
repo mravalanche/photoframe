@@ -639,7 +639,7 @@ def test_reset_clears_configuration_secret_cache_and_runtime(tmp_path: Path):
         client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
         client.post("/album/select", data={"album_id": "album"})
         runtime = app.state.runtime
-        runtime.cache.put("immich:wide", b"cached-photo")
+        runtime.cache.put(runtime._cache_key("wide"), b"cached-photo")
         assert runtime.cache.stats().files == 1
 
         response = client.post("/reset")

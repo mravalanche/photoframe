@@ -81,6 +81,23 @@ list.
 
 ## Basic configuration
 
+Portrait and square photos can be browsed alongside landscape photos. Open a photo's
+framing controls and choose **Show whole photo** to retain the entire image. Choose **Soft photo
+background** for a heavily blurred, muted extension, **Colour wash** for a quiet colour sampled
+from the photograph, or plain **White** / **Black**. The foreground stays sharp and unchanged.
+Choose **Fill frame** to crop it to the display instead. Saving framing includes
+that photo in rotation; use **Show now** when you want to change the physical frame immediately.
+These preferences belong to this frame and do not edit your Immich originals.
+
+Use **Hide from this frame** to remove a photo from rotation without deleting it from Immich.
+Undo the action or restore it from **Hidden photos**. Hiding does not erase the photo currently
+on the physical display; if no photos remain in rotation, restore or include a photo to resume.
+
+For interval scheduling, use the slider to choose common durations from 30 seconds to 1 day.
+Choose **Custom interval** for a whole number of seconds, minutes, hours or days—for example,
+every 7 minutes or every 90 minutes, up to 30 days. Existing custom durations stay exact.
+The next-update preview shows the effect before you save; daily and weekly schedules remain available.
+
 The collapsed **Advanced settings** panel controls the web listener:
 
 - **This device only** binds to `127.0.0.1`.

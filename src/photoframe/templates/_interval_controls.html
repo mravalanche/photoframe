@@ -1,0 +1,23 @@
+{% set seconds = settings.frame.rotation_seconds %}
+{% set steps = [30, 60, 300, 900, 1800, 3600, 10800, 21600, 43200, 86400] %}
+{% set labels = ['30 seconds', '1 minute', '5 minutes', '15 minutes', '30 minutes', '1 hour', '3 hours', '6 hours', '12 hours', '1 day'] %}
+{% set is_custom = seconds not in steps %}
+{% set position = steps.index(seconds) if not is_custom else 5 %}
+{% set divisor = 86400 if seconds % 86400 == 0 else 3600 if seconds % 3600 == 0 else 60 if seconds % 60 == 0 else 1 %}
+<fieldset class="interval-fields span-2" data-schedule-fields="interval">
+  <legend>Time between photos</legend>
+  <label class="interval-slider-label" for="interval-slider">Every <output data-interval-label for="interval-slider">{% if is_custom %}{{ seconds // divisor }} {{ 'days' if divisor == 86400 else 'hours' if divisor == 3600 else 'minutes' if divisor == 60 else 'seconds' }}{% else %}{{ labels[position] }}{% endif %}</output></label>
+  <input class="interval-slider" id="interval-slider" list="interval-stops" type="range" min="0" max="9" step="1" value="{{ position }}" aria-valuetext="{{ labels[position] }}" aria-describedby="interval-slider-help" data-interval-slider {{ 'disabled' if is_custom }}>
+  <datalist id="interval-stops">{% for index in range(10) %}<option value="{{ index }}"></option>{% endfor %}</datalist>
+  <div class="interval-scale" aria-hidden="true"><span>30 seconds</span><span>1 day</span></div>
+  <small id="interval-slider-help">Slide through common intervals. Choose Custom interval for an exact duration.</small>
+  <label class="interval-custom-choice"><input type="checkbox" data-interval-custom {{ 'checked' if is_custom }}> Custom interval</label>
+  <div data-interval-custom-fields {{ 'hidden' if not is_custom }}>
+    <div class="interval-inputs">
+      <label for="interval-value">Every<input id="interval-value" name="interval_value" type="number" inputmode="numeric" min="{{ 30 if divisor == 1 else 1 }}" max="{{ 2592000 // divisor }}" step="1" required value="{{ seconds // divisor }}" aria-describedby="interval-help"></label>
+      <label for="interval-unit">Unit<select id="interval-unit" name="interval_unit">{% for value, label, factor in [('seconds', 'Seconds', 1), ('minutes', 'Minutes', 60), ('hours', 'Hours', 3600), ('days', 'Days', 86400)] %}<option value="{{ value }}" {{ 'selected' if divisor == factor }}>{{ label }}</option>{% endfor %}</select></label>
+    </div>
+    <small id="interval-help">Choose a whole number, from 30 seconds to 30 days.</small>
+    <small data-interval-conversion role="status"></small>
+  </div>
+</fieldset>
