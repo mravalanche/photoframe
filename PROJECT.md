@@ -360,9 +360,59 @@ candidate that passed the repository check.
 
 The managed web updater, privileged helper boundary, signed bundle pipeline, one-time migration,
 and device acceptance drill are documented in [Managed updates](docs/managed-updates.md).
-This integration does not itself publish a production signing key or claim a completed Pi soak.
+Production signing trust is configured; see [Signing setup](release/README.md).
+The physical Pi soak and update/rollback acceptance drill remain outstanding.
 The normal reviewed, green-CI path into develop still applies; promotion to main requires the
 recorded physical-device update and rollback drill.
+
+### Feature priorities — agreed 2026-09-20
+
+The order below is the product backlog, separate from the engineering and release-readiness
+work below. These are proposals, not implemented features. Portrait-photo support is the first
+priority, followed by hiding photos from the frame.
+
+- [ ] **1. Portrait photos and per-photo framing.** Make portrait and square photos discoverable
+  and selectable even on a landscape frame; they are currently excluded by orientation. Offer
+  per-photo **Show whole photo / Fill frame**, simple black or white borders, and an accurate
+  preview using the same preparation as the physical display. Preserve current defaults for
+  other photos and provider originals. Start here before considering a manual crop/focal-point
+  editor or automatic face detection.
+- [ ] **2. Hide from this frame.** Exclude selected photos from this frame's rotation without
+  deleting or modifying them in Immich. Include immediate Undo and a hidden-photo list with
+  Restore. Persist exclusions across restart and handle hiding the last eligible photo safely.
+- [ ] **3. Keep this photo.** Hold the last successfully displayed photo until a chosen time or
+  manual resume, with the exact local resume time visible. Persist through restart, continue
+  library refreshes, and resume without replaying missed updates. Make the effect of manually
+  showing another photo during a hold explicit.
+- [ ] **4. Recently displayed.** Keep a bounded history of successfully displayed photos with
+  **Show again**. Do not record previews or failed renders as displayed photos.
+- [ ] **5. Memories from past years.** Offer photos from around this date in previous years,
+  restricted to explicitly selected albums. Show the year clearly, respect hidden photos,
+  avoid excessive repetition, and fall back to ordinary rotation when nothing matches.
+- [ ] **6. Mix several albums.** Combine selected albums into one rotation with duplicate removal
+  and predictable ordering. Respect resource limits; named presets can follow the basic mix.
+- [ ] **7. Find photos faster.** Add searchable albums and a paged, date-grouped photo chooser
+  instead of relying only on a long thumbnail rail. Revisit priority if library size makes
+  discovery a frequent problem.
+
+### Developer maintenance and appliance reliability
+
+- [ ] **Review outdated code, dependencies and tooling.** Audit runtime/development dependencies,
+  Python APIs, GitHub Actions, installer assumptions and documentation. Record supported versions
+  and replace obsolete usage with tested alternatives; distinguish useful upgrades from churn.
+- [ ] **Evaluate Python 3.14.** Check application and dependency support, especially Pillow,
+  Inky/GPIO integrations and ARM64 wheels, then test on the physical Pi before deciding whether
+  to raise the supported/minimum Python version. The current managed bundle/helper contract is
+  Python 3.12: plan interpreter provisioning, bundle compatibility, migration and rollback before
+  changing it. Keep project metadata, lockfile, CI, tooling and installation docs consistent.
+- [ ] **Eliminate deprecation warnings.** Audit startup, normal browser workflows, tests and
+  release builds. Address the observed FastAPI `on_event` lifecycle and Starlette/httpx test-client
+  deprecations, plus any others found, through supported APIs/dependencies rather than blanket
+  suppression. Add a focused warning-as-error regression gate once the baseline is clean.
+- [ ] **Reliable offline rotation, including after reboot.** Existing originals are cached, but
+  the catalog is held in memory. Persist enough catalog/prepared-photo state to keep rotating
+  available photos through an offline restart. Provide concise readiness/failure information
+  without requiring users to manage a cache queue; preserve storage and memory bounds.
 
 ### P0 — security, recovery, and release confidence
 
