@@ -113,7 +113,6 @@ def migration(monkeypatch, tmp_path):
         restore_owned(path, payload, mode, uid, gid)
 
     monkeypatch.setattr(module, "restore_owned_file", restore_recorded)
-    monkeypatch.setattr(module, "hash_pin", lambda pin: "hash")
     key = Mock()
     key.public_bytes.return_value = b"key"
     monkeypatch.setattr(module, "load_public_key", lambda path: key)
@@ -147,7 +146,7 @@ def test_failed_readiness_restores_old_install_and_allows_retry(migration, monke
 
     monkeypatch.setattr(module, "wait_ready", fail_ready)
     with pytest.raises(RuntimeError, match="failed readiness"):
-        module.bootstrap(args, "example-password", layout=layout)
+        module.bootstrap(args, layout=layout)
     assert settings.read_bytes() == b"# old-settings"
     assert (layout.units / "photoframe.service").read_bytes() == b"old-unit"
     assert (settings, original.st_uid, original.st_gid) in ownership
@@ -159,8 +158,9 @@ def test_failed_readiness_restores_old_install_and_allows_retry(migration, monke
     assert ["systemctl", "disable", "photoframe.service"] in calls
     assert calls[-1] == ["systemctl", "start", "photoframe.service"]
     monkeypatch.setattr(module, "wait_ready", lambda *args: None)
-    module.bootstrap(args, "example-password", layout=layout)
+    module.bootstrap(args, layout=layout)
     assert (args.root / "current").exists()
+    assert not (layout.config / "update-pin.hash").exists()
 
 
 def test_staging_failure_does_not_stop_existing_service(migration, monkeypatch):
@@ -171,7 +171,7 @@ def test_staging_failure_does_not_stop_existing_service(migration, monkeypatch):
 
     monkeypatch.setattr(module, "install_environment", fail_install)
     with pytest.raises(RuntimeError, match="wheel install failed"):
-        module.bootstrap(args, "example-password", layout=layout)
+        module.bootstrap(args, layout=layout)
     assert not any("stop" in call for call in calls)
     assert not args.root.exists()
     assert (args.data_dir / "settings.toml").read_bytes() == b"# old-settings"

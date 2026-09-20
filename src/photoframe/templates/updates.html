@@ -23,13 +23,7 @@
   </section>
   <section class="update-card" id="managed-controls" hidden aria-labelledby="controls-title">
     <h2 id="controls-title">Manage updates</h2>
-    <form id="unlock-form">
-      <label for="update-pin">Administrator update PIN</label>
-      <input id="update-pin" type="password" autocomplete="current-password" minlength="8" maxlength="128" required aria-describedby="pin-help">
-      <p id="pin-help">Use the PIN configured during installation. Update controls lock after 15 minutes.</p>
-      <button type="submit">Unlock update controls</button>
-    </form>
-    <div id="unlocked" hidden>
+    <div>
       <label class="update-checkbox"><input id="weekly-checks" type="checkbox"> Check for stable updates weekly</label>
       <p>Checks only look for releases. Downloading and restarting always require your choice.</p>
       <div class="update-actions">
@@ -37,7 +31,6 @@
         <button id="stage-update" type="button" disabled>Download & verify</button>
         <button id="apply-update" type="button" disabled>Apply & restart</button>
         <button id="rollback-update" type="button" hidden>Restore previous version</button>
-        <button id="lock-update" type="button">Lock controls</button>
       </div>
     </div>
   </section>

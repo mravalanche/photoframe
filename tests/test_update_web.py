@@ -4,16 +4,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from photoframe import __version__
-from photoframe.updater.auth import PinStore
 from photoframe.updater.managed import ManagedInstallation
 from photoframe.web import create_app
 
 
 @pytest.fixture
-def updater(tmp_path, monkeypatch):
-    pin = tmp_path / "pin"
-    PinStore(pin).establish("test-123456")
-    monkeypatch.setenv("PHOTOFRAME_UPDATE_PIN_FILE", str(pin))
+def updater(tmp_path):
     app = create_app(tmp_path)
     controller = app.state.updater
     controller.installation = ManagedInstallation(True, "Managed", tmp_path)
@@ -22,28 +18,26 @@ def updater(tmp_path, monkeypatch):
     return app, controller
 
 
-def login(client):
-    response = client.post(
-        "/api/updates/login", json={"pin": "test-123456"}, headers={"Origin": "http://testserver"}
-    )
+def browser_session(client):
+    response = client.post("/api/updates/session", json={}, headers={"Origin": "http://testserver"})
     assert response.status_code == 200
     assert "HttpOnly" in response.headers["set-cookie"]
     return {"Origin": "http://testserver", "X-CSRF-Token": response.json()["csrf"]}
 
 
-def test_auth_origin_csrf_and_rate_limit(updater):
+def test_passphrase_free_session_still_requires_origin_and_csrf(updater):
     app, controller = updater
     client = TestClient(app)
-    assert client.post("/api/updates/login", json={"pin": "test-123456"}).status_code == 403
+    assert client.post("/api/updates/session", json={}).status_code == 403
     assert (
         client.post(
-            "/api/updates/login",
-            json={"pin": "test-123456"},
+            "/api/updates/session",
+            json={},
             headers={"Origin": "https://evil.example"},
         ).status_code
         == 403
     )
-    headers = login(client)
+    headers = browser_session(client)
     assert (
         client.post(
             "/api/updates/check", json={}, headers={"Origin": "http://testserver"}
@@ -52,29 +46,12 @@ def test_auth_origin_csrf_and_rate_limit(updater):
     )
     assert client.post("/api/updates/check", json={}, headers=headers).status_code == 200
     assert controller.helper.call.call_args.args[0] == "check"
-    for _ in range(5):
-        assert (
-            client.post(
-                "/api/updates/login",
-                json={"pin": "wrong-pin"},
-                headers={"Origin": "http://testserver"},
-            ).status_code
-            == 403
-        )
-    assert (
-        client.post(
-            "/api/updates/login",
-            json={"pin": "test-123456"},
-            headers={"Origin": "http://testserver"},
-        ).status_code
-        == 429
-    )
 
 
 def test_explicit_apply_and_maintenance(updater):
     app, controller = updater
     client = TestClient(app)
-    headers = login(client)
+    headers = browser_session(client)
     assert (
         client.post("/api/updates/activate", json={"release": "1.3.0"}, headers=headers).status_code
         == 400
@@ -90,6 +67,43 @@ def test_explicit_apply_and_maintenance(updater):
     assert client.get("/health/update").json() == {"version": __version__, "ready": True}
 
 
+def test_browser_session_renews_without_credentials_and_ignores_old_pin(tmp_path, monkeypatch):
+    old_pin = tmp_path / "update-pin.hash"
+    old_pin.write_text("obsolete credential")
+    monkeypatch.setenv("PHOTOFRAME_UPDATE_PIN_FILE", str(old_pin))
+    app = create_app(tmp_path)
+    app.state.updater.installation = ManagedInstallation(True, "Managed", tmp_path)
+    app.state.updater.helper = Mock()
+    app.state.updater.helper.call.return_value = {"ok": True, "phase": "idle"}
+    client = TestClient(app)
+    previous = browser_session(client)
+    current = browser_session(client)
+    assert current["X-CSRF-Token"] != previous["X-CSRF-Token"]
+    assert client.post("/api/updates/check", json={}, headers=previous).status_code == 403
+    assert client.post("/api/updates/check", json={}, headers=current).status_code == 200
+    assert old_pin.read_text() == "obsolete credential"
+    assert client.post("/api/updates/logout", json={}, headers=current).status_code == 400
+
+
+def test_browser_session_rejects_non_json_and_has_secure_cookie(updater):
+    app, controller = updater
+    client = TestClient(app, base_url="https://testserver")
+    assert (
+        client.post(
+            "/api/updates/session", content="{}", headers={"Origin": "https://testserver"}
+        ).status_code
+        == 403
+    )
+    response = client.post(
+        "/api/updates/session", json={}, headers={"Origin": "https://testserver"}
+    )
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert "Secure" in response.headers["set-cookie"]
+    assert "SameSite=strict" in response.headers["set-cookie"]
+    controller.helper.call.assert_not_called()
+
+
 def test_failed_apply_releases_gate(updater):
     app, controller = updater
     controller.helper.call.return_value = {"ok": False, "message": "Not staged"}
@@ -103,7 +117,7 @@ def test_weekly_preference_survives_restart(updater):
     client = TestClient(app)
     assert (
         client.post(
-            "/api/updates/preferences", json={"weekly": False}, headers=login(client)
+            "/api/updates/preferences", json={"weekly": False}, headers=browser_session(client)
         ).status_code
         == 200
     )
@@ -124,7 +138,9 @@ def test_unmanaged_no_mutation_and_accessible_page(tmp_path):
         app.state.updater.action("stage", "1.3.0")
     html = client.get("/updates").text
     assert 'role="status"' in html
-    assert "Administrator update PIN" in html
+    assert "update-pin" not in html
+    assert "unlock-form" not in html
+    assert "lock-update" not in html
     assert "Apply &amp;" in html or "Apply & restart" in html
     assert "Software updates" in client.get("/").text
 
@@ -165,7 +181,7 @@ def test_activation_retries_same_durable_id_when_acceptance_unknown(updater):
 def test_browser_job_id_and_large_payload(updater):
     app, controller = updater
     client = TestClient(app)
-    headers = login(client)
+    headers = browser_session(client)
     assert (
         client.post("/api/updates/check", json={"junk": "x" * 4096}, headers=headers).status_code
         == 400
@@ -195,7 +211,7 @@ def test_preparation_failure_never_retries_or_locks_frame(updater, monkeypatch):
 def test_invalid_request_id_is_rejected(updater):
     app, _controller = updater
     client = TestClient(app)
-    headers = login(client)
+    headers = browser_session(client)
     response = client.post("/api/updates/check", json={"request_id": {}}, headers=headers)
     assert response.status_code == 400
 
