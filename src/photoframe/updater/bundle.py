@@ -66,7 +66,7 @@ def build_bundle(wheelhouse: Path, output: Path, version: str, commit: str) -> P
     with (
         target.open("xb") as handle,
         gzip.GzipFile(fileobj=handle, mode="wb", mtime=0, filename="") as compressed,
-        tarfile.open(fileobj=compressed, mode="w", format=tarfile.USTAR_FORMAT) as archive,
+        tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as archive,
     ):
         entries = [("release.json", canonical_json(identity))]
         entries.extend((f"wheelhouse/{wheel.name}", wheel.read_bytes()) for wheel in wheels)

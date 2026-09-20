@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from photoframe.updater.bootstrap import install_environment, service_units, validate_path
 from photoframe.updater.bundle import build_bundle, release_identity, sign_bundle
+from photoframe.updater.helper import safe_extract
 from photoframe.updater.manifest import SignedManifest
 
 
@@ -90,3 +91,24 @@ def test_install_environment_is_offline_and_installs_hardware_extra(monkeypatch,
     assert "--isolated" in commands[1]
     assert "photoframe[inky]==1.3.0" in commands[1]
     assert commands[-1][-1] == "check"
+
+
+def test_long_platform_wheel_names_are_deterministic_and_extract_safely(tmp_path):
+    wheels = wheelhouse(tmp_path)
+    tags = [
+        "manylinux_2_17_aarch64",
+        "manylinux2014_aarch64",
+        "manylinux_2_28_aarch64",
+        "manylinux_2_31_aarch64",
+    ]
+    name = "dependency-1.0.0-cp312-cp312-" + ".".join(tags) + ".whl"
+    assert len(name) > 100
+    with zipfile.ZipFile(wheels / name, "w") as wheel:
+        wheel.writestr("dependency/__init__.py", "")
+    first = build_bundle(wheels, tmp_path / "first", "1.3.0", "a" * 40)
+    second = build_bundle(wheels, tmp_path / "second", "1.3.0", "a" * 40)
+    assert first.read_bytes() == second.read_bytes()
+    destination = tmp_path / "extracted"
+    destination.mkdir()
+    safe_extract(first, destination)
+    assert (destination / "wheelhouse" / name).read_bytes() == (wheels / name).read_bytes()
