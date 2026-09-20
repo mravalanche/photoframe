@@ -1012,3 +1012,34 @@ body.has-activity { padding-bottom: calc(160px + env(safe-area-inset-bottom)); }
   .app-header > a:not(.brand) { order: 3; flex-basis: 100%; color: var(--muted); font-size: 12px; }
   .notification-stack { top: 102px; }
 }
+
+/* Photo controls remain in the document so mobile framing never obscures activity. */
+.interval-fields { min-width: 0; margin: 0; padding: 0; border: 0; }
+.interval-fields legend { font-size: 11px; color: var(--muted); font-weight: 650; margin-bottom: 6px; }
+.interval-inputs { display: grid; grid-template-columns: minmax(70px, 1fr) minmax(95px, 1fr); gap: 8px; }
+.interval-fields > small { display: block; color: var(--muted); font-size: 11px; margin-top: 6px; }
+.hidden-photos { border: 1px solid var(--line); padding: 16px; border-radius: 10px; }
+.hidden-photos summary { cursor: pointer; min-height: 32px; font-weight: 650; }
+.hidden-photos p, .hide-photo-form small { color: var(--muted); font-size: 12px; }
+.hidden-photo-row { display: flex; gap: 14px; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.hidden-photo-row span { overflow-wrap: anywhere; min-width: 0; }
+.hidden-photo-row button { flex-shrink: 0; }
+.photo-editor { align-items: start; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr); }
+.photo-editor .selected-image { height: auto; padding: 0; overflow: hidden; }
+.photo-editor .selected-image img { width: 100%; height: auto; display: block; object-fit: contain; }
+.photo-editor .selected-copy { min-width: 0; }
+.photo-editor h2 { overflow-wrap: anywhere; }
+.framing-form { margin-bottom: 18px; }
+.hide-photo-form { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+.hide-photo-form small { display: block; }
+.photo-editor .framing-required { display: block; font-size: 13px; color: var(--amber); }
+@media (max-width: 760px) {
+  .photo-editor { position: static; display: grid; grid-template-columns: 1fr; padding: 16px; box-shadow: none; }
+  .photo-editor .selected-image { max-width: 100%; }
+  .photo-editor .selected-copy > p:not(.kicker) { display: block; font-size: 13px; }
+  .photo-editor .framing-form { grid-template-columns: 1fr 1fr; }
+  .photo-editor .framing-form .span-2 { grid-column: 1 / -1; }
+}
+
+.photo-hidden-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--moss); border-radius: 10px; background: var(--moss-soft); }
+.photo-hidden-notice span { flex: 1; overflow-wrap: anywhere; }

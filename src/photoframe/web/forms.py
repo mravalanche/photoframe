@@ -21,6 +21,26 @@ def _text(form: Mapping[str, object], key: str, default: str = "") -> str:
     return str(form.get(key, default)).strip()
 
 
+def parse_rotation_seconds(form: Mapping[str, object], *, default: int | None = None) -> int:
+    """Parse the human interval and legacy seconds without rounding durations."""
+    if "interval_value" in form or "interval_unit" in form:
+        units = {"seconds": 1, "minutes": 60, "hours": 3600, "days": 86400}
+        unit = _text(form, "interval_unit")
+        if unit not in units:
+            raise ValueError("Choose seconds, minutes, hours or days for the interval")
+        raw = _text(form, "interval_value")
+        multiplier = units[unit]
+    else:
+        raw = _text(form, "rotation_seconds", str(default) if default is not None else "")
+        multiplier = 1
+    if not raw.isascii() or not raw.isdecimal() or len(raw) > 7:
+        raise ValueError("Enter a whole-number interval between 30 seconds and 30 days")
+    seconds = int(raw) * multiplier
+    if not 30 <= seconds <= 2_592_000:
+        raise ValueError("Choose an interval between 30 seconds and 30 days")
+    return seconds
+
+
 @dataclass(frozen=True)
 class ConnectionForm:
     server_url: str
@@ -88,7 +108,7 @@ class WorkflowForm:
         model = _text(form, "display_model")
         return cls(
             orientation=Orientation(_text(form, "orientation")),
-            rotation_seconds=int(_text(form, "rotation_seconds")),
+            rotation_seconds=parse_rotation_seconds(form),
             schedule_mode=ScheduleMode(_text(form, "schedule_mode", "interval")),
             daily_time=_text(form, "daily_time", "03:00"),
             weekly_day=int(_text(form, "weekly_day", "0")),

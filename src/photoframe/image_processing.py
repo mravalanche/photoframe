@@ -53,7 +53,9 @@ def image_is_decodable(source: bytes) -> bool:
     return True
 
 
-def prepare_for_display(source: bytes, target_size: tuple[int, int]) -> Image.Image:
+def prepare_for_display(
+    source: bytes, target_size: tuple[int, int], *, fit_mode: str = "fill", matte: str = "white"
+) -> Image.Image:
     """Return an RGB image that exactly fills ``target_size``.
 
     The image is oriented using EXIF metadata, cropped centrally only as needed
@@ -65,8 +67,20 @@ def prepare_for_display(source: bytes, target_size: tuple[int, int]) -> Image.Im
     width, height = target_size
     if width < 1 or height < 1:
         raise ValueError("Display dimensions must be positive")
+    if fit_mode not in {"fit", "fill"} or matte not in {"black", "white"}:
+        raise ValueError("Choose fit or fill and a black or white border")
     image = decode_image(source)
     try:
+        if fit_mode == "fit":
+            contained = ImageOps.contain(image, target_size, method=Image.Resampling.LANCZOS)
+            try:
+                canvas = Image.new("RGB", target_size, matte)
+                canvas.paste(
+                    contained, ((width - contained.width) // 2, (height - contained.height) // 2)
+                )
+                return canvas
+            finally:
+                contained.close()
         return ImageOps.fit(
             image,
             (width, height),

@@ -1,3 +1,4 @@
+import hashlib
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated
@@ -62,8 +63,28 @@ class ProviderSettings(BaseModel):
     server_url: HttpUrl | None = None
 
 
+class PhotoFraming(BaseModel):
+    fit_mode: str = Field(default="fill", pattern="^(fit|fill)$")
+    matte: str = Field(default="white", pattern="^(black|white)$")
+
+
+class PhotoPreference(PhotoFraming):
+    hidden: bool = False
+    included: bool = False
+
+
 class FrameSettings(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
+
+    photo_scope: str = Field(default="", exclude=True)
+    photo_preferences: dict[str, dict[str, PhotoPreference]] = Field(default_factory=dict)
+
+    def preference(self, photo_id: str) -> PhotoPreference:
+        return self.photo_preferences.get(self.photo_scope, {}).get(photo_id, PhotoPreference())
+
+    def allows(self, photo: "Photo") -> bool:
+        preference = self.preference(photo.id)
+        return not preference.hidden and (preference.included or photo.matches(self.orientation))
 
     orientation: Orientation = Orientation.LANDSCAPE
     rotation_seconds: Annotated[int, Field(ge=30, le=2_592_000)] = 3600
@@ -207,6 +228,7 @@ class RefreshStatus(BaseModel):
     last_completed_schedule_key: str | None = None
     last_attempted_schedule_key: str | None = None
     last_rendered_photo_id: str | None = None
+    display_snapshot_token: str | None = None
     last_render_error: str | None = None
 
 
@@ -217,6 +239,12 @@ class Verification(BaseModel):
 
 
 class AppSettings(BaseModel):
+    @model_validator(mode="after")
+    def bind_photo_scope(self) -> "AppSettings":
+        source = f"{self.provider.kind}:{str(self.provider.server_url or '').rstrip('/')}"
+        self.frame.photo_scope = hashlib.sha256(source.encode()).hexdigest()
+        return self
+
     schema_version: int = 2
     provider: ProviderSettings = Field(default_factory=ProviderSettings)
     frame: FrameSettings = Field(default_factory=FrameSettings)

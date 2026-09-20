@@ -2,6 +2,7 @@ import os
 import secrets as secure_random
 from collections.abc import Callable
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -15,7 +16,7 @@ from fastapi.templating import Jinja2Templates
 
 from .. import __version__
 from ..lifecycle import RefreshWorker, health_payload
-from ..models import NetworkAccess, PhotoOrder, ScheduleMode
+from ..models import NetworkAccess, PhotoFraming, PhotoOrder, ScheduleMode
 from ..providers import ConfiguredProviderResolver, DemoProvider, ProviderError, ProviderResolver
 from ..renderer import RenderPhase
 from ..schedule import next_occurrence
@@ -32,6 +33,7 @@ from .forms import (
     NextPhotoForm,
     PhotoForm,
     WorkflowForm,
+    parse_rotation_seconds,
 )
 from .updates import register_updates
 
@@ -178,7 +180,8 @@ def create_app(
         )
         if not rendered_photo:
             rendered_photo = runtime.preserved_display_photo()
-        displayed_photo = rendered_photo or selection.photo
+        snapshot_photo = runtime.displayed_snapshot_photo()
+        displayed_photo = snapshot_photo or rendered_photo or selection.photo
         render_photo = runtime.photo(render_state.photo_id)
         completion_age_seconds = (
             max(0.0, (current - render_state.finished_at).total_seconds())
@@ -238,10 +241,32 @@ def create_app(
             "current_album_available": current_album_available,
             "photos": photos,
             "eligible": eligible,
+            "browse_photos": [
+                photo
+                for photo in photos
+                if not settings.frame.preference(photo.id).hidden
+                and not runtime.known_unsupported(photo.id)
+            ],
+            "hidden_photos": [
+                photo for photo in photos if settings.frame.preference(photo.id).hidden
+            ],
+            "selected_framing": (
+                PhotoFraming(fit_mode="fit")
+                if selected_photo
+                and not selected_photo.matches(settings.frame.orientation)
+                and not settings.frame.preference(selected_photo.id).included
+                else settings.frame.preference(selected_photo.id)
+                if selected_photo
+                else PhotoFraming()
+            ),
+            "selected_rotation_eligible": bool(
+                selected_photo and selected_photo.id in {photo.id for photo in eligible}
+            ),
             "wrong_orientation_count": eligibility.wrong_orientation,
             "unsupported_count": eligibility.unsupported,
             "selection": selection,
             "displayed_photo": displayed_photo,
+            "display_snapshot_available": snapshot_photo is not None,
             "selected_photo": selected_photo,
             "render_photo": render_photo,
             "next_photo": following_photo,
@@ -417,10 +442,71 @@ def create_app(
     async def preview_photo(request: Request) -> HTMLResponse:
         try:
             form = PhotoForm.parse(await request.form())
-            configuration.preview_photo(form.photo_id)
-            return workspace(request)
-        except ValueError as exc:
-            return workspace(request, error=str(exc))
+            await run_in_threadpool(configuration.preview_photo, form.photo_id)
+            return await run_in_threadpool(workspace, request)
+        except (ValueError, ProviderError, RuntimeError) as exc:
+            return await run_in_threadpool(workspace, request, error=str(exc))
+
+    @app.post("/photo/framing", response_class=HTMLResponse)
+    async def save_photo_framing(request: Request) -> HTMLResponse:
+        try:
+            form = await request.form()
+            framing = PhotoFraming.model_validate(dict(form))
+            notice = await run_in_threadpool(
+                configuration.save_framing, str(form.get("photo_id", "")), framing
+            )
+            return await run_in_threadpool(workspace, request, notice=notice)
+        except (ValueError, ProviderError, RuntimeError) as exc:
+            return await run_in_threadpool(workspace, request, error=str(exc))
+
+    @app.post("/photo/hide", response_class=HTMLResponse)
+    @app.post("/photo/unhide", response_class=HTMLResponse)
+    async def hide_photo(request: Request) -> HTMLResponse:
+        try:
+            form = PhotoForm.parse(await request.form())
+            notice = await run_in_threadpool(
+                configuration.set_hidden, form.photo_id, request.url.path == "/photo/hide"
+            )
+            context = await run_in_threadpool(workspace_context, request, notice=notice)
+            context["just_hidden_photo"] = (
+                runtime.photo(form.photo_id) if request.url.path == "/photo/hide" else None
+            )
+            return templates.TemplateResponse(request, "_workspace.html", context)
+        except (ValueError, ProviderError, RuntimeError) as exc:
+            return await run_in_threadpool(workspace, request, error=str(exc))
+
+    @app.get("/photos/displayed")
+    def displayed_snapshot() -> Response:
+        try:
+            if runtime.displayed_snapshot_photo() is None:
+                return Response(status_code=404)
+            return Response(
+                runtime.display_snapshot_path.read_bytes(),
+                media_type="image/png",
+                headers={"Cache-Control": "no-store"},
+            )
+        except OSError:
+            return Response(status_code=404)
+
+    @app.get("/photos/{photo_id}/prepared")
+    def prepared_photo(
+        photo_id: str, fit_mode: str | None = None, matte: str | None = None
+    ) -> Response:
+        try:
+            configuration.require_browsable(photo_id)
+            saved = repository.load().frame.preference(photo_id)
+            framing = PhotoFraming(fit_mode=fit_mode or saved.fit_mode, matte=matte or saved.matte)
+            image = runtime.prepare_photo(photo_id, framing, preview=True)
+            try:
+                output = BytesIO()
+                image.save(output, format="PNG")
+                return Response(
+                    output.getvalue(), media_type="image/png", headers={"Cache-Control": "no-store"}
+                )
+            finally:
+                image.close()
+        except (ValueError, ProviderError, RuntimeError) as exc:
+            return Response(str(exc), status_code=422, media_type="text/plain")
 
     @app.post("/photo/preview/clear", response_class=HTMLResponse)
     def clear_preview(request: Request) -> HTMLResponse:
@@ -480,7 +566,9 @@ def create_app(
             settings = repository.load()
             frame = settings.frame.model_copy(deep=True)
             frame.schedule_mode = ScheduleMode(str(form.get("schedule_mode", "interval")))
-            frame.rotation_seconds = int(str(form.get("rotation_seconds", "3600")))
+            frame.rotation_seconds = parse_rotation_seconds(
+                form, default=settings.frame.rotation_seconds
+            )
             frame.daily_time = str(form.get("daily_time", "03:00"))
             frame.weekly_day = int(str(form.get("weekly_day", "0")))
             frame.weekly_time = str(form.get("weekly_time", "03:00"))
