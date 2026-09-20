@@ -46,9 +46,8 @@ sudo /path/to/checkout/.venv/bin/python -m photoframe.updater.bootstrap \
   --public-key /path/to/reviewed/update-signing-key.pem
 ```
 
-The prompt establishes an update-admin PIN/passphrase of at least eight ASCII
-characters, stored as a salted scrypt hash. It is never passed on the command line.
-Choose a strong passphrase. Existing photos, settings, credentials, TLS identity,
+No update PIN or passphrase is required during installation or browser updates.
+Existing photos, settings, credentials, TLS identity,
 album selection and scheduling remain in their original data directory. The
 bootstrap replaces the systemd unit, keeping a recovery copy of the original.
 Saved listener and firewall settings are preserved.
@@ -61,7 +60,7 @@ Managed layout:
 | `/opt/photoframe/current` | Atomic pointer to the active release |
 | `/opt/photoframe/helper-venv` | Independent root-owned updater runtime |
 | `/opt/photoframe/snapshots` | Private pre-update settings snapshots |
-| `/etc/photoframe` | Pinned public key, helper token and update PIN hash |
+| `/etc/photoframe` | Pinned public key and helper token |
 | `/var/lib/photoframe-updater` | Root-owned durable job and rollback state |
 | Existing data directory | App-owned persistent photos, settings, secrets and TLS |
 
@@ -71,8 +70,8 @@ ordinary app updates cannot silently replace the trust anchor or privileged help
 
 ## Routine use and failure handling
 
-Open **Software updates**, unlock controls with the update PIN, and choose **Check
-now**. Review the release notes, choose **Download & verify**, then **Apply &
+Open **Software updates** and choose **Check now**. Review the release notes,
+choose **Download & verify**, then **Apply &
 restart**. Applying waits for application work and the physical display to become
 idle; a busy frame leaves the current version running. Other writes are temporarily
 rejected while activation is underway.
@@ -110,9 +109,12 @@ Do not run both installation types against the same data directory.
 The web process remains unprivileged and cannot write release slots or the helper
 runtime. The helper accepts only fixed versioned operations over a restricted local
 socket and token; release URLs and repository are fixed. The browser uses a short
-session with HttpOnly/SameSite cookies, CSRF and Origin checks and PIN rate limits.
-Use HTTPS for the LAN listener so the PIN is encrypted in transit. This PIN protects
-updates only; it does not add login protection to the existing photo/settings UI.
+session established automatically, with HttpOnly/SameSite cookies, CSRF and Origin
+checks. These checks protect browser requests; they do not authenticate users.
+Anyone who can access the app can request an official signed update or rollback.
+Use the app on a trusted network and use HTTPS for the LAN listener.
+Existing installations with an old `update-pin.hash` file can leave it in place;
+the app no longer reads it and no credential migration is necessary.
 
 Signing authority and a compromised root account remain trusted. The helper's
 local token is available to the app account, so a compromised app process can

@@ -1,8 +1,6 @@
-"""Authenticated browser endpoints for appliance updates."""
+"""Same-origin browser endpoints for appliance updates."""
 
 import json
-import os
-from pathlib import Path
 from uuid import UUID
 
 from fastapi import Request
@@ -13,8 +11,6 @@ from .. import __version__
 from ..lifecycle import RefreshWorker
 from ..updater.auth import (
     AuthenticationError,
-    PinStore,
-    RateLimiter,
     SessionStore,
     require_same_origin,
 )
@@ -24,8 +20,7 @@ from ..updater.controller import UpdateController
 def register_updates(app, templates, runtime, data_dir):
     controller = UpdateController(data_dir, runtime)
     app.state.updater = controller
-    sessions, limiter = SessionStore(), RateLimiter()
-    pin = PinStore(Path(os.getenv("PHOTOFRAME_UPDATE_PIN_FILE", "/etc/photoframe/update-pin.hash")))
+    sessions = SessionStore()
     worker = RefreshWorker(controller.tick)
     app.router.add_event_handler("startup", worker.start)
     app.router.add_event_handler("shutdown", worker.stop)
@@ -66,25 +61,12 @@ def register_updates(app, templates, runtime, data_dir):
             body = json.loads(raw)
             if not isinstance(body, dict):
                 raise ValueError("Invalid request")
-            if action == "login":
-                identity = request.client.host if request.client else "unknown"
-                if not limiter.allow(identity) or not limiter.allow("global"):
-                    return JSONResponse(
-                        {"message": "Too many attempts. Try again in five minutes."},
-                        status_code=429,
-                    )
-                value = body.get("pin", "")
-                if (
-                    not isinstance(value, str)
-                    or not 8 <= len(value) <= 128
-                    or not pin.verify(value)
-                ):
-                    limiter.fail(identity)
-                    limiter.fail("global")
-                    raise AuthenticationError("Incorrect update PIN")
-                limiter.clear(identity)
+            if action == "session":
+                sessions.revoke(request.cookies.get("photoframe_update"))
                 session = sessions.create()
-                response = JSONResponse({"csrf": session.csrf})
+                response = JSONResponse(
+                    {"csrf": session.csrf}, headers={"Cache-Control": "no-store"}
+                )
                 response.set_cookie(
                     "photoframe_update",
                     session.token,
@@ -98,11 +80,6 @@ def register_updates(app, templates, runtime, data_dir):
             sessions.require(
                 request.cookies.get("photoframe_update"), request.headers.get("x-csrf-token")
             )
-            if action == "logout":
-                sessions.revoke(request.cookies.get("photoframe_update"))
-                response = JSONResponse({"message": "Update controls locked"})
-                response.delete_cookie("photoframe_update", path="/api/updates")
-                return response
             if action == "preferences":
                 if type(body.get("weekly")) is not bool:
                     raise ValueError("Weekly checks must be on or off")

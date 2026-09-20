@@ -3,8 +3,6 @@
   let csrf = null, state = {}, timer, failures = 0, busy = false, pendingAction = 'activate';
   const active = new Set(['queued', 'checking', 'downloading', 'staging', 'verifying', 'activating', 'restarting', 'health_check', 'rolling_back']);
   function controls() {
-    el('unlock-form').hidden = Boolean(csrf);
-    el('unlocked').hidden = !csrf;
     const blocked = busy || active.has(state.phase);
     el('check-update').disabled = blocked;
     el('weekly-checks').disabled = blocked;
@@ -14,9 +12,10 @@
     el('rollback-update').disabled = blocked;
   }
   async function send(action, body = {}) {
+    if (action !== 'session') csrf = (await send('session')).csrf;
     const response = await fetch(`/api/updates/${action}`, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json', 'X-CSRF-Token':csrf || ''}, body:JSON.stringify(body), signal:AbortSignal.timeout(45000)});
     const result = await response.json();
-    if (!response.ok) { if (response.status === 403 && action !== 'login') csrf = null; throw new Error(result.message || 'Update request failed'); }
+    if (!response.ok) { throw new Error(result.message || 'Update request failed'); }
     return result;
   }
   async function action(name, body) {
@@ -50,11 +49,6 @@
       if (failures < 9) timer = setTimeout(poll, Math.min(30000, 1000 * 2 ** failures));
     }
   }
-  el('unlock-form').addEventListener('submit', async event => {
-    event.preventDefault(); el('update-error').textContent = '';
-    try { csrf = (await send('login', {pin:el('update-pin').value})).csrf; el('update-pin').value = ''; controls(); el('check-update').focus(); }
-    catch(error) { el('update-error').textContent = error.message; }
-  });
   el('public-check').onclick = async () => { el('public-check').disabled = true; try { await fetch('/api/updates/releases', {signal:AbortSignal.timeout(15000)}); await poll(); } catch (_) { el('update-error').textContent = 'Release check unavailable. Try again later.'; } finally { el('public-check').disabled = false; } };
   el('check-update').onclick = () => action('check');
   el('stage-update').onclick = () => action('stage', {release:state.latest_manifest.version});
@@ -62,7 +56,6 @@
   el('apply-update').onclick = () => { pendingAction = 'activate'; el('confirm-title').textContent = 'Apply update and restart?'; el('confirm-detail').textContent = 'Your frame will pause briefly. Your saved settings and photos will be kept.'; el('confirm-action').textContent = 'Apply & restart'; el('apply-dialog').returnValue = ''; el('apply-dialog').showModal(); };
   el('rollback-update').onclick = () => { pendingAction = 'rollback'; el('confirm-title').textContent = 'Restore previous version and restart?'; el('confirm-detail').textContent = 'This also restores the settings saved before the update. Settings changes made since that update will be lost.'; el('confirm-action').textContent = 'Restore & restart'; el('apply-dialog').returnValue = ''; el('apply-dialog').showModal(); };
   el('apply-dialog').addEventListener('close', () => { if (el('apply-dialog').returnValue === 'confirm') action(pendingAction, {confirmed:true, ...(pendingAction === 'activate' ? {release:state.staged_version} : {})}); });
-  el('lock-update').onclick = async () => { await action('logout'); csrf = null; controls(); };
   el('reconnect').onclick = () => { failures = 0; poll(); };
   poll();
 })();

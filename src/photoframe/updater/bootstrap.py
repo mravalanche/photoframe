@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import getpass
 import json
 import os
 import platform
@@ -21,7 +20,6 @@ from pathlib import Path
 from cryptography.hazmat.primitives import serialization
 
 from ..persistence import atomic_write
-from .auth import hash_pin
 from .helper import (
     load_public_key,
     make_release_readable,
@@ -225,7 +223,7 @@ class SavedFile:
         restore_owned_file(path, self.payload, self.mode, self.uid, self.gid)
 
 
-def bootstrap(args: argparse.Namespace, pin: str, *, layout: InstallLayout | None = None) -> None:
+def bootstrap(args: argparse.Namespace, *, layout: InstallLayout | None = None) -> None:
     layout = layout or InstallLayout()
     check_platform()
     import grp
@@ -241,7 +239,7 @@ def bootstrap(args: argparse.Namespace, pin: str, *, layout: InstallLayout | Non
     trusted_path(args.root)
     for path in (layout.config, layout.state.parent, layout.units):
         trusted_path(path)
-    config_names = ("update-signing-key.pem", "updater.token", "update-pin.hash")
+    config_names = ("update-signing-key.pem", "updater.token")
     helper_unit = layout.units / "photoframe-updater.service"
     if root.exists() or any(
         (layout.config / name).exists() or (layout.config / name).is_symlink()
@@ -262,7 +260,6 @@ def bootstrap(args: argparse.Namespace, pin: str, *, layout: InstallLayout | Non
     )
     signed = SignedManifest.verify(args.manifest.read_bytes(), public_key)
     signed.verify_bundle(args.bundle)
-    encoded_pin = hash_pin(pin)
     units = service_units(root, data, args.user, group, python)
     unit_path = layout.units / "photoframe.service"
     old_unit = SavedFile.read(unit_path)
@@ -307,7 +304,6 @@ def bootstrap(args: argparse.Namespace, pin: str, *, layout: InstallLayout | Non
         for name, payload in {
             "update-signing-key.pem": public_bytes,
             "updater.token": secrets.token_hex(32).encode(),
-            "update-pin.hash": encoded_pin.encode(),
         }.items():
             path = layout.config / name
             atomic_write(path, payload, mode=0o640)
@@ -369,10 +365,7 @@ def main() -> None:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--public-key", type=Path, required=True)
     args = parser.parse_args()
-    pin = getpass.getpass("New update administrator PIN/passphrase (at least 8 characters): ")
-    if pin != getpass.getpass("Confirm PIN/passphrase: "):
-        parser.error("PIN entries do not match")
-    bootstrap(args, pin)
+    bootstrap(args)
 
 
 if __name__ == "__main__":
