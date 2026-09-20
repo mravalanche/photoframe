@@ -1,5 +1,29 @@
 # Managed release signing setup
 
+## Production trust configuration
+
+Established on 2026-09-20. The Ed25519 public key is
+`release/update-signing-key.pem`. Its SHA-256 fingerprint, calculated over DER
+SubjectPublicKeyInfo bytes, is:
+
+```text
+8066fec68b6ffd9b6dcabbda52ac73c0e0bb0cb74dfbf84e3a4542828e6f30d8
+```
+
+The private key is held in the `managed-releases` environment secret
+`PHOTOFRAME_RELEASE_SIGNING_KEY`. The environment permits only `v*` tags and requires
+approval from `mravalanche`; administrator bypass is disabled. The signing job will
+therefore wait for owner approval after a release is published. Review the exact tag,
+commit and workflow before approving. Release tags matching `v*` cannot be updated or
+deleted under the active repository ruleset, which has no bypass actors.
+
+The initial private-key copy is retained outside Git in the administrator's restricted
+local signing directory. Keep an encrypted offline backup before publishing and never
+attach the private key to a release or commit it. GitHub cannot return a stored secret.
+Physical Pi acceptance and the first signed release have not yet been completed.
+
+## Establishing or replacing trust
+
 The updater deliberately has no development key or unsigned fallback. Before the
 first managed release, the repository owner must:
 
