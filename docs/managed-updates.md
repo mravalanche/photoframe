@@ -9,9 +9,10 @@ they never download or install automatically.
 ## First release and supported device
 
 This feature is an integration candidate until a real-device soak has passed.
-There is no production signing key in this branch. Complete
-[release signing setup](../release/README.md) before publishing the first managed
-release. v1.2.0 and v1.2.1 remain source/manual releases and cannot bootstrap this
+The production public signing key is pinned in this branch; see
+[release signing setup](../release/README.md) for its fingerprint and release controls.
+Physical-device acceptance is still required before the first managed release.
+v1.2.0 and v1.2.1 remain source/manual releases and cannot bootstrap this
 updater. Missing or invalid signatures fail closed.
 
 The first managed target is **Linux ARM64, glibc 2.36 or newer, CPython 3.12**
