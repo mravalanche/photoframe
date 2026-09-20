@@ -29,7 +29,15 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from ..persistence import _fsync_directory, atomic_write
-from .manifest import MAX_BUNDLE_BYTES, ManifestError, ReleaseManifest, SignedManifest
+from .manifest import (
+    MAX_BUNDLE_BYTES,
+    ManifestError,
+    ReleaseManifest,
+    SignedManifest,
+    require_channel,
+    semver,
+    validate_channel,
+)
 from .protocol import MAX_MESSAGE_BYTES, ProtocolError, Request
 from .state import StateStore, UpdaterState
 
@@ -223,13 +231,62 @@ class ReleaseSource:
         self.public_key = public_key
         self.opener = opener
 
-    def latest(self) -> SignedManifest:
+    def latest(self, channel: str = "stable") -> SignedManifest:
+        validate_channel(channel)
+        url = MANIFEST_URL
+        version = None
+        if channel == "develop":
+            # GitHub metadata is discovery only. The downloaded manifest must be signed,
+            # match this exact version and belong to the requested channel.
+            try:
+                with self.opener(
+                    "https://api.github.com/repos/mravalanche/photoframe/releases?per_page=100",
+                    timeout=20,
+                ) as response:
+                    payload = response.read(2 * 1024 * 1024 + 1)
+                if len(payload) > 2 * 1024 * 1024:
+                    raise ValueError("release listing exceeds the supported limit")
+                releases = json.loads(payload)
+                if not isinstance(releases, list):
+                    raise ValueError("invalid release listing")
+                versions = []
+                for release in releases:
+                    if (
+                        not isinstance(release, dict)
+                        or release.get("draft")
+                        or release.get("prerelease") is not True
+                    ):
+                        continue
+                    tag = release.get("tag_name", "")
+                    if not isinstance(tag, str) or not tag.startswith("v"):
+                        continue
+                    candidate = tag[1:]
+                    try:
+                        require_channel(candidate, "develop")
+                    except ManifestError:
+                        continue
+                    assets = release.get("assets", [])
+                    if isinstance(assets, list) and any(
+                        isinstance(asset, dict) and asset.get("name") == "photoframe-manifest.json"
+                        for asset in assets
+                    ):
+                        versions.append(candidate)
+                if not versions:
+                    raise ValueError("no signed develop release is available")
+                version = max(versions, key=semver)
+                url = BUNDLE_URL.format(version=version, bundle="photoframe-manifest.json")
+            except (OSError, ValueError, urllib.error.URLError) as exc:
+                raise UpdateError("could not discover a signed develop release") from exc
         try:
-            with self.opener(MANIFEST_URL, timeout=20) as response:
+            with self.opener(url, timeout=20) as response:
                 payload = response.read(256 * 1024 + 1)
         except (OSError, urllib.error.URLError) as exc:
             raise UpdateError("could not reach the official release service") from exc
-        return SignedManifest.verify(payload, self.public_key)
+        signed = SignedManifest.verify(payload, self.public_key)
+        require_channel(signed.manifest.version, channel)
+        if version is not None and signed.manifest.version != version:
+            raise UpdateError("discovered version differs from signed manifest")
+        return signed
 
     def download(self, manifest: ReleaseManifest, target: Path) -> None:
         url = BUNDLE_URL.format(version=manifest.version, bundle=manifest.bundle)
@@ -308,13 +365,20 @@ class Updater:
         payload.pop("request_fingerprints", None)
         return {"ok": True, **payload}
 
-    def check(self, request_id: str) -> dict[str, Any]:
+    def check(self, request_id: str, channel: str = "stable") -> dict[str, Any]:
         state = self.state_store.load()
         if cached := state.completed_requests.get(request_id):
             return cached
-        self._save_phase(state, "checking", "Checking the signed stable release channel", 10)
+        self._save_phase(
+            state,
+            "checking",
+            f"Checking the signed {validate_channel(channel)} release channel",
+            10,
+        )
         try:
-            signed = self.source.latest()
+            signed = self.source.latest() if channel == "stable" else self.source.latest(channel)
+            require_channel(signed.manifest.version, channel)
+            state.latest_channel = channel
             state.latest_manifest = signed.manifest.as_dict()
             state.cached_at = datetime.now(UTC).isoformat()
             result = {
@@ -325,7 +389,7 @@ class Updater:
             }
             state.phase, state.message, state.progress = "available", "Release check complete", 100
         except (UpdateError, ManifestError) as exc:
-            if state.latest_manifest:
+            if state.latest_manifest and state.latest_channel == channel:
                 result = {
                     "ok": True,
                     "phase": "offline",
@@ -335,22 +399,28 @@ class Updater:
                 }
                 state.phase, state.message = "offline", str(result["message"])
             else:
+                state.latest_manifest = None
+                state.latest_channel = channel
                 result = {"ok": False, "phase": "failed", "message": str(exc)}
                 state.phase, state.message = "failed", str(exc)
             state.progress = 100
         self.state_store.remember(state, request_id, result)
         return result
 
-    def stage(self, request_id: str, release: str) -> dict[str, Any]:
+    def stage(self, request_id: str, release: str, channel: str = "stable") -> dict[str, Any]:
         state = self.state_store.load()
         if cached := state.completed_requests.get(request_id):
             return cached
         if state.phase in {"staging", "activating", "rolling_back"}:
             raise UpdateError("another update operation is already active")
-        signed = self.source.latest()
+        require_channel(release, channel)
+        signed = self.source.latest() if channel == "stable" else self.source.latest(channel)
         manifest = signed.manifest
+        require_channel(manifest.version, channel)
         if manifest.version != release:
-            raise UpdateError("requested release is not the authenticated latest stable release")
+            raise UpdateError(
+                "requested release is not the authenticated latest release in the selected channel"
+            )
         if state.current_version:
             manifest.require_upgrade_from(state.current_version)
         manifest.supports_rollback_to(2)
@@ -638,9 +708,12 @@ class Updater:
     def _work(self, request: Request) -> None:
         try:
             if request.action == "check":
-                self.check(request.request_id)
+                if request.channel == "stable":
+                    self.check(request.request_id)
+                else:
+                    self.check(request.request_id, request.channel)
             elif request.action == "stage":
-                self.stage(request.request_id, request.release or "")
+                self.stage(request.request_id, request.release or "", request.channel)
             elif request.action == "activate":
                 self.activate(request.request_id, request.release or "")
             else:
@@ -657,7 +730,10 @@ class Updater:
     def dispatch(self, request: Request) -> dict[str, Any]:
         if request.action == "status":
             return self.status()
-        fingerprint = f"{request.action}:{request.release or ''}"
+        validate_channel(request.channel)
+        if request.release is not None:
+            require_channel(request.release, request.channel)
+        fingerprint = f"{request.action}:{request.release or ''}:{request.channel}"
         if not self._operation_lock.acquire(blocking=False):
             state = self.state_store.load()
             if (

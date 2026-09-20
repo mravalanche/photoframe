@@ -14,3 +14,5 @@
 dialog { max-width:min(30rem, calc(100% - 2rem)); border-radius:1rem; padding:1.5rem; background:#18202c; color:#f4f5f7; }
 dialog::backdrop { background:#0009; }
 @media(max-width:480px) { .update-card { padding:1rem; } .update-actions button { width:100%; } }
+
+#update-channel { display: block; width: 100%; min-height: 44px; margin-top: 8px; padding: 8px; color: inherit; background: var(--surface, #252820); border: 1px solid var(--border, #555); border-radius: 6px; }

@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   bundle:
-    if: github.repository == 'mravalanche/photoframe' && !github.event.release.prerelease
+    if: github.repository == 'mravalanche/photoframe'
     runs-on: ubuntu-24.04-arm
     container: python:3.12-bookworm
     environment: managed-releases
@@ -32,17 +32,15 @@ jobs:
       - name: Verify release identity and future-only policy
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git merge-base --is-ancestor HEAD origin/main
-          python - <<'PY'
-          import os, re, tomllib
-          tag = os.environ['RELEASE_TAG']
-          assert re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', tag)
-          version = tomllib.load(open('pyproject.toml', 'rb'))['project']['version']
-          assert tag == 'v' + version
-          assert tuple(map(int, version.split('.'))) > (1, 2, 1), 'Historical releases stay immutable'
-          PY
+          if [ "$RELEASE_PRERELEASE" = "true" ]; then
+            git merge-base --is-ancestor HEAD origin/develop
+          else
+            git merge-base --is-ancestor HEAD origin/main
+          fi
+          python scripts/prepare_release.py
           test -f release/update-signing-key.pem
           uv lock --check
           uv sync --frozen --all-groups
@@ -56,7 +54,7 @@ jobs:
           python -m pip wheel --require-hashes --no-deps --wheel-dir wheelhouse -r requirements-release.txt
           uv build --wheel --out-dir wheelhouse
           python -m venv /tmp/photoframe-bundle-check
-          /tmp/photoframe-bundle-check/bin/python -m pip --isolated install --no-index --find-links wheelhouse 'photoframe[inky]'
+          /tmp/photoframe-bundle-check/bin/python -m pip --isolated install --no-index --find-links wheelhouse --pre 'photoframe[inky]'
           /tmp/photoframe-bundle-check/bin/python -m pip check
           /tmp/photoframe-bundle-check/bin/python -c 'import photoframe; import inky; print(photoframe.__version__)'
 

@@ -58,7 +58,7 @@ def test_signed_manifest_binds_identity_policy_and_bundle(tmp_path: Path) -> Non
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
-        ("version", "1.3.0-rc.1", "stable semantic"),
+        ("version", "1.3.0-rc.1", "stable or"),
         ("repository", "attacker/photoframe", "wrong repository"),
         ("platform", "linux-x86_64", "different platform"),
         ("commit", "abc", "full lowercase"),

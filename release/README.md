@@ -38,7 +38,7 @@ first managed release, the repository owner must:
    ordinary develop-to-main and Release Please flow. A future published stable
    release builds on ARM64/Python 3.12, runs the quality gate, and signs its bundle.
 
-The workflow refuses missing keys, mismatched public/private keys, prereleases,
+The workflow refuses missing keys, mismatched public/private keys, unsupported prereleases,
 versions at or below 1.2.1, and replacement of existing assets. A published source
 release is not installable by the managed updater until its signed assets exist.
 Do not add assets retrospectively to v1.2.0 or v1.2.1.
@@ -49,3 +49,8 @@ The release archive is deterministic for a given wheelhouse. Dependencies come
 from the hash-checked lock export; native wheel compilation can depend on the
 builder toolchain, so this is not a claim of bit-for-bit reproducible builds
 across arbitrary build hosts. Its install has no package-index network access.
+
+Develop candidates use canonical `X.Y.Z.devN` tags and must be GitHub prereleases
+reachable from develop. They use the existing protected signing environment and pinned
+key; stable releases must instead be reachable from main. See the signed develop channel
+section of `docs/managed-updates.md` for publishing and first-frame migration.

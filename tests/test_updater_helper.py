@@ -89,7 +89,7 @@ def test_async_job_stays_observable_and_duplicate_is_idempotent(tmp_path: Path) 
     service = updater(tmp_path)
     started, finish = threading.Event(), threading.Event()
 
-    def check(request_id: str) -> dict:
+    def check(request_id: str, channel: str = "stable") -> dict:
         started.set()
         assert finish.wait(5)
         return {}

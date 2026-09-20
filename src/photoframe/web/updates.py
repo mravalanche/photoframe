@@ -83,7 +83,9 @@ def register_updates(app, templates, runtime, data_dir):
             if action == "preferences":
                 if type(body.get("weekly")) is not bool:
                     raise ValueError("Weekly checks must be on or off")
-                return await run_in_threadpool(controller.configure, body["weekly"])
+                return await run_in_threadpool(
+                    controller.configure, body["weekly"], body.get("channel")
+                )
             if action not in {"check", "stage", "activate", "rollback"}:
                 raise ValueError("Unknown update action")
             if action in {"activate", "rollback"} and body.get("confirmed") is not True:

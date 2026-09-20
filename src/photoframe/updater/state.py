@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from ..persistence import atomic_write
+from .manifest import _SEMVER, validate_channel
 
 
 @dataclass
@@ -31,6 +32,7 @@ class UpdaterState:
     settings_gid: int | None = None
     request_fingerprints: dict[str, str] = field(default_factory=dict)
     latest_manifest: dict[str, Any] | None = None
+    latest_channel: str = "stable"
     cached_at: str | None = None
     completed_requests: dict[str, dict[str, Any]] = field(default_factory=dict)
 
@@ -39,10 +41,7 @@ class UpdaterState:
         accepted = {name: raw[name] for name in cls.__dataclass_fields__ if name in raw}
         for name in ("current_version", "previous_version", "staged_version", "target_version"):
             value = accepted.get(name)
-            if value is not None and (
-                not isinstance(value, str)
-                or not re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", value)
-            ):
+            if value is not None and (not isinstance(value, str) or not _SEMVER.fullmatch(value)):
                 raise ValueError("invalid persisted release version")
         for name in ("job_id", "snapshot_id"):
             value = accepted.get(name)
@@ -53,6 +52,7 @@ class UpdaterState:
         for name in ("completed_requests", "request_fingerprints"):
             if name in accepted and not isinstance(accepted[name], dict):
                 raise ValueError("invalid persisted request history")
+        validate_channel(accepted.get("latest_channel", "stable"))
         return cls(**accepted)
 
     def as_dict(self) -> dict[str, Any]:

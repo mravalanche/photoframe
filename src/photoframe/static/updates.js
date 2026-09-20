@@ -6,7 +6,8 @@
     const blocked = busy || active.has(state.phase);
     el('check-update').disabled = blocked;
     el('weekly-checks').disabled = blocked;
-    el('stage-update').disabled = blocked || !state.latest_manifest || state.latest_manifest.version.split('.').map(Number).reduce((a, v, i) => a || v - Number(state.running_version.split('.')[i]), 0) <= 0;
+    el('update-channel').disabled = blocked;
+    el('stage-update').disabled = blocked || !state.upgrade_available;
     el('apply-update').disabled = blocked || !state.staged_version;
     el('rollback-update').hidden = !state.previous_version;
     el('rollback-update').disabled = blocked;
@@ -37,7 +38,8 @@
       el('update-progress').hidden = !active.has(state.phase);
       el('update-progress').value = state.progress || 0;
       el('weekly-checks').checked = state.weekly;
-      el('update-release').textContent = state.staged_version ? `v${state.staged_version} verified and ready to apply.` : state.latest_manifest ? `Latest stable release: v${state.latest_manifest.version}` : '';
+      el('update-channel').value = state.channel || 'stable';
+      el('update-release').textContent = state.staged_version ? `v${state.staged_version} verified and ready to apply.` : state.latest_manifest ? `Latest ${state.channel} release: v${state.latest_manifest.version}` : '';
       el('release-notes').textContent = state.latest_manifest?.release_notes || (state.public_release ? `Latest published version: v${state.public_release}.` : '');
       el('update-diagnostics').textContent = `Status: ${state.phase}. Running v${state.running_version}. ${state.job_id ? `Job: ${state.job_id}.` : ''} ${state.last_check ? `Last check: ${new Date(state.last_check * 1000).toLocaleString()}.` : 'Not checked yet.'} ${state.check_error || ''}`;
       el('reconnect').hidden = true; controls();
@@ -52,7 +54,9 @@
   el('public-check').onclick = async () => { el('public-check').disabled = true; try { await fetch('/api/updates/releases', {signal:AbortSignal.timeout(15000)}); await poll(); } catch (_) { el('update-error').textContent = 'Release check unavailable. Try again later.'; } finally { el('public-check').disabled = false; } };
   el('check-update').onclick = () => action('check');
   el('stage-update').onclick = () => action('stage', {release:state.latest_manifest.version});
-  el('weekly-checks').onchange = () => action('preferences', {weekly:el('weekly-checks').checked});
+  const savePreferences = () => action('preferences', {weekly:el('weekly-checks').checked, channel:el('update-channel').value});
+  el('weekly-checks').onchange = savePreferences;
+  el('update-channel').onchange = savePreferences;
   el('apply-update').onclick = () => { pendingAction = 'activate'; el('confirm-title').textContent = 'Apply update and restart?'; el('confirm-detail').textContent = 'Your frame will pause briefly. Your saved settings and photos will be kept.'; el('confirm-action').textContent = 'Apply & restart'; el('apply-dialog').returnValue = ''; el('apply-dialog').showModal(); };
   el('rollback-update').onclick = () => { pendingAction = 'rollback'; el('confirm-title').textContent = 'Restore previous version and restart?'; el('confirm-detail').textContent = 'This also restores the settings saved before the update. Settings changes made since that update will be lost.'; el('confirm-action').textContent = 'Restore & restart'; el('apply-dialog').returnValue = ''; el('apply-dialog').showModal(); };
   el('apply-dialog').addEventListener('close', () => { if (el('apply-dialog').returnValue === 'confirm') action(pendingAction, {confirmed:true, ...(pendingAction === 'activate' ? {release:state.staged_version} : {})}); });
