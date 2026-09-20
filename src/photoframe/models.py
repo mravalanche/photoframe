@@ -65,7 +65,7 @@ class ProviderSettings(BaseModel):
 
 class PhotoFraming(BaseModel):
     fit_mode: str = Field(default="fill", pattern="^(fit|fill)$")
-    matte: str = Field(default="white", pattern="^(black|white)$")
+    matte: str = Field(default="white", pattern="^(black|white|blur|colour)$")
 
 
 class PhotoPreference(PhotoFraming):

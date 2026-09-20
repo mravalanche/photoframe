@@ -1,5 +1,6 @@
 from io import BytesIO
 
+import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
@@ -44,7 +45,8 @@ def frame(tmp_path):
     return app, TestClient(app), runtime
 
 
-def test_portrait_is_browsable_but_rotation_requires_explicit_framing(tmp_path):
+@pytest.mark.parametrize("background", ["black", "blur", "colour"])
+def test_portrait_is_browsable_but_rotation_requires_explicit_framing(tmp_path, background):
     _app, client, runtime = frame(tmp_path)
     assert [p.id for p in runtime.photo_eligibility(runtime.repository.load().frame).eligible] == [
         "wide"
@@ -54,7 +56,7 @@ def test_portrait_is_browsable_but_rotation_requires_explicit_framing(tmp_path):
     assert runtime.preview_id() == "tall"
     assert "not eligible" in client.post("/render/start").text
     response = client.post(
-        "/photo/framing", data={"photo_id": "tall", "fit_mode": "fit", "matte": "black"}
+        "/photo/framing", data={"photo_id": "tall", "fit_mode": "fit", "matte": background}
     )
     assert "Framing saved" in response.text
     assert {p.id for p in runtime.photo_eligibility(runtime.repository.load().frame).eligible} == {
@@ -67,8 +69,12 @@ def test_portrait_is_browsable_but_rotation_requires_explicit_framing(tmp_path):
         runtime.prepare_photo("tall") as hardware,
     ):
         assert preview.tobytes() == hardware.tobytes()
-        assert preview.getpixel((0, 0)) == (0, 0, 0)
+        if background == "black":
+            assert preview.getpixel((0, 0)) == (0, 0, 0)
+        else:
+            assert preview.getpixel((0, 0)) != (255, 0, 0)
         assert preview.getpixel((60, 40)) == (255, 0, 0)
+    assert runtime.repository.load().frame.preference("tall").matte == background
 
 
 def test_unsaved_preview_does_not_modify_framing_or_enable_rotation(tmp_path):

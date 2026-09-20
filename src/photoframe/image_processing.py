@@ -1,8 +1,9 @@
 """Prepare source photographs for a frame's native e-ink panel size."""
 
 from io import BytesIO
+from typing import cast
 
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps, UnidentifiedImageError
 
 MAX_DECODE_PIXELS = 16_000_000
 
@@ -53,6 +54,36 @@ def image_is_decodable(source: bytes) -> bool:
     return True
 
 
+def _photo_background(image: Image.Image, size: tuple[int, int], style: str) -> Image.Image:
+    """Build quiet backdrops at thumbnail size without another source decode."""
+    with image.resize((32, 32), Image.Resampling.BOX) as sample:
+        # Outer regions avoid letting a face or a bright central subject dominate.
+        pixels = [
+            cast(tuple[int, int, int], sample.getpixel((x, y)))
+            for y in range(32)
+            for x in range(32)
+            if x < 4 or x >= 28 or y < 4 or y >= 28
+        ]
+    channels = [sorted(pixel[channel] for pixel in pixels) for channel in range(3)]
+    colour = tuple(channel[len(channel) // 2] for channel in channels)
+    luminance = colour[0] * 0.2126 + colour[1] * 0.7152 + colour[2] * 0.0722
+    muted = tuple(round(value * 0.35 + luminance * 0.65) for value in colour)
+    if style == "colour":
+        return Image.new("RGB", size, muted)
+
+    scale = 96 / max(size)
+    small_size = (max(1, round(size[0] * scale)), max(1, round(size[1] * scale)))
+    with (
+        ImageOps.fit(image, small_size, method=Image.Resampling.LANCZOS) as small,
+        small.filter(ImageFilter.GaussianBlur(radius=12)) as blurred,
+        ImageEnhance.Color(blurred).enhance(0.3) as desaturated,
+        ImageEnhance.Contrast(desaturated).enhance(0.35) as softened,
+        Image.new("RGB", small_size, muted) as wash,
+        Image.blend(softened, wash, 0.3) as backdrop,
+    ):
+        return backdrop.resize(size, Image.Resampling.BICUBIC)
+
+
 def prepare_for_display(
     source: bytes, target_size: tuple[int, int], *, fit_mode: str = "fill", matte: str = "white"
 ) -> Image.Image:
@@ -67,14 +98,18 @@ def prepare_for_display(
     width, height = target_size
     if width < 1 or height < 1:
         raise ValueError("Display dimensions must be positive")
-    if fit_mode not in {"fit", "fill"} or matte not in {"black", "white"}:
-        raise ValueError("Choose fit or fill and a black or white border")
+    if fit_mode not in {"fit", "fill"} or matte not in {"black", "white", "blur", "colour"}:
+        raise ValueError("Choose fit or fill and a supported photo background")
     image = decode_image(source)
     try:
         if fit_mode == "fit":
             contained = ImageOps.contain(image, target_size, method=Image.Resampling.LANCZOS)
             try:
-                canvas = Image.new("RGB", target_size, matte)
+                canvas = (
+                    _photo_background(image, target_size, matte)
+                    if matte in {"blur", "colour"}
+                    else Image.new("RGB", target_size, matte)
+                )
                 canvas.paste(
                     contained, ((width - contained.width) // 2, (height - contained.height) // 2)
                 )

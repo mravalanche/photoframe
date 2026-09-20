@@ -82,8 +82,10 @@ list.
 ## Basic configuration
 
 Portrait and square photos can be browsed alongside landscape photos. Open a photo's
-framing controls and choose **Show whole photo** to retain the entire image with a plain
-black or white border, or **Fill frame** to crop it to the display. Saving framing includes
+framing controls and choose **Show whole photo** to retain the entire image. Choose **Soft photo
+background** for a heavily blurred, muted extension, **Colour wash** for a quiet colour sampled
+from the photograph, or plain **White** / **Black**. The foreground stays sharp and unchanged.
+Choose **Fill frame** to crop it to the display instead. Saving framing includes
 that photo in rotation; use **Show now** when you want to change the physical frame immediately.
 These preferences belong to this frame and do not edit your Immich originals.
 
