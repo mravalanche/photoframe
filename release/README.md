@@ -20,7 +20,9 @@ deleted under the active repository ruleset, which has no bypass actors.
 The initial private-key copy is retained outside Git in the administrator's restricted
 local signing directory. Keep an encrypted offline backup before publishing and never
 attach the private key to a release or commit it. GitHub cannot return a stored secret.
-Physical Pi acceptance and the first signed release have not yet been completed.
+The first signed develop candidate, v1.3.0.dev3, has passed the ARM64 build, offline
+installation check and independent signature/digest verification. Physical Pi acceptance
+and the first stable managed release remain outstanding.
 
 ## Establishing or replacing trust
 

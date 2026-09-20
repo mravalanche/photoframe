@@ -11,7 +11,8 @@ they never download or install automatically.
 This feature is an integration candidate until a real-device soak has passed.
 The production public signing key is pinned in this branch; see
 [release signing setup](../release/README.md) for its fingerprint and release controls.
-Physical-device acceptance is still required before the first managed release.
+The first installable signed develop candidate is [v1.3.0.dev3](https://github.com/mravalanche/photoframe/releases/tag/v1.3.0.dev3).
+Physical-device acceptance is still required before the first stable managed release.
 v1.2.0 and v1.2.1 remain source/manual releases and cannot bootstrap this
 updater. Missing or invalid signatures fail closed.
 
@@ -30,7 +31,7 @@ installation has passed acceptance. Back up the existing data directory, includi
 hidden files, and record its path, service account, listener address and unit.
 Do not publish that backup: it contains the encrypted provider credential and key.
 
-Obtain the **future signed release's** archive and `photoframe-manifest.json` from
+Obtain the chosen signed candidate or stable release archive and `photoframe-manifest.json` from
 the official release. Obtain the reviewed `release/update-signing-key.pem` through
 an independently trusted checkout and compare its fingerprint. A key downloaded
 beside a bundle is not an independent trust anchor.
