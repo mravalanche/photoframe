@@ -78,3 +78,47 @@ def test_custom_interval_preview_save_and_invalid_save_are_consistent(tmp_path):
         assert client.post("/schedule/preview", data=workflow(value, unit)).status_code == 422
         client.post("/workflow", data=workflow(value, unit))
         assert app.state.runtime.repository.load() == before
+
+
+@pytest.mark.parametrize("mode", ["daily", "weekly", "interval"])
+def test_disabled_inactive_schedule_fields_preserve_saved_choices(tmp_path, mode):
+    app = create_app(tmp_path, demo_mode=True)
+    repository = app.state.runtime.repository
+
+    def configure(settings):
+        settings.frame.rotation_seconds = 420
+        settings.frame.daily_time = "10:23"
+        settings.frame.weekly_day = 4
+        settings.frame.weekly_time = "16:42"
+
+    repository.update(configure)
+    payload = workflow("7", "minutes")
+    payload["schedule_mode"] = mode
+    if mode != "interval":
+        del payload["interval_value"]
+        del payload["interval_unit"]
+    if mode == "daily":
+        payload["daily_time"] = "11:24"
+    if mode == "weekly":
+        payload["weekly_day"] = "2"
+        payload["weekly_time"] = "17:43"
+    response = TestClient(app).post("/workflow", data=payload)
+    assert "Frame settings saved" in response.text
+    saved = repository.load().frame
+    assert saved.schedule_mode.value == mode
+    assert saved.rotation_seconds == 420
+    assert saved.daily_time == ("11:24" if mode == "daily" else "10:23")
+    assert saved.weekly_day == (2 if mode == "weekly" else 4)
+    assert saved.weekly_time == ("17:43" if mode == "weekly" else "16:42")
+
+
+def test_missing_active_interval_never_uses_persisted_fallback(tmp_path):
+    app = create_app(tmp_path, demo_mode=True)
+    client = TestClient(app)
+    payload = workflow("7", "minutes")
+    del payload["interval_value"]
+    del payload["interval_unit"]
+    before = app.state.runtime.repository.load()
+    result = client.post("/workflow", data=payload)
+    assert "Enter a whole-number interval" in result.text
+    assert app.state.runtime.repository.load() == before

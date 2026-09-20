@@ -91,9 +91,10 @@ Use **Hide from this frame** to remove a photo from rotation without deleting it
 Undo the action or restore it from **Hidden photos**. Hiding does not erase the photo currently
 on the physical display; if no photos remain in rotation, restore or include a photo to resume.
 
-For interval scheduling, enter a whole number and choose seconds, minutes, hours or days—for
-example, every 7 minutes or every 90 minutes. Intervals range from 30 seconds to 30 days. The
-next-update preview shows the effect before you save; daily and weekly schedules remain available.
+For interval scheduling, use the slider to choose common durations from 30 seconds to 1 day.
+Choose **Custom interval** for a whole number of seconds, minutes, hours or days—for example,
+every 7 minutes or every 90 minutes, up to 30 days. Existing custom durations stay exact.
+The next-update preview shows the effect before you save; daily and weekly schedules remain available.
 
 The collapsed **Advanced settings** panel controls the web listener:
 

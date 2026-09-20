@@ -421,7 +421,7 @@ def create_app(
     @app.post("/workflow", response_class=HTMLResponse)
     async def save_workflow(request: Request) -> HTMLResponse:
         try:
-            form = WorkflowForm.parse(await request.form())
+            form = WorkflowForm.parse(await request.form(), saved_frame=repository.load().frame)
             return workspace(request, notice=configuration.save_workflow(form))
         except Exception as exc:
             return workspace(request, error=str(exc))

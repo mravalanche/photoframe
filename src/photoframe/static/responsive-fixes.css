@@ -1043,3 +1043,14 @@ body.has-activity { padding-bottom: calc(160px + env(safe-area-inset-bottom)); }
 
 .photo-hidden-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--moss); border-radius: 10px; background: var(--moss-soft); }
 .photo-hidden-notice span { flex: 1; overflow-wrap: anywhere; }
+
+/* Native range steps represent useful durations instead of a linear seconds scale. */
+.interval-fields .interval-slider-label { display: flex; gap: 6px; font-size: 14px; color: var(--text); }
+.interval-slider-label output { font-weight: 750; }
+.form-grid input.interval-slider { min-height: 44px; padding: 0; border: 0; accent-color: var(--moss); background: transparent; cursor: pointer; }
+.form-grid input.interval-slider:disabled { opacity: .45; cursor: default; }
+.interval-scale { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-top: -4px; }
+.form-grid label.interval-custom-choice { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 8px; font-size: 13px; }
+.interval-custom-choice input { width: 18px; min-height: 18px; accent-color: var(--moss); }
+[data-interval-custom-fields] { margin-top: 6px; }
+[data-interval-custom-fields] > small { display: block; font-size: 11px; color: var(--muted); margin-top: 6px; }
