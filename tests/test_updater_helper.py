@@ -13,6 +13,7 @@ from photoframe.updater.helper import (
     Updater,
     make_release_readable,
     privileged_environment,
+    restore_owned_file,
     safe_extract,
 )
 from photoframe.updater.protocol import Request
@@ -55,6 +56,22 @@ def test_privileged_commands_ignore_inherited_python_and_search_paths(monkeypatc
     assert environment["PATH"] == "/usr/sbin:/usr/bin:/sbin:/bin"
     assert "PYTHONPATH" not in environment
     assert "PYTHONHOME" not in environment
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX descriptor-based restore")
+def test_restore_replaces_symlink_without_changing_target_owner_or_mode(tmp_path):
+    external = tmp_path / "protected"
+    external.write_bytes(b"protected")
+    external.chmod(0o644)
+    settings = tmp_path / "settings.toml"
+    settings.symlink_to(external)
+    owner = external.stat()
+    restore_owned_file(settings, b"restored", 0o600, owner.st_uid, owner.st_gid)
+    assert settings.read_bytes() == b"restored"
+    assert not settings.is_symlink()
+    assert external.read_bytes() == b"protected"
+    assert stat.S_IMODE(external.stat().st_mode) == 0o644
+    assert stat.S_IMODE(settings.stat().st_mode) == 0o600
 
 
 def updater(tmp_path: Path) -> Updater:
@@ -174,6 +191,8 @@ def test_snapshot_restores_owner_and_contents(
     (service.snapshots / f"{'a' * 32}.settings.toml").write_text("old")
     chown = Mock()
     monkeypatch.setattr("os.chown", chown, raising=False)
+    fchown = Mock()
+    monkeypatch.setattr("os.fchown", fchown, raising=False)
     state = UpdaterState(
         previous_version="1.2.1",
         settings_existed=True,
@@ -184,7 +203,11 @@ def test_snapshot_restores_owner_and_contents(
     )
     service._restore(state, "a" * 32, "1.3.0", "failure")
     assert (service.data_dir / "settings.toml").read_text() == "old"
-    chown.assert_called_once_with(service.data_dir / "settings.toml", 1000, 1000)
+    if os.name == "posix":
+        assert fchown.call_args.args[1:] == (1000, 1000)
+        chown.assert_not_called()
+    else:
+        chown.assert_called_once_with(service.data_dir / "settings.toml", 1000, 1000)
 
 
 @pytest.mark.parametrize(

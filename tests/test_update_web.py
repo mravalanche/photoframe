@@ -198,3 +198,60 @@ def test_invalid_request_id_is_rejected(updater):
     headers = login(client)
     response = client.post("/api/updates/check", json={"request_id": {}}, headers=headers)
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize("release", [None, {}, "1.3.0-rc1"])
+def test_invalid_activation_release_never_locks_frame(updater, release):
+    app, controller = updater
+    with pytest.raises(ValueError):
+        controller.action("activate", release)
+    assert not app.state.runtime.maintenance_gate.maintenance
+    assert controller.activation_job is None
+    controller.helper.call.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        {"ok": False, "phase": "failed", "message": "Request rejected"},
+        {"ok": True, "phase": "complete"},
+    ],
+)
+def test_recovery_retry_terminal_response_releases_durable_gate(updater, result):
+    app, controller = updater
+    controller.helper.call.side_effect = TimeoutError("acceptance unknown")
+    with pytest.raises(TimeoutError):
+        controller.action("activate", "1.3.0")
+    controller.helper.call.side_effect = [{"ok": True, "phase": "idle"}, result]
+    controller.tick()
+    assert controller.activation_job is None
+    assert not app.state.runtime.maintenance_gate.maintenance
+    another = create_app(controller.path.parent).state.updater
+    assert another.activation_job is None
+    assert not another.runtime.maintenance_gate.maintenance
+
+
+def test_terminal_cleanup_write_failure_keeps_durable_gate(updater, monkeypatch):
+    app, controller = updater
+    controller.action("activate", "1.3.0")
+    job = controller.activation_job
+    controller.helper.call.return_value = {"phase": "complete", "job_id": job}
+    monkeypatch.setattr(controller, "save", Mock(side_effect=OSError("disk full")))
+    assert controller.status()["phase"] == "unavailable"
+    assert controller.activation_job == job
+    assert controller.preferences["activation_job"] == job
+    assert app.state.runtime.maintenance_gate.maintenance
+
+
+def test_pending_job_id_cannot_be_reused_to_release_gate(updater):
+    app, controller = updater
+    controller.action("activate", "1.3.0")
+    job = controller.activation_job
+    controller.helper.call.reset_mock()
+    with pytest.raises(ValueError, match="already in progress"):
+        controller.action("check", request_id=job)
+    with pytest.raises(ValueError, match="already in progress"):
+        controller.action("activate", "1.4.0", request_id=job)
+    assert controller.activation_job == job
+    assert app.state.runtime.maintenance_gate.maintenance
+    controller.helper.call.assert_not_called()

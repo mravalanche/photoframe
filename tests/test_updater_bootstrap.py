@@ -104,6 +104,15 @@ def migration(monkeypatch, tmp_path):
     )
     ownership = []
     monkeypatch.setattr(module.os, "chown", lambda *args: ownership.append(args), raising=False)
+    read_saved = module.SavedFile.read
+    monkeypatch.setattr(module.SavedFile, "read", lambda path, **kwargs: read_saved(path))
+    restore_owned = module.restore_owned_file
+
+    def restore_recorded(path, payload, mode, uid, gid):
+        ownership.append((path, uid, gid))
+        restore_owned(path, payload, mode, uid, gid)
+
+    monkeypatch.setattr(module, "restore_owned_file", restore_recorded)
     monkeypatch.setattr(module, "hash_pin", lambda pin: "hash")
     key = Mock()
     key.public_bytes.return_value = b"key"
@@ -183,3 +192,5 @@ def test_saved_file_rejects_non_regular_settings(tmp_path):
     saved = module.SavedFile.read(path)
     assert saved is not None
     assert saved.mode == stat.S_IMODE(path.stat().st_mode)
+    with pytest.raises(ValueError, match="owned"):
+        module.SavedFile.read(path, expected_uid=path.stat().st_uid + 1)

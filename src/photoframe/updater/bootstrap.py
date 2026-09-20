@@ -22,7 +22,13 @@ from cryptography.hazmat.primitives import serialization
 
 from ..persistence import atomic_write
 from .auth import hash_pin
-from .helper import load_public_key, make_release_readable, privileged_environment, safe_extract
+from .helper import (
+    load_public_key,
+    make_release_readable,
+    privileged_environment,
+    restore_owned_file,
+    safe_extract,
+)
 from .manifest import SignedManifest
 from .state import StateStore, UpdaterState
 
@@ -144,10 +150,11 @@ def run(argv: list[str]) -> None:
 
 
 def install_environment(python: Path, destination: Path, wheelhouse: Path, version: str) -> None:
-    run([str(python), "-m", "venv", str(destination)])
+    run([str(python), "-I", "-m", "venv", str(destination)])
     run(
         [
             str(destination / "bin/python"),
+            "-I",
             "-m",
             "pip",
             "--isolated",
@@ -160,7 +167,7 @@ def install_environment(python: Path, destination: Path, wheelhouse: Path, versi
             f"photoframe[inky]=={version}",
         ]
     )
-    run([str(destination / "bin/python"), "-m", "pip", "--isolated", "check"])
+    run([str(destination / "bin/python"), "-I", "-m", "pip", "--isolated", "check"])
 
 
 @dataclass(frozen=True)
@@ -195,19 +202,27 @@ class SavedFile:
     gid: int
 
     @classmethod
-    def read(cls, path: Path) -> SavedFile | None:
+    def read(cls, path: Path, *, expected_uid: int | None = None) -> SavedFile | None:
         if path.is_symlink():
             raise ValueError(f"refusing symbolic link for migration state: {path}")
-        if not path.exists():
-            return None
-        info = path.stat()
-        if not stat.S_ISREG(info.st_mode):
+        if path.exists() and not path.is_file():
             raise ValueError(f"migration state is not a regular file: {path}")
-        return cls(path.read_bytes(), stat.S_IMODE(info.st_mode), info.st_uid, info.st_gid)
+        try:
+            descriptor = os.open(
+                path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+            )
+        except FileNotFoundError:
+            return None
+        with os.fdopen(descriptor, "rb") as source:
+            info = os.fstat(source.fileno())
+            if not stat.S_ISREG(info.st_mode):
+                raise ValueError(f"migration state is not a regular file: {path}")
+            if expected_uid is not None and info.st_uid != expected_uid:
+                raise ValueError("settings must be owned by the application user")
+            return cls(source.read(), stat.S_IMODE(info.st_mode), info.st_uid, info.st_gid)
 
     def restore(self, path: Path) -> None:
-        atomic_write(path, self.payload, mode=self.mode)
-        getattr(os, "chown")(path, self.uid, self.gid)  # noqa: B009
+        restore_owned_file(path, self.payload, self.mode, self.uid, self.gid)
 
 
 def bootstrap(args: argparse.Namespace, pin: str, *, layout: InstallLayout | None = None) -> None:
@@ -240,7 +255,7 @@ def bootstrap(args: argparse.Namespace, pin: str, *, layout: InstallLayout | Non
     check_certificate_paths(data)
     python = args.python.resolve(strict=True)
     trusted_path(python)
-    run([str(python), "-c", "import sys; assert sys.version_info[:2] == (3, 12)"])
+    run([str(python), "-I", "-c", "import sys; assert sys.version_info[:2] == (3, 12)"])
     public_key = load_public_key(args.public_key)
     public_bytes = public_key.public_bytes(
         serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
@@ -303,7 +318,7 @@ def bootstrap(args: argparse.Namespace, pin: str, *, layout: InstallLayout | Non
             atomic_write(root / "previous-service.unit", old_unit.payload, mode=0o600)
         run(["systemctl", "stop", "photoframe.service"])
         stopped = True
-        settings = SavedFile.read(data / "settings.toml")
+        settings = SavedFile.read(data / "settings.toml", expected_uid=account.pw_uid)
         settings_captured = True
         if settings is not None:
             atomic_write(root / "previous-settings.toml", settings.payload, mode=0o600)

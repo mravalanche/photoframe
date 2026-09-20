@@ -57,6 +57,18 @@ class UpdateController:
     def save(self):
         atomic_write(self.path, json.dumps(self.preferences).encode())
 
+    def _finish_activation(self):
+        previous = self.preferences.copy()
+        for key in ("activation_job", "activation_action", "activation_release"):
+            self.preferences.pop(key, None)
+        try:
+            self.save()
+        except OSError:
+            self.preferences = previous
+            raise
+        self.activation_job = None
+        self.runtime.maintenance_gate.cancel()
+
     def status(self):
         with self.lock:
             return self._status()
@@ -71,12 +83,7 @@ class UpdateController:
                     and result.get("job_id") == self.activation_job
                     and result.get("phase") in {"failed", "rolled_back", "complete"}
                 ):
-                    self.runtime.maintenance_gate.cancel()
-                    self.activation_job = None
-                    self.preferences.pop("activation_job", None)
-                    self.preferences.pop("activation_action", None)
-                    self.preferences.pop("activation_release", None)
-                    self.save()
+                    self._finish_activation()
             except (OSError, ValueError) as exc:
                 result = {"phase": "unavailable", "message": f"Updater unavailable: {exc}"}
         return {
@@ -134,11 +141,19 @@ class UpdateController:
                 and status.get("job_id") != self.activation_job
             ):
                 with suppress(OSError, ValueError):
-                    self.helper.call(
+                    result = self.helper.call(
                         self.preferences["activation_action"],
                         self.activation_job,
                         self.preferences.get("activation_release"),
                     )
+                    if result.get("ok") is False or result.get("phase") in {
+                        "complete",
+                        "rolled_back",
+                        "failed",
+                    }:
+                        if result.get("ok") is False:
+                            self.last_error = result.get("message", "Updater request failed")
+                        self._finish_activation()
             return True
         if (
             not self.installation.enabled
@@ -158,9 +173,19 @@ class UpdateController:
             raise ValueError(
                 "Web updates require a managed installation. Follow the migration guide to enable them."
             )
+        if action in {"stage", "activate"}:
+            if not isinstance(release, str):
+                raise ValueError("A stable release version is required")
+            semver(release)
+        elif release is not None:
+            raise ValueError("A release version is only allowed for stage and activate")
         with self.lock:
             request_id = request_id or uuid4().hex
-            if self.activation_job and request_id != self.activation_job:
+            if self.activation_job and (
+                request_id != self.activation_job
+                or action != self.preferences.get("activation_action")
+                or release != self.preferences.get("activation_release")
+            ):
                 raise ValueError("An update restart is already in progress")
             if action == "check":
                 self.preferences["last_check"] = time.time()
@@ -191,11 +216,15 @@ class UpdateController:
             try:
                 result = self.helper.call(action, request_id, release)
                 if result.get("ok") is False:
-                    self.activation_job = None
-                    self.preferences.pop("activation_job", None)
-                    self.save()
-                    self.runtime.maintenance_gate.cancel()
+                    if self.activation_job:
+                        self._finish_activation()
                     raise ValueError(result.get("message", "Updater request failed"))
+                if self.activation_job and result.get("phase") in {
+                    "complete",
+                    "rolled_back",
+                    "failed",
+                }:
+                    self._finish_activation()
                 return result
             except (OSError, ValueError):
                 raise

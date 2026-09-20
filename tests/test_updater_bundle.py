@@ -85,7 +85,7 @@ def test_install_environment_is_offline_and_installs_hardware_extra(monkeypatch,
     destination = tmp_path / "slot/venv"
     wheels = tmp_path / "slot/wheelhouse"
     install_environment(python, destination, wheels, "1.3.0")
-    assert commands[0] == [str(python), "-m", "venv", str(destination)]
+    assert commands[0] == [str(python), "-I", "-m", "venv", str(destination)]
     assert "--no-index" in commands[1]
     assert "--isolated" in commands[1]
     assert "photoframe[inky]==1.3.0" in commands[1]

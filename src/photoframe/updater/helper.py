@@ -6,6 +6,7 @@ import argparse
 import http.client
 import json
 import os
+import secrets
 import shutil
 import socketserver
 import ssl
@@ -18,6 +19,7 @@ import tomllib
 import urllib.error
 import urllib.request
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, BinaryIO
@@ -55,7 +57,7 @@ def privileged_environment() -> dict[str, str]:
 def make_release_readable(slot: Path) -> None:
     """Publish root-created files for the service user without following venv links."""
     slot.chmod(0o755)
-    for directory, folders, files in os.walk(slot, followlinks=False):
+    for directory, folders, files in os.walk(slot, topdown=False, followlinks=False):
         for name in (*folders, *files):
             path = Path(directory) / name
             mode = path.lstat().st_mode
@@ -65,8 +67,41 @@ def make_release_readable(slot: Path) -> None:
                 path.chmod(0o755)
             elif stat.S_ISREG(mode):
                 path.chmod(0o755 if mode & 0o111 else 0o644)
+                with path.open("r+b") as installed:
+                    os.fsync(installed.fileno())
             else:
                 raise UpdateError("release environment contains an unexpected file type")
+        _fsync_directory(Path(directory))
+
+
+def restore_owned_file(path: Path, payload: bytes, mode: int, uid: int, gid: int) -> None:
+    """Restore into an app-owned directory without privileged path-following mutations."""
+    if os.name != "posix":
+        # Production helpers are Linux-only; retain portable unit-test support.
+        atomic_write(path, payload, mode=mode)
+        getattr(os, "chown")(path, uid, gid)  # noqa: B009
+        return
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    temporary = f".{path.name}.{secrets.token_hex(16)}.tmp"
+    try:
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+            dir_fd=directory,
+        )
+        with os.fdopen(descriptor, "wb") as output:
+            output.write(payload)
+            output.flush()
+            os.fchown(output.fileno(), uid, gid)
+            os.fchmod(output.fileno(), mode)
+            os.fsync(output.fileno())
+        os.replace(temporary, path.name, src_dir_fd=directory, dst_dir_fd=directory)
+        os.fsync(directory)
+    finally:
+        with suppress(FileNotFoundError):
+            os.unlink(temporary, dir_fd=directory)
+        os.close(directory)
 
 
 def _certificate_path(data_dir: Path, value: str) -> Path:
@@ -412,11 +447,21 @@ class Updater:
 
     def _snapshot_settings(self, job_id: str) -> Path | None:
         settings = self.data_dir / "settings.toml"
-        if not settings.exists():
+        try:
+            descriptor = os.open(
+                settings, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+            )
+        except FileNotFoundError:
             return None
+        with os.fdopen(descriptor, "rb") as source:
+            info = os.fstat(source.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != self.data_dir.stat().st_uid:
+                raise UpdateError("settings must be a regular file owned by the application user")
+            payload = source.read()
+            self._snapshot_owner = (info.st_uid, info.st_gid)
         self.snapshots.mkdir(parents=True, exist_ok=True)
         snapshot = self.snapshots / f"{job_id}.settings.toml"
-        atomic_write(snapshot, settings.read_bytes(), mode=0o600)
+        atomic_write(snapshot, payload, mode=0o600)
         return snapshot
 
     def activate(self, request_id: str, release: str) -> dict[str, Any]:
@@ -447,8 +492,7 @@ class Updater:
             snapshot = self._snapshot_settings(request_id)
             state.settings_existed = snapshot is not None
             if snapshot is not None:
-                info = (self.data_dir / "settings.toml").stat()
-                state.settings_uid, state.settings_gid = info.st_uid, info.st_gid
+                state.settings_uid, state.settings_gid = self._snapshot_owner
             state.snapshot_ready = True
             self.state_store.save(state)
             self._switch(release)
@@ -497,9 +541,12 @@ class Updater:
         settings = self.data_dir / "settings.toml"
         snapshot = self.snapshots / f"{state.snapshot_id or request_id}.settings.toml"
         if state.snapshot_ready and state.settings_existed:
-            atomic_write(settings, snapshot.read_bytes(), mode=0o600)
             if state.settings_uid is not None and state.settings_gid is not None:
-                getattr(os, "chown")(settings, state.settings_uid, state.settings_gid)  # noqa: B009
+                restore_owned_file(
+                    settings, snapshot.read_bytes(), 0o600, state.settings_uid, state.settings_gid
+                )
+            else:
+                raise UpdateError("settings snapshot has no recorded owner")
         elif state.snapshot_ready:
             settings.unlink(missing_ok=True)
         state.current_version = old
@@ -533,9 +580,16 @@ class Updater:
         if state.snapshot_id and state.snapshot_ready:
             if state.settings_existed:
                 snapshot = self.snapshots / f"{state.snapshot_id}.settings.toml"
-                atomic_write(settings, snapshot.read_bytes(), mode=0o600)
                 if state.settings_uid is not None and state.settings_gid is not None:
-                    getattr(os, "chown")(settings, state.settings_uid, state.settings_gid)  # noqa: B009
+                    restore_owned_file(
+                        settings,
+                        snapshot.read_bytes(),
+                        0o600,
+                        state.settings_uid,
+                        state.settings_gid,
+                    )
+                else:
+                    raise UpdateError("settings snapshot has no recorded owner")
             else:
                 settings.unlink(missing_ok=True)
         state.current_version = previous
