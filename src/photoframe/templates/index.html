@@ -362,9 +362,10 @@
   </script>
   <aside id="activity-dock" class="activity-dock" aria-label="Current activity" hidden>
     <div><strong data-activity-title role="status" aria-live="polite" aria-atomic="true"></strong><p data-activity-detail></p></div>
+    <button type="button" class="secondary" data-activity-cancel hidden>Cancel loading</button>
     <button type="button" class="quiet" data-activity-dismiss aria-label="Dismiss activity status" hidden>×</button>
     <progress aria-label="Current operation progress" hidden></progress>
   </aside>
-  <script src="{{ url_for('static', path='/activity.js') }}" defer></script>
+  <script src="{{ url_for('static', path='/activity.js') }}?v={{ version }}" defer></script>
 </body>
 </html>

@@ -69,11 +69,13 @@ The API key is stored locally and is never rendered back into the browser. Nativ
 and height must both be known before an image can be rendered; supported Inky hardware is detected
 at startup when possible.
 
-Frame updates and album changes appear in a pinned activity bar, so their status stays visible
-while you scroll on a phone. Album changes run in the background: the bar first reports loading,
-then the number of photos checked for the frame. The current album remains selected until the
-new album is ready. Keep the page open to see completion, or reopen it to see the running job.
-Other changes wait until the album job finishes.
+Frame updates and album preparation appear in a pinned activity bar, including the initial
+library load and **Refresh photos & thumbnails**. The bar shows the current phase and the number
+of matching photos prepared for the frame, downloading and checking images as needed.
+**Cancel loading** stops preparation after the current photo request finishes. You can also choose
+a different album while preparation runs; the latest confirmed choice replaces the pending job.
+The current album and displayed photo remain unchanged until the new album is ready. Reopening
+the page reconnects to the running job. Other settings changes wait until preparation finishes.
 
 To limit memory use on the frame, Immich responses are capped at 32 MiB and albums at 20,000
 assets. Large JPEGs are downsampled before decoding; images that still exceed the decoding limit

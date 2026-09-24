@@ -116,7 +116,13 @@ def create_app(
     @app.middleware("http")
     async def maintenance_guard(request: Request, call_next):
         async def admitted_request():
-            if request.method == "POST" and request.url.path in {"/album/refresh", "/hardware"}:
+            if request.method == "POST" and request.url.path in {
+                "/album/refresh",
+                "/hardware",
+                "/api/album/select",
+                "/api/album/cancel",
+                "/api/album/refresh",
+            }:
                 try:
                     require_same_origin(
                         request.headers.get("origin"),
@@ -130,6 +136,8 @@ def create_app(
             if request.method == "POST" and request.url.path not in {
                 "/album/select",
                 "/api/album/select",
+                "/api/album/cancel",
+                "/api/album/refresh",
                 "/album/refresh",
                 "/hardware",
             }:
@@ -172,8 +180,8 @@ def create_app(
         ):
             try:
                 runtime.refresh_albums()
-                if settings.frame.album_id:
-                    runtime.refresh_photos()
+                # The refresh worker owns photo loading. Keep this request free
+                # to show the album picker while its counted job runs.
             except (ProviderError, RuntimeError) as exc:
                 error = str(exc)
                 runtime.loaded = True
@@ -467,6 +475,36 @@ def create_app(
             return JSONResponse({"message": str(exc)}, status_code=409)
         return JSONResponse(state, status_code=202)
 
+    @app.post("/api/album/cancel")
+    async def cancel_album_load(request: Request) -> JSONResponse:
+        try:
+            payload = await request.json()
+        except ValueError:
+            return JSONResponse({"message": "Send an album operation identifier"}, status_code=400)
+        job_id = payload.get("id") if isinstance(payload, dict) else None
+        if not isinstance(job_id, str):
+            return JSONResponse({"message": "Choose an active album operation"}, status_code=400)
+        if not album_change.cancel(job_id) and not runtime.cancel_library_load(job_id):
+            return JSONResponse(
+                {"message": "This album operation has already changed; refresh its status"},
+                status_code=409,
+            )
+        return JSONResponse({"message": "Cancellation requested"}, status_code=202)
+
+    @app.post("/api/album/refresh")
+    def start_album_refresh() -> JSONResponse:
+        try:
+            album_id = repository.load().frame.album_id
+            if not album_id:
+                raise ValueError("Choose an album before refreshing its photos")
+            state = album_change.start(album_id, refresh=True)
+            # A new revision is safe before preparation completes: catalog and
+            # settings remain atomic, and cached failures can be retried.
+            app.state.thumbnail_revision = secure_random.token_hex(8)
+        except ValueError as exc:
+            return JSONResponse({"message": str(exc)}, status_code=409)
+        return JSONResponse(state, status_code=202)
+
     @app.get("/api/activity")
     def activity_status() -> JSONResponse:
         state = configuration.current_render_state()
@@ -474,6 +512,7 @@ def create_app(
             jsonable_encoder(
                 {
                     "album": album_change.snapshot(),
+                    "library": runtime.library_load_snapshot(),
                     "render": {**state.model_dump(), "active": state.active},
                 }
             )
