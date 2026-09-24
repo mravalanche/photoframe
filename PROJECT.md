@@ -161,11 +161,11 @@ firewall rule. Photoframe has no application authentication, so anyone who can r
 its settings. Automatic HTTPS encrypts traffic but its local certificate is not automatically
 trusted by browsers; expect to accept it or install an appropriate trust configuration on each
 client. After connecting, complete the normal browser setup and make later listener changes under
-**Advanced settings**.
+**Settings → Advanced & recovery**.
 
 ## Network and HTTPS operation
 
-Network settings live in the collapsed **Advanced settings** panel and persist under `[network]`
+Network settings live in **Settings → Advanced & recovery** and persist under `[network]`
 in `settings.toml`.
 
 | UI choice | Bind address | Intended reach |
@@ -461,3 +461,39 @@ Before tagging or pushing a release candidate:
 - [ ] Record known limitations, migration notes, and recovery steps in the release notes.
 - [ ] Commit only reviewed changes, create the release tag, and push through the normal protected
   branch/review process.
+
+
+## Settings, recovery and loading follow-up (September 2026)
+
+Implemented for review on a feature branch based on `develop`:
+
+- The header has a labelled Settings cog and compact software-update status. Settings opens
+  Software updates first, followed by Photo provider, Display hardware, and Advanced & recovery.
+  Desktop side navigation becomes a two-column section chooser on small screens. Shared theme,
+  buttons, typography, status colours and focus styles apply throughout.
+- Album choice, preview/next-photo controls, photo order and schedule remain on the frame page.
+  Hardware saves preserve the schedule and run under the exclusive operation guard. Existing
+  combined workflow submissions remain supported; schedule-only saves preserve hardware.
+- Software updates show a status icon with text, relative last-check time (exact time available
+  on the timestamp), and a separate safely formatted release-notes region. Browser controls
+  disable while status is unavailable. The existing session, origin, confirmation and restart
+  protections remain intact; `/updates` redirects to the Settings section.
+- **Refresh photos & thumbnails** reloads the selected album and retries negative decode verdicts.
+  It preserves the displayed photo, valid preview, and schedule, and changes thumbnail URLs to
+  bypass stale browser cache. Failed provider refresh leaves the current catalog intact.
+  Missing thumbnails show an explicit unavailable placeholder.
+- Slow loading is an explicit user priority. The initial shell shows saved album/schedule
+  information, Settings links and an accessible loading/error/retry state immediately. Settings
+  sections use only saved configuration and do not wait for photo fetching or eligibility checks.
+  Provider, hardware and workflow saves run blocking work off the event loop.
+
+Follow-up performance work: the full photo workspace still validates uncached photos before
+showing image actions. A future progressive library should use a single background catalog loader
+with explicit loading/ready/error states, avoid duplicated cold-start fetching, and show early
+previews without declaring unvalidated photos eligible. Measure on the physical frame; the original
+missing-image incident has not been reproduced on that device.
+
+Release state: no develop candidate published for this follow-up yet. Automated tests and browser checks at 320, 390, 768 and 1280 pixels passed, including both
+themes, recovery actions and delayed loading. Complete user review, then merge through a pull
+request to `develop`; publish a signed develop candidate
+only once the user is happy with the changes. Physical Pi acceptance remains required.

@@ -1,6 +1,6 @@
 # Managed web updates
 
-The Software updates page shows the actual installed distribution version. Source
+The **Settings → Software updates** page shows the actual installed distribution version. Source
 checkouts can discover stable releases but cannot overwrite themselves. Managed
 installations can download and verify a release, then apply it with an explicit
 **Apply & restart** confirmation. Checks run weekly with jitter and can be disabled;
@@ -71,7 +71,7 @@ ordinary app updates cannot silently replace the trust anchor or privileged help
 
 ## Routine use and failure handling
 
-Open **Software updates** and choose **Check now**. Review the release notes,
+Open **Settings → Software updates** and choose **Check now**. Review the release notes,
 choose **Download & verify**, then **Apply &
 restart**. Applying waits for application work and the physical display to become
 idle; a busy frame leaves the current version running. Other writes are temporarily

@@ -1,0 +1,8 @@
+<section class="workspace-loading" aria-labelledby="loading-title" hx-get="/partials/workspace" hx-trigger="load, retry" hx-swap="outerHTML" hx-request='{"timeout":120000}' data-workspace-loading>
+  <div class="overview"><div><p class="kicker">YOUR FRAME</p><h1 id="loading-title">{{ initial_settings.frame.album_name or 'Welcome to Photoframe' }}</h1><p class="lead">{% if initial_settings.verification.ok %}Your saved setup is ready. Photos are loading from your library.{% else %}Connect your library to start choosing photos for your frame.{% endif %}</p></div></div>
+  <div class="loading-frame" aria-busy="true">
+    <div class="frame-meta"><div><span>PHOTO PREVIEW</span><strong data-loading-message>Loading your photos…</strong></div><div class="schedule"><span>SAVED SCHEDULE</span><strong>{{ initial_next_change if initial_settings.frame.album_id else 'Not configured' }}</strong></div></div>
+    <div class="loading-canvas"><span class="loading-shape" aria-hidden="true"></span><p role="status" data-loading-detail>Connecting to your photo library and checking available images.</p></div>
+  </div>
+  <div class="loading-options"><a class="secondary" href="/settings/provider">{{ 'Photo provider settings' if initial_settings.verification.ok else 'Connect photo library' }}</a><a class="quiet" href="/settings">Open Settings</a><button class="secondary" type="button" data-loading-retry hidden onclick="htmx.trigger(this.closest('[data-workspace-loading]'), 'retry')">Try loading again</button></div>
+</section>

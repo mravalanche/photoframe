@@ -6,7 +6,7 @@ from pathlib import Path
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from fastapi import BackgroundTasks, FastAPI, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse, Response
@@ -24,10 +24,12 @@ from ..services.album_change import AlbumChangeJob
 from ..services.configuration import ConfigurationService, ResetIncompleteError
 from ..services.runtime import Runtime
 from ..settings import SecretStore, SettingsRepository
+from ..updater.auth import AuthenticationError, require_same_origin
 from ..updater.maintenance import MaintenanceError
 from .forms import (
     AlbumForm,
     ConnectionForm,
+    HardwareForm,
     NetworkForm,
     NextPhotoForm,
     PhotoForm,
@@ -114,9 +116,22 @@ def create_app(
     @app.middleware("http")
     async def maintenance_guard(request: Request, call_next):
         async def admitted_request():
+            if request.method == "POST" and request.url.path in {"/album/refresh", "/hardware"}:
+                try:
+                    require_same_origin(
+                        request.headers.get("origin"),
+                        request.url.scheme,
+                        request.headers.get("host", ""),
+                    )
+                except AuthenticationError:
+                    return JSONResponse(
+                        {"message": "Request origin is not allowed"}, status_code=403
+                    )
             if request.method == "POST" and request.url.path not in {
                 "/album/select",
                 "/api/album/select",
+                "/album/refresh",
+                "/hardware",
             }:
                 try:
                     with runtime.interactive_operation():
@@ -126,7 +141,7 @@ def create_app(
             return await call_next(request)
 
         if not request.url.path.startswith(
-            ("/api/updates/", "/api/activity", "/updates", "/health", "/static/")
+            ("/api/updates/", "/api/activity", "/updates", "/settings", "/health", "/static/")
         ):
             try:
                 with runtime.maintenance_gate.operation():
@@ -223,6 +238,7 @@ def create_app(
         ]
         return {
             "request": request,
+            "thumbnail_revision": getattr(app.state, "thumbnail_revision", ""),
             "settings": settings,
             "weekday_names": [
                 "Monday",
@@ -315,10 +331,31 @@ def create_app(
     def workspace(
         request: Request, notice: str | None = None, error: str | None = None
     ) -> HTMLResponse:
+        section = request.headers.get("x-settings-section") or request.query_params.get("section")
+        if section in {"provider", "hardware", "advanced"}:
+            settings = repository.load()
+            context = {
+                "settings": settings,
+                "notice": notice,
+                "error": error,
+                "credential_saved": secrets.exists(),
+                "demo_mode": is_demo,
+                "network_address": settings.network.display_address,
+                "network_summary": (
+                    f"{'This device only' if settings.network.access == NetworkAccess.DEVICE_ONLY else 'Local network'}"
+                    f" · {settings.network.protocol.value.upper()} · {settings.network.port}"
+                ),
+            }
+        else:
+            context = workspace_context(request, notice=notice, error=error)
+        context["settings_section"] = (
+            section if section in {"provider", "hardware", "advanced"} else None
+        )
+        context["thumbnail_revision"] = getattr(app.state, "thumbnail_revision", "")
         return templates.TemplateResponse(
             request,
             "_workspace.html",
-            workspace_context(request, notice=notice, error=error),
+            context,
         )
 
     def render_operation_id(request: Request) -> str | None:
@@ -330,7 +367,37 @@ def create_app(
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "index.html", {})
+        settings = repository.load()
+        occurrence = next_occurrence(settings.frame, settings.device.timezone, datetime.now(UTC))
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            {
+                "initial_settings": settings,
+                "initial_next_change": schedule_label(occurrence.due_at, settings.device.timezone),
+            },
+        )
+
+    @app.get("/settings", response_class=HTMLResponse)
+    @app.get("/settings/{section}", response_class=HTMLResponse)
+    def settings_page(request: Request, section: str = "updates") -> HTMLResponse:
+        titles = {
+            "updates": "Software updates",
+            "provider": "Photo provider",
+            "hardware": "Display hardware",
+            "advanced": "Advanced & recovery",
+        }
+        if section not in titles:
+            raise HTTPException(status_code=404)
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            {
+                "settings_section": section,
+                "settings_title": titles[section],
+                "version": __version__,
+            },
+        )
 
     @app.get("/partials/workspace", response_class=HTMLResponse)
     def workspace_partial(request: Request) -> HTMLResponse:
@@ -349,10 +416,11 @@ def create_app(
     @app.post("/connection", response_class=HTMLResponse)
     async def save_connection(request: Request) -> HTMLResponse:
         try:
-            message = configuration.save_connection(ConnectionForm.parse(await request.form()))
-            return workspace(request, notice=message)
+            form = ConnectionForm.parse(await request.form())
+            message = await run_in_threadpool(configuration.save_connection, form)
+            return await run_in_threadpool(workspace, request, notice=message)
         except Exception as exc:
-            return workspace(request, error=str(exc))
+            return await run_in_threadpool(workspace, request, error=str(exc))
 
     @app.post("/albums/refresh", response_class=HTMLResponse)
     def refresh_albums(request: Request) -> HTMLResponse:
@@ -360,6 +428,24 @@ def create_app(
             return workspace(request, notice=configuration.refresh_albums())
         except Exception as exc:
             return workspace(request, error=str(exc))
+
+    @app.post("/album/refresh", response_class=HTMLResponse)
+    def refresh_current_album(request: Request) -> HTMLResponse:
+        try:
+            notice = configuration.refresh_current_album()
+            app.state.thumbnail_revision = secure_random.token_hex(8)
+            return workspace(request, notice=notice)
+        except (ProviderError, ValueError, RuntimeError) as exc:
+            return workspace(request, error=str(exc))
+
+    @app.post("/hardware", response_class=HTMLResponse)
+    async def save_hardware(request: Request) -> HTMLResponse:
+        try:
+            form = HardwareForm.parse(await request.form())
+            notice = await run_in_threadpool(configuration.save_hardware, form)
+            return await run_in_threadpool(workspace, request, notice=notice)
+        except (ValueError, RuntimeError) as exc:
+            return await run_in_threadpool(workspace, request, error=str(exc))
 
     @app.post("/album/select", response_class=HTMLResponse)
     async def select_album(request: Request) -> HTMLResponse:
@@ -397,9 +483,10 @@ def create_app(
     async def save_workflow(request: Request) -> HTMLResponse:
         try:
             form = WorkflowForm.parse(await request.form())
-            return workspace(request, notice=configuration.save_workflow(form))
+            notice = await run_in_threadpool(configuration.save_workflow, form)
+            return await run_in_threadpool(workspace, request, notice=notice)
         except Exception as exc:
-            return workspace(request, error=str(exc))
+            return await run_in_threadpool(workspace, request, error=str(exc))
 
     @app.post("/network", response_class=HTMLResponse)
     async def save_network(request: Request, background_tasks: BackgroundTasks) -> HTMLResponse:

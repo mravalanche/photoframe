@@ -57,11 +57,12 @@ firewall reach, trust warnings, and all installer options.
 
 ## First use
 
-1. Under **Photo provider**, enter the Immich server root URL and API key, then save and verify.
+1. Open **Settings → Photo provider** using the cog, enter the Immich server root URL and API key, then save and verify.
 2. Under **Album**, refresh the available albums and choose one.
-3. Under **Display & timing**, choose orientation, rotation, photo order, and display settings.
+3. Under **Schedule & orientation**, choose orientation, rotation and photo order.
+   Configure the physical display separately under **Settings → Display hardware**.
 4. Preview a photo. **Show now** updates the frame; **Start rotation here** changes the schedule.
-5. If another device on the local network needs access, open **Advanced settings** and
+5. If another device on the local network needs access, open **Settings → Advanced & recovery** and
    configure the listener before saving.
 
 The API key is stored locally and is never rendered back into the browser. Native display width
@@ -81,7 +82,7 @@ list.
 
 ## Basic configuration
 
-The collapsed **Advanced settings** panel controls the web listener:
+**Settings → Advanced & recovery** controls the web listener:
 
 - **This device only** binds to `127.0.0.1`.
 - **Devices on my local network** binds to `0.0.0.0`; connect using the frame's LAN IP address.

@@ -41,9 +41,10 @@ class ImageDisplay(Protocol):
 def _manual_profile(settings: DeviceSettings, status: str) -> DisplayProfile | None:
     if not settings.display_size:
         return None
+    mock = settings.display_driver == DisplayDriver.MOCK
     return DisplayProfile(
-        driver=DisplayDriver.INKY,
-        model=settings.display_model or "Manually configured Inky",
+        driver=DisplayDriver.MOCK if mock else DisplayDriver.INKY,
+        model=settings.display_model or ("Mock display" if mock else "Manually configured Inky"),
         resolution=settings.display_size,
         detected=False,
         status=status,

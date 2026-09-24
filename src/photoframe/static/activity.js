@@ -58,6 +58,8 @@
     show(headings[job.phase] || 'Working…', message, job.active, job.phase === 'failed', kind === 'album' && job.phase === 'checking' ? job : null);
   }
   async function refreshWorkspace() {
+    // A job started on another page must not replace a Settings form or its edits.
+    if (document.body.dataset?.page === 'settings') return;
     const panel = document.querySelector('[data-settings-panel="album"] > summary');
     const top = panel?.getBoundingClientRect().top;
     const headers = {};
