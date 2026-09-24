@@ -17,9 +17,9 @@ def test_activity_job_progress_recovery_and_single_workspace_refresh() -> None:
 const vm = require('node:vm'), fs = require('node:fs'), assert = require('node:assert/strict');
 const element = () => ({hidden:true, textContent:'', classList:{add(){},remove(){},toggle(){}},
   listeners:{}, addEventListener(name, fn){this.listeners[name]=fn;},removeAttribute(name){delete this[name];}});
-const dock = element(), title=element(), detail=element(), progress=element(), dismiss=element();
+const dock = element(), title=element(), detail=element(), progress=element(), dismiss=element(), cancel=element();
 dock.querySelector = selector => ({'[data-activity-title]':title,'[data-activity-detail]':detail,
-  'progress':progress,'[data-activity-dismiss]':dismiss})[selector];
+  'progress':progress,'[data-activity-dismiss]':dismiss,'[data-activity-cancel]':cancel})[selector];
 const events={}, jobs=[], refreshes=[], timers=[];
 let busy=false, refreshOk=false;
 const context={console, AbortSignal, Date, FormData:class{get(){return 'missing';}}, announceAlbum(){}, setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout(){},
@@ -31,10 +31,11 @@ const context={console, AbortSignal, Date, FormData:class{get(){return 'missing'
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 const poll=async state=>{jobs.push(state);timers.pop()();await flush();};
 (async()=>{
- jobs.push({album:{id:'job',active:true,phase:'loading',album_name:'Summer'},render:{phase:'idle'}});
+ jobs.push({album:{id:'job',active:true,phase:'loading',album_name:'Summer',cancellable:true},render:{phase:'idle'}});
  vm.runInNewContext(fs.readFileSync(SCRIPT,'utf8'),context);await flush();
- assert.equal(dock.hidden,false);assert.equal(busy,true);assert.equal(progress.value,undefined);
- await poll({album:{id:'job',active:true,phase:'checking',completed:3,total:8,album_name:'Summer'},render:{phase:'idle'}});
+ assert.equal(dock.hidden,false);assert.equal(busy,false);assert.equal(progress.value,undefined);
+ await poll({album:{id:'job',active:true,phase:'checking',completed:3,total:8,album_name:'Summer',cancellable:true},render:{phase:'idle'}});
+ assert.equal(cancel.hidden,false);
  assert.equal(progress.value,3);assert.equal(progress.max,8);assert.match(detail.textContent,/3 of 8/);
  await poll(new Error('offline'));
  assert.equal(title.textContent,'Connection interrupted');assert.equal(dock.hidden,false);
@@ -44,6 +45,7 @@ const poll=async state=>{jobs.push(state);timers.pop()();await flush();};
  await poll(complete);assert.equal(refreshes.length,1);
  dismiss.listeners.click();await poll(complete);assert.equal(dock.hidden,true);
  await poll({album:{phase:'idle'},render:{phase:'waiting',active:true,operation_id:'owned'}});
+ assert.equal(cancel.hidden,true);
  assert.equal(title.textContent,'Refreshing e-ink display');assert.equal(progress.value,undefined);
  await poll({album:{phase:'idle'},render:{phase:'failed',active:false,operation_id:'owned',message:'Display timed out'}});
  assert.equal(dismiss.hidden,false);assert.match(detail.textContent,/timed out/);
@@ -61,6 +63,15 @@ const poll=async state=>{jobs.push(state);timers.pop()();await flush();};
  await poll({album:{id:'other-tab',phase:'loading',active:true},render:{phase:'idle'}});
  await poll({album:{id:'other-tab',phase:'complete',active:false},render:{phase:'idle'}});
  assert.equal(refreshes.length,1,'Other tabs must not replace a Settings form');
+ await poll({album:{phase:'idle'},library:{id:'cold',phase:'checking',active:true,cancellable:true,completed:5,total:10},render:{phase:'idle'}});
+ assert.equal(cancel.hidden,false);assert.equal(progress.value,5);assert.equal(busy,false);
+ jobs.push({}, {album:{phase:'idle'},library:{id:'cold',phase:'cancelling',active:true,cancellable:false,message:'Finishing current request'},render:{phase:'idle'}});
+ await cancel.listeners.click();
+ assert.equal(cancel.hidden,true);assert.equal(title.textContent,'Cancelling album loading');
+ await poll({album:{phase:'idle'},library:{id:'cold',phase:'cancelled',active:false,message:'Your album is unchanged'},render:{phase:'idle'}});
+ assert.equal(title.textContent,'Album loading cancelled');assert.equal(dismiss.hidden,false);
+ assert.equal(progress.hidden,true);
+
 })();
 """.replace("SCRIPT", json.dumps(str(script)))
     subprocess.run([node, "-e", scenario], check=True)

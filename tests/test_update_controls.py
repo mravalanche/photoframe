@@ -21,13 +21,13 @@ const element=id=>{
   if(!elements.has(id))elements.set(id,{hidden:false,disabled:false,dataset:{},tagName:'DIV',addEventListener(){},removeAttribute(){},replaceChildren(){},append(){},querySelector(selector){return element(id+selector)}});
   return elements.get(id);
 };
-let generation=0, unavailable=false, nextPoll;
+let generation=0, unavailable=false, nextPoll, runningVersion='1.3.0';
 const context={document:{getElementById:element,querySelector(){return null},dispatchEvent(){},createTextNode(text){return {textContent:text}}},AbortSignal,Set,Date,URL,CustomEvent:class{constructor(type,options){Object.assign(this,options)}},
   setTimeout(callback){nextPoll=callback;},clearTimeout(){},
   fetch:async(path,options={})=>{
     calls.push(path);
     if(unavailable)throw Error('Offline');
-    if(path.endsWith('/status'))return{ok:true,json:async()=>({managed:true,phase:'idle',weekly:true,running_version:'1.3.0'})};
+    if(path.endsWith('/status'))return{ok:true,json:async()=>({managed:true,phase:'idle',weekly:true,running_version:runningVersion})};
     if(path.endsWith('/session'))return{ok:true,json:async()=>({csrf:`token-${++generation}`})};
     assert.equal(options.headers['X-CSRF-Token'],`token-${generation}`);
     assert.equal(options.credentials,'same-origin');
@@ -37,6 +37,7 @@ const context={document:{getElementById:element,querySelector(){return null},dis
   vm.runInNewContext(fs.readFileSync(SCRIPT.replace('updates.js','update-status.js'),'utf8'),context);
   vm.runInNewContext(fs.readFileSync(SCRIPT,'utf8'),context);
   await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(element('installed-version').textContent,'v1.3.0');
   await element('check-update').onclick();
   await element('check-update').onclick();
   assert.equal(generation,2);
@@ -49,7 +50,9 @@ const context={document:{getElementById:element,querySelector(){return null},dis
     assert.equal(element(id).disabled,true, `${id} must be disabled while disconnected`);
   }
   unavailable=false;
+  runningVersion='1.3.1';
   await nextPoll();
+  assert.equal(element('installed-version').textContent,'v1.3.1');
   assert.equal(element('check-update').disabled,false);
 })();
 """.replace("SCRIPT", json.dumps(str(script)))

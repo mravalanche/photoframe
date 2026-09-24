@@ -33,7 +33,7 @@
   {% if settings.frame.album_id %}
   <section class="library-section" aria-labelledby="library-title">
     <div class="section-heading"><div><p class="kicker">LIBRARY</p><h2 id="library-title">Choose a preview</h2></div><p class="eligibility-summary"><strong>{{ eligible|length }} eligible</strong><span>{{ wrong_orientation_count }} wrong orientation</span><span>{{ unsupported_count }} unsupported or unreadable</span></p></div>
-    <form method="post" action="/album/refresh" hx-post="/album/refresh" hx-target="#workspace" hx-swap="outerHTML" hx-disabled-elt="find button" hx-indicator="#album-refresh-progress" class="album-recovery" hx-sync="this:drop">
+    <form method="post" action="/album/refresh" data-album-refresh-form hx-post="/album/refresh" hx-target="#workspace" hx-swap="outerHTML" hx-disabled-elt="find button" hx-indicator="#album-refresh-progress" class="album-recovery" hx-sync="this:drop">
       <button class="secondary" {% if render_state.active %}disabled{% endif %}>Refresh photos & thumbnails</button>
       <span id="album-refresh-progress" class="htmx-indicator" role="status">Refreshing photos…</span>
       <p>Reload this album and retry unavailable images. Your displayed photo and schedule stay the same.</p>

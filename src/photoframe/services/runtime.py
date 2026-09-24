@@ -7,6 +7,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from threading import Event, Lock, RLock
+from time import monotonic
 
 from PIL import Image
 
@@ -27,6 +28,7 @@ from ..selector import (
 )
 from ..settings import SecretStore, SettingsRepository
 from ..updater.maintenance import MaintenanceError, MaintenanceGate
+from .album_load import AlbumLoad, AlbumLoadCancelled
 
 
 class Runtime:
@@ -53,6 +55,8 @@ class Runtime:
         self.cache = PhotoCache(settings.data_dir, self.repository.load().refresh.cache_max_bytes)
         self.refresh_coordinator = RefreshCoordinator(self)
         self._runtime_lock = RLock()
+        self._library_load_lock = Lock()
+        self._library_load: AlbumLoad | None = None
         self._eligibility_lock = RLock()
         self._claim_lock = Lock()
         self._lifecycle_inflight = False
@@ -119,14 +123,50 @@ class Runtime:
             self.loaded = True
             return list(self.albums)
 
-    def refresh_photos(self) -> list[Photo]:
-        album_id = self.repository.load().frame.album_id
-        photos = self.provider().list_photos(album_id) if album_id else []
-        self.photo_eligibility(self.repository.load().frame, photos)
+    def library_load_snapshot(self) -> dict:
         with self._runtime_lock:
-            self.photos = photos
-        self.reconcile_shuffle()
-        return list(photos)
+            load = self._library_load
+        return load.snapshot() if load else {"active": False, "phase": "idle"}
+
+    def cancel_library_load(self, job_id: str | None = None) -> bool:
+        with self._runtime_lock:
+            load = self._library_load
+        if load and (job_id is None or load.snapshot()["id"] == job_id):
+            return load.cancel()
+        return False
+
+    def refresh_photos(self) -> list[Photo]:
+        with self._library_load_lock:
+            settings = self.repository.load()
+            load = AlbumLoad(settings.frame.album_id or "", settings.frame.album_name)
+            with self._claim_lock:
+                if self._album_change_inflight:
+                    raise AlbumLoadCancelled
+                with self._runtime_lock:
+                    self._library_load = load
+            try:
+                photos = (
+                    self.provider().list_photos(settings.frame.album_id)
+                    if settings.frame.album_id
+                    else []
+                )
+                self.photo_eligibility(
+                    settings.frame, photos, load.progress, checkpoint=load.checkpoint
+                )
+                with load.committing():
+                    with self._runtime_lock:
+                        self.photos = photos
+                    self.reconcile_shuffle()
+                load.finish("complete", "Your album is ready")
+                return list(photos)
+            except AlbumLoadCancelled:
+                load.finish("cancelled", "Album loading cancelled")
+                raise
+            except Exception:
+                load.finish(
+                    "failed", "Photos could not be loaded. Check the photo source and try again."
+                )
+                raise
 
     def reconcile_shuffle(self, *, anchor_id: str | None = None, fresh: bool = False) -> None:
         """Persist a stable shuffled deck after settings or eligibility changes."""
@@ -247,6 +287,7 @@ class Runtime:
         progress: Callable[[int, int], None] | None = None,
         *,
         retry_unsupported: bool = False,
+        checkpoint: Callable[[], None] | None = None,
     ) -> EligibilitySummary:
         candidates = photos if photos is not None else self.catalog_snapshot()[1]
         total = sum(photo.matches(frame.orientation) for photo in candidates)
@@ -256,6 +297,8 @@ class Runtime:
 
         def check(photo: Photo) -> bool:
             nonlocal checked
+            if checkpoint:
+                checkpoint()
             supported = self.photo_is_decodable(photo.id, retry_unsupported=retry_unsupported)
             checked += 1
             if progress:
@@ -292,9 +335,15 @@ class Runtime:
             with self._claim_lock:
                 self._interactive_inflight -= 1
 
-    def wait_for_refresh(self) -> None:
-        if not self._refresh_idle.wait(timeout=60):
-            raise ValueError("The photo library is still refreshing; try again shortly")
+    def wait_for_refresh(self, checkpoint: Callable[[], None] | None = None) -> None:
+        deadline = monotonic() + 90
+        while not self._refresh_idle.wait(timeout=0.1):
+            if checkpoint:
+                checkpoint()
+            if checkpoint is None and monotonic() >= deadline:
+                raise ValueError("The photo library is still refreshing; try again shortly")
+        if checkpoint:
+            checkpoint()
         if self.renderer.snapshot().active or self.renderer.hardware_busy:
             raise ValueError("Wait for the current frame update before changing albums")
 
@@ -417,6 +466,18 @@ class Runtime:
                 )
             self._advance_scheduled_render(now)
             return attempted
+        except AlbumLoadCancelled:
+            # Do not immediately restart a cancelled cold load on the next worker
+            # tick. A new album selection remains free to start immediately.
+            self.repository.update(
+                lambda saved: setattr(
+                    saved.refresh_status,
+                    "next_attempt_at",
+                    (now or datetime.now(UTC))
+                    + timedelta(seconds=saved.refresh.catalog_refresh_seconds),
+                )
+            )
+            return False
         finally:
             with self._claim_lock:
                 self._lifecycle_inflight = False

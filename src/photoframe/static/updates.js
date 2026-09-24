@@ -33,6 +33,7 @@
       const response = await fetch('/api/updates/status', {cache:'no-store', signal:AbortSignal.timeout(10000)});
       if (!response.ok) throw new Error('Unavailable');
       state = await response.json(); failures = 0; connected = true;
+      if (state.running_version) el('installed-version').textContent = `v${state.running_version}`;
       el('managed-controls').hidden = !state.managed;
       el('unmanaged').hidden = state.managed;
       el('update-status').textContent = state.check_error || state.message || state.phase;

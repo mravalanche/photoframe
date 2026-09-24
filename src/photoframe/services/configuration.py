@@ -5,6 +5,7 @@ from __future__ import annotations
 import secrets as secure_random
 from collections import deque
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -27,6 +28,7 @@ from ..renderer import RenderPhase, RenderState
 from ..selector import active_selection, next_photo, shuffled_photo_ids
 from ..settings import SecretStore, SettingsRepository
 from ..tls import tls_paths
+from .album_load import AlbumLoad, AlbumLoadCancelled
 from .runtime import Runtime
 
 
@@ -166,63 +168,73 @@ class ConfigurationService:
         with self.runtime.maintenance_gate.operation(), self._album_selection_lock:
             self.runtime.claim_album_change()
             try:
-                self.runtime.wait_for_refresh()
-                previous = self.repository.load()
-                if not previous.frame.album_id:
-                    raise ValueError("Choose an album before refreshing its photos")
-                displayed = (
-                    self.runtime.photo(
-                        self.runtime.renderer.rendered_photo_id()
-                        or previous.refresh_status.last_rendered_photo_id
-                    )
-                    or self.runtime.preserved_display_photo()
-                )
-                try:
-                    photos = self.runtime.provider().list_photos(previous.frame.album_id)
-                    eligible = self.runtime.photo_eligibility(
-                        previous.frame, photos, retry_unsupported=True
-                    ).eligible
-                    cache = self.runtime.cache_stats()
-                except Exception as exc:
-                    raise RuntimeError(
-                        "The album could not be refreshed. Your current photos are unchanged; "
-                        "check the photo source and try again."
-                    ) from exc
-                eligible_ids = {photo.id for photo in eligible}
-                preview_id = self.runtime.preview_id()
-                refreshed_at = datetime.now(UTC)
-
-                def record_refresh(settings: AppSettings) -> None:
-                    if settings.provider != previous.provider or settings.frame != previous.frame:
-                        raise ValueError("Configuration changed while refreshing; try again")
-                    if settings.frame.starting_photo_id not in eligible_ids:
-                        settings.frame.starting_photo_id = None
-                    if settings.frame.photo_order == PhotoOrder.SHUFFLE:
-                        settings.frame.shuffle_photo_ids = shuffled_photo_ids(
-                            eligible, settings.frame
-                        )
-                    status = settings.refresh_status
-                    status.last_attempt_at = refreshed_at
-                    status.last_success_at = refreshed_at
-                    status.next_attempt_at = refreshed_at + timedelta(
-                        seconds=settings.refresh.catalog_refresh_seconds
-                    )
-                    status.consecutive_failures = 0
-                    status.last_error = None
-                    status.cached_photo_count, status.cached_bytes = cache.files, cache.bytes
-
-                self.runtime.commit_album(
-                    photos,
-                    displayed,
-                    record_refresh,
-                    preview_id=preview_id if preview_id in eligible_ids else None,
-                )
-                return (
-                    f"Refreshed {len(photos)} photos; {len(eligible)} available for this frame. "
-                    "The picture on your frame and its schedule are unchanged."
-                )
+                return self._refresh_current_album()
             finally:
                 self.runtime.release_album_change()
+
+    def _refresh_current_album(self, load: AlbumLoad | None = None) -> str:
+        self.runtime.wait_for_refresh(checkpoint=load.checkpoint if load else None)
+        previous = self.repository.load()
+        if not previous.frame.album_id:
+            raise ValueError("Choose an album before refreshing its photos")
+        displayed = (
+            self.runtime.photo(
+                self.runtime.renderer.rendered_photo_id()
+                or previous.refresh_status.last_rendered_photo_id
+            )
+            or self.runtime.preserved_display_photo()
+        )
+        try:
+            if load:
+                load.stage("loading", "Getting the latest photo list from your library")
+            photos = self.runtime.provider().list_photos(previous.frame.album_id)
+            eligible = self.runtime.photo_eligibility(
+                previous.frame,
+                photos,
+                load.progress if load else None,
+                retry_unsupported=True,
+                checkpoint=load.checkpoint if load else None,
+            ).eligible
+            cache = self.runtime.cache_stats()
+        except AlbumLoadCancelled:
+            raise
+        except Exception as exc:
+            raise RuntimeError(
+                "The album could not be refreshed. Your current photos are unchanged; "
+                "check the photo source and try again."
+            ) from exc
+        eligible_ids = {photo.id for photo in eligible}
+        preview_id = self.runtime.preview_id()
+        refreshed_at = datetime.now(UTC)
+
+        def record_refresh(settings: AppSettings) -> None:
+            if settings.provider != previous.provider or settings.frame != previous.frame:
+                raise ValueError("Configuration changed while refreshing; try again")
+            if settings.frame.starting_photo_id not in eligible_ids:
+                settings.frame.starting_photo_id = None
+            if settings.frame.photo_order == PhotoOrder.SHUFFLE:
+                settings.frame.shuffle_photo_ids = shuffled_photo_ids(eligible, settings.frame)
+            status = settings.refresh_status
+            status.last_attempt_at = refreshed_at
+            status.last_success_at = refreshed_at
+            status.next_attempt_at = refreshed_at + timedelta(
+                seconds=settings.refresh.catalog_refresh_seconds
+            )
+            status.consecutive_failures = 0
+            status.last_error = None
+            status.cached_photo_count, status.cached_bytes = cache.files, cache.bytes
+
+        with load.committing() if load else nullcontext():
+            self.runtime.commit_album(
+                photos,
+                displayed,
+                record_refresh,
+                preview_id=preview_id if preview_id in eligible_ids else None,
+            )
+        return (
+            f"Refreshed {len(photos)} photos; {len(eligible)} available for this frame. "
+            "The picture on your frame and its schedule are unchanged."
+        )
 
     def select_album(self, album_id: str) -> str:
         with self._album_selection_lock:
@@ -233,9 +245,15 @@ class ConfigurationService:
                 self.runtime.release_album_change()
 
     def _select_album(
-        self, album_id: str, progress: Callable[[int, int], None] | None = None
+        self,
+        album_id: str,
+        progress: Callable[[int, int], None] | None = None,
+        *,
+        load: AlbumLoad | None = None,
     ) -> str:
-        self.runtime.wait_for_refresh()
+        if load:
+            load.stage("waiting", "Waiting for any previous photo request to finish")
+        self.runtime.wait_for_refresh(checkpoint=load.checkpoint if load else None)
         albums, _photos = self.runtime.catalog_snapshot()
         album = next((item for item in albums if item.id == album_id), None)
         if not album:
@@ -246,7 +264,9 @@ class ConfigurationService:
             self.runtime.photo(self.runtime.renderer.rendered_photo_id())
             or self.runtime.preserved_display_photo()
         )
-        eligible_before = self.runtime.photo_eligibility(previous.frame, _photos).eligible
+        eligible_before = self.runtime.photo_eligibility(
+            previous.frame, _photos, checkpoint=load.checkpoint if load else None
+        ).eligible
         displayed_before = (
             rendered_before
             or active_selection(eligible_before, previous.frame, datetime.now(UTC)).photo
@@ -255,8 +275,17 @@ class ConfigurationService:
         candidate_frame.album_id = album.id
         candidate_frame.album_name = album.name
         try:
+            if load:
+                load.stage("loading", "Getting the photo list from your library")
             photos = self.runtime.provider().list_photos(album.id)
-            eligible = self.runtime.photo_eligibility(candidate_frame, photos, progress).eligible
+            eligible = self.runtime.photo_eligibility(
+                candidate_frame,
+                photos,
+                load.progress if load else progress,
+                checkpoint=load.checkpoint if load else None,
+            ).eligible
+        except AlbumLoadCancelled:
+            raise
         except Exception as exc:
             raise RuntimeError(
                 f"Could not use {album.name}. Your current album is unchanged; "
@@ -274,7 +303,8 @@ class ConfigurationService:
                 settings.frame.shuffle_photo_ids = shuffled_photo_ids(eligible, settings.frame)
             settings.refresh_status.next_attempt_at = None
 
-        self.runtime.commit_album(photos, displayed_before, choose_album)
+        with load.committing() if load else nullcontext():
+            self.runtime.commit_album(photos, displayed_before, choose_album)
         return f"Selected {album.name}; found {len(photos)} images"
 
     def save_workflow(self, form: WorkflowInput) -> str:
