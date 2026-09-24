@@ -1,3 +1,5 @@
 """Photoframe application."""
 
-__version__ = "1.2.1"
+from .version import package_version
+
+__version__ = package_version()

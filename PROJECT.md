@@ -161,11 +161,11 @@ firewall rule. Photoframe has no application authentication, so anyone who can r
 its settings. Automatic HTTPS encrypts traffic but its local certificate is not automatically
 trusted by browsers; expect to accept it or install an appropriate trust configuration on each
 client. After connecting, complete the normal browser setup and make later listener changes under
-**Advanced settings**.
+**Settings → Advanced & recovery**.
 
 ## Network and HTTPS operation
 
-Network settings live in the collapsed **Advanced settings** panel and persist under `[network]`
+Network settings live in **Settings → Advanced & recovery** and persist under `[network]`
 in `settings.toml`.
 
 | UI choice | Bind address | Intended reach |
@@ -358,6 +358,62 @@ candidate that passed the repository check.
 
 ## Roadmap
 
+The managed web updater, privileged helper boundary, signed bundle pipeline, one-time migration,
+and device acceptance drill are documented in [Managed updates](docs/managed-updates.md).
+Production signing trust is configured; see [Signing setup](release/README.md).
+The physical Pi soak and update/rollback acceptance drill remain outstanding.
+The normal reviewed, green-CI path into develop still applies; promotion to main requires the
+recorded physical-device update and rollback drill.
+
+### Feature priorities — agreed 2026-09-20
+
+The order below is the product backlog, separate from the engineering and release-readiness
+work below. These are proposals, not implemented features. Portrait-photo support is the first
+priority, followed by hiding photos from the frame.
+
+- [ ] **1. Portrait photos and per-photo framing.** Make portrait and square photos discoverable
+  and selectable even on a landscape frame; they are currently excluded by orientation. Offer
+  per-photo **Show whole photo / Fill frame**, simple black or white borders, and an accurate
+  preview using the same preparation as the physical display. Preserve current defaults for
+  other photos and provider originals. Start here before considering a manual crop/focal-point
+  editor or automatic face detection.
+- [ ] **2. Hide from this frame.** Exclude selected photos from this frame's rotation without
+  deleting or modifying them in Immich. Include immediate Undo and a hidden-photo list with
+  Restore. Persist exclusions across restart and handle hiding the last eligible photo safely.
+- [ ] **3. Keep this photo.** Hold the last successfully displayed photo until a chosen time or
+  manual resume, with the exact local resume time visible. Persist through restart, continue
+  library refreshes, and resume without replaying missed updates. Make the effect of manually
+  showing another photo during a hold explicit.
+- [ ] **4. Recently displayed.** Keep a bounded history of successfully displayed photos with
+  **Show again**. Do not record previews or failed renders as displayed photos.
+- [ ] **5. Memories from past years.** Offer photos from around this date in previous years,
+  restricted to explicitly selected albums. Show the year clearly, respect hidden photos,
+  avoid excessive repetition, and fall back to ordinary rotation when nothing matches.
+- [ ] **6. Mix several albums.** Combine selected albums into one rotation with duplicate removal
+  and predictable ordering. Respect resource limits; named presets can follow the basic mix.
+- [ ] **7. Find photos faster.** Add searchable albums and a paged, date-grouped photo chooser
+  instead of relying only on a long thumbnail rail. Revisit priority if library size makes
+  discovery a frequent problem.
+
+### Developer maintenance and appliance reliability
+
+- [ ] **Review outdated code, dependencies and tooling.** Audit runtime/development dependencies,
+  Python APIs, GitHub Actions, installer assumptions and documentation. Record supported versions
+  and replace obsolete usage with tested alternatives; distinguish useful upgrades from churn.
+- [ ] **Evaluate Python 3.14.** Check application and dependency support, especially Pillow,
+  Inky/GPIO integrations and ARM64 wheels, then test on the physical Pi before deciding whether
+  to raise the supported/minimum Python version. The current managed bundle/helper contract is
+  Python 3.12: plan interpreter provisioning, bundle compatibility, migration and rollback before
+  changing it. Keep project metadata, lockfile, CI, tooling and installation docs consistent.
+- [ ] **Eliminate deprecation warnings.** Audit startup, normal browser workflows, tests and
+  release builds. Address the observed FastAPI `on_event` lifecycle and Starlette/httpx test-client
+  deprecations, plus any others found, through supported APIs/dependencies rather than blanket
+  suppression. Add a focused warning-as-error regression gate once the baseline is clean.
+- [ ] **Reliable offline rotation, including after reboot.** Existing originals are cached, but
+  the catalog is held in memory. Persist enough catalog/prepared-photo state to keep rotating
+  available photos through an offline restart. Provide concise readiness/failure information
+  without requiring users to manage a cache queue; preserve storage and memory bounds.
+
 ### P0 — security, recovery, and release confidence
 
 - [ ] Define and implement an optional authentication model before recommending access beyond a
@@ -405,3 +461,41 @@ Before tagging or pushing a release candidate:
 - [ ] Record known limitations, migration notes, and recovery steps in the release notes.
 - [ ] Commit only reviewed changes, create the release tag, and push through the normal protected
   branch/review process.
+
+
+## Settings, recovery and loading follow-up (September 2026)
+
+Implemented for review on a feature branch based on `develop`:
+
+- The header has an accessible icon-only Settings cog and compact software-update status. Settings opens
+  Software updates first, followed by Photo provider, Display hardware, and Advanced & recovery.
+  Desktop side navigation becomes a two-column section chooser on small screens. Shared theme,
+  buttons, typography, status colours and focus styles apply throughout.
+- Album choice, preview/next-photo controls, photo order and schedule remain on the frame page.
+  Hardware saves preserve the schedule and run under the exclusive operation guard. Existing
+  combined workflow submissions remain supported; schedule-only saves preserve hardware.
+- Software updates show a status icon with text, relative last-check time (exact time available
+  on the timestamp), and a separate expandable release-notes panel below the controls. The installed version
+  has its own display and refreshes after an update; application assets use release-version URLs. Browser controls
+  disable while status is unavailable. The existing session, origin, confirmation and restart
+  protections remain intact; `/updates` redirects to the Settings section.
+- **Refresh photos & thumbnails** reloads the selected album and retries negative decode verdicts.
+  It preserves the displayed photo, valid preview, and schedule, and changes thumbnail URLs to
+  bypass stale browser cache. Failed provider refresh leaves the current catalog intact.
+  Missing thumbnails show an explicit unavailable placeholder.
+- Slow loading is an explicit user priority. The initial shell shows saved album/schedule
+  information, Settings links and an accessible loading/error/retry state immediately. Settings
+  sections use only saved configuration and do not wait for photo fetching or eligibility checks.
+  Provider, hardware and workflow saves run blocking work off the event loop.
+
+Album preparation now exposes phases and prepared-photo counts for initial/background loading,
+selection and manual recovery. Cancellation is cooperative between photo requests, with an atomic
+commit boundary; a later confirmed album choice replaces queued preparation. The initial workspace
+leaves photo loading to the background worker so the album picker can appear earlier.
+Unvalidated photos are not made eligible. Measure responsiveness on the physical frame;
+the original missing-image incident has not been reproduced on that device.
+
+Release state: the initial Settings/recovery work shipped in signed candidate `v1.3.0.dev4`.
+Device testing prompted a further presentation and album-loading follow-up. Ship that follow-up
+through a pull request to `develop` before preparing another development release.
+Physical Pi acceptance remains required.

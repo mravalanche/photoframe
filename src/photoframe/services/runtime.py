@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import secrets as secure_random
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
-from threading import Lock, RLock
+from threading import Event, Lock, RLock
+from time import monotonic
 
 from PIL import Image
 
@@ -24,6 +27,8 @@ from ..selector import (
     shuffled_photo_ids,
 )
 from ..settings import SecretStore, SettingsRepository
+from ..updater.maintenance import MaintenanceError, MaintenanceGate
+from .album_load import AlbumLoad, AlbumLoadCancelled
 
 
 class Runtime:
@@ -33,10 +38,12 @@ class Runtime:
         secrets: SecretStore,
         provider_resolver: ProviderResolver,
         demo_provider: PhotoProvider | None = None,
+        maintenance_gate: MaintenanceGate | None = None,
     ):
         self.repository, self.secrets = settings, secrets
         self.provider_resolver = provider_resolver
         self.demo_provider = demo_provider
+        self.maintenance_gate = maintenance_gate or MaintenanceGate()
         self.albums: list[Album] = []
         self.photos: list[Photo] = []
         self._loaded = False
@@ -48,9 +55,15 @@ class Runtime:
         self.cache = PhotoCache(settings.data_dir, self.repository.load().refresh.cache_max_bytes)
         self.refresh_coordinator = RefreshCoordinator(self)
         self._runtime_lock = RLock()
+        self._library_load_lock = Lock()
+        self._library_load: AlbumLoad | None = None
         self._eligibility_lock = RLock()
         self._claim_lock = Lock()
         self._lifecycle_inflight = False
+        self._album_change_inflight = False
+        self._interactive_inflight = 0
+        self._refresh_idle = Event()
+        self._refresh_idle.set()
         self._startup_catalog_restore_pending = True
         self.render_service = RenderService(
             self.renderer,
@@ -110,14 +123,50 @@ class Runtime:
             self.loaded = True
             return list(self.albums)
 
-    def refresh_photos(self) -> list[Photo]:
-        album_id = self.repository.load().frame.album_id
-        photos = self.provider().list_photos(album_id) if album_id else []
-        self.photo_eligibility(self.repository.load().frame, photos)
+    def library_load_snapshot(self) -> dict:
         with self._runtime_lock:
-            self.photos = photos
-        self.reconcile_shuffle()
-        return list(photos)
+            load = self._library_load
+        return load.snapshot() if load else {"active": False, "phase": "idle"}
+
+    def cancel_library_load(self, job_id: str | None = None) -> bool:
+        with self._runtime_lock:
+            load = self._library_load
+        if load and (job_id is None or load.snapshot()["id"] == job_id):
+            return load.cancel()
+        return False
+
+    def refresh_photos(self) -> list[Photo]:
+        with self._library_load_lock:
+            settings = self.repository.load()
+            load = AlbumLoad(settings.frame.album_id or "", settings.frame.album_name)
+            with self._claim_lock:
+                if self._album_change_inflight:
+                    raise AlbumLoadCancelled
+                with self._runtime_lock:
+                    self._library_load = load
+            try:
+                photos = (
+                    self.provider().list_photos(settings.frame.album_id)
+                    if settings.frame.album_id
+                    else []
+                )
+                self.photo_eligibility(
+                    settings.frame, photos, load.progress, checkpoint=load.checkpoint
+                )
+                with load.committing():
+                    with self._runtime_lock:
+                        self.photos = photos
+                    self.reconcile_shuffle()
+                load.finish("complete", "Your album is ready")
+                return list(photos)
+            except AlbumLoadCancelled:
+                load.finish("cancelled", "Album loading cancelled")
+                raise
+            except Exception:
+                load.finish(
+                    "failed", "Photos could not be loaded. Check the photo source and try again."
+                )
+                raise
 
     def reconcile_shuffle(self, *, anchor_id: str | None = None, fresh: bool = False) -> None:
         """Persist a stable shuffled deck after settings or eligibility changes."""
@@ -144,6 +193,26 @@ class Runtime:
     def catalog_snapshot(self) -> tuple[list[Album], list[Photo]]:
         with self._runtime_lock:
             return list(self.albums), list(self.photos)
+
+    def workspace_snapshot(self) -> tuple[AppSettings, list[Album], list[Photo]]:
+        """Read the selected album and its matching published catalog together."""
+        with self._runtime_lock:
+            return self.repository.load(), list(self.albums), list(self.photos)
+
+    def commit_album(
+        self,
+        photos: list[Photo],
+        displayed: Photo | None,
+        change: Callable[[AppSettings], None],
+        *,
+        preview_id: str | None = None,
+    ) -> None:
+        prepared_catalog = list(photos)
+        with self._runtime_lock:
+            self.repository.update(change)
+            self._preserved_display_photo = displayed
+            self.photos = prepared_catalog
+            self.selected_preview_id = preview_id
 
     def clear_photos(self) -> None:
         """Clear the loaded photo catalog without exposing runtime locking."""
@@ -175,12 +244,17 @@ class Runtime:
     def _cache_key(self, photo_id: str) -> str:
         return f"{self.repository.load().provider.kind}:{photo_id}"
 
-    def photo_is_decodable(self, photo_id: str) -> bool:
+    def photo_is_decodable(self, photo_id: str, *, retry_unsupported: bool = False) -> bool:
         """Verify an asset once, persisting the installed-pipeline verdict."""
         key = self._cache_key(photo_id)
+        # Status requests for the current album must not wait behind a network
+        # download being checked for a candidate album.
+        known = self.cache.decodability(key)
+        if known is not None and not (retry_unsupported and not known):
+            return known
         with self._eligibility_lock:
             known = self.cache.decodability(key)
-            if known is not None:
+            if known is not None and not (retry_unsupported and not known):
                 return known
             try:
                 self.render_source(photo_id)
@@ -207,14 +281,75 @@ class Runtime:
         return fallback
 
     def photo_eligibility(
-        self, frame: FrameSettings, photos: list[Photo] | None = None
+        self,
+        frame: FrameSettings,
+        photos: list[Photo] | None = None,
+        progress: Callable[[int, int], None] | None = None,
+        *,
+        retry_unsupported: bool = False,
+        checkpoint: Callable[[], None] | None = None,
     ) -> EligibilitySummary:
         candidates = photos if photos is not None else self.catalog_snapshot()[1]
+        total = sum(photo.matches(frame.orientation) for photo in candidates)
+        checked = 0
+        if progress:
+            progress(checked, total)
+
+        def check(photo: Photo) -> bool:
+            nonlocal checked
+            if checkpoint:
+                checkpoint()
+            supported = self.photo_is_decodable(photo.id, retry_unsupported=retry_unsupported)
+            checked += 1
+            if progress:
+                progress(checked, total)
+            return supported
+
         return classify_photos(
             candidates,
             frame,
-            lambda photo: self.photo_is_decodable(photo.id),
+            check,
         )
+
+    def claim_album_change(self) -> None:
+        """Exclude scheduled refresh/render while a candidate catalog is prepared."""
+        with self._claim_lock:
+            if self._album_change_inflight:
+                raise ValueError("An album change is already in progress")
+            if self._interactive_inflight:
+                raise ValueError("Another change is being saved; try changing albums shortly")
+            if self.renderer.snapshot().active or self.renderer.hardware_busy:
+                raise ValueError("Wait for the current frame update before changing albums")
+            self._album_change_inflight = True
+
+    @contextmanager
+    def interactive_operation(self) -> Iterator[None]:
+        """Atomically admit web mutations against the background album claim."""
+        with self._claim_lock:
+            if self._album_change_inflight:
+                raise ValueError("Wait for the album change to finish before making another change")
+            self._interactive_inflight += 1
+        try:
+            yield
+        finally:
+            with self._claim_lock:
+                self._interactive_inflight -= 1
+
+    def wait_for_refresh(self, checkpoint: Callable[[], None] | None = None) -> None:
+        deadline = monotonic() + 90
+        while not self._refresh_idle.wait(timeout=0.1):
+            if checkpoint:
+                checkpoint()
+            if checkpoint is None and monotonic() >= deadline:
+                raise ValueError("The photo library is still refreshing; try again shortly")
+        if checkpoint:
+            checkpoint()
+        if self.renderer.snapshot().active or self.renderer.hardware_busy:
+            raise ValueError("Wait for the current frame update before changing albums")
+
+    def release_album_change(self) -> None:
+        with self._claim_lock:
+            self._album_change_inflight = False
 
     def renderable_photos(self, photos: list[Photo], frame: FrameSettings) -> list[Photo]:
         return self.photo_eligibility(frame, photos).eligible
@@ -240,7 +375,7 @@ class Runtime:
         settings = self.repository.load()
         self.cache.set_max_bytes(settings.refresh.cache_max_bytes)
         key = f"{settings.provider.kind}:{photo_id}"
-        cached = self.cache.get(key)
+        cached = self.cache.get(key, max_bytes=32 * 1024 * 1024)
         if cached is not None:
             return cached
         source, _media_type = self.provider().original(photo_id)
@@ -279,10 +414,18 @@ class Runtime:
         return failures
 
     def refresh_lifecycle(self, now: datetime | None = None) -> bool:
+        try:
+            with self.maintenance_gate.operation():
+                return self._refresh_lifecycle(now)
+        except MaintenanceError:
+            return False
+
+    def _refresh_lifecycle(self, now: datetime | None = None) -> bool:
         with self._claim_lock:
-            if self._lifecycle_inflight:
+            if self._lifecycle_inflight or self._album_change_inflight:
                 return False
             self._lifecycle_inflight = True
+            self._refresh_idle.clear()
         try:
             settings = self.repository.load()
             _albums, photos = self.catalog_snapshot()
@@ -323,9 +466,22 @@ class Runtime:
                 )
             self._advance_scheduled_render(now)
             return attempted
+        except AlbumLoadCancelled:
+            # Do not immediately restart a cancelled cold load on the next worker
+            # tick. A new album selection remains free to start immediately.
+            self.repository.update(
+                lambda saved: setattr(
+                    saved.refresh_status,
+                    "next_attempt_at",
+                    (now or datetime.now(UTC))
+                    + timedelta(seconds=saved.refresh.catalog_refresh_seconds),
+                )
+            )
+            return False
         finally:
             with self._claim_lock:
                 self._lifecycle_inflight = False
+                self._refresh_idle.set()
 
     def record_worker_failure(self, exc: Exception) -> None:
         current = datetime.now(UTC)
@@ -342,6 +498,8 @@ class Runtime:
 
     def _advance_scheduled_render(self, now: datetime | None = None) -> None:
         """Render one recent due occurrence, surviving restarts without replay storms."""
+        if self.maintenance_gate.maintenance or self._album_change_inflight:
+            return
         current = now or datetime.now(UTC)
         settings = self.repository.load()
         self.renderer.update(settings.device, current)

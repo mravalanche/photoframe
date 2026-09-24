@@ -11,23 +11,47 @@
       document.documentElement.dataset.theme = saved === 'light' ? 'light' : 'dark';
     })();
   </script>
-  <title>Photoframe</title>
+  <title>{{ 'Settings · ' if settings_section else '' }}Photoframe</title>
   <link rel="icon" href="{{ url_for('static', path='/photoframe.svg') }}" type="image/svg+xml">
-  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=8">
-  <script src="{{ url_for('static', path='/tab-identity.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}?v={{ version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v={{ version }}">
+  <link rel="stylesheet" href="/static/settings.css?v={{ version }}">
+  <link rel="stylesheet" href="/static/updates.css?v={{ version }}">
+  <script src="/static/update-status.js?v={{ version }}" defer></script>
+  {% if settings_section == 'updates' %}<script src="/static/updates.js?v={{ version }}" defer></script>{% endif %}
+  <script src="/static/thumbnails.js?v={{ version }}" defer></script>
+  <script src="{{ url_for('static', path='/tab-identity.js') }}?v={{ version }}"></script>
   <script src="{{ url_for('static', path='/vendor/htmx-2.0.4.min.js') }}" defer></script>
 </head>
-<body>
+<body data-page="{{ 'settings' if settings_section else 'frame' }}">
   <header class="app-header">
     <a href="/" class="brand" aria-label="Photoframe home"><span class="brand-mark"><img src="{{ url_for('static', path='/photoframe.svg') }}" alt=""></span><span>Photoframe</span></a>
+    <nav class="header-actions" aria-label="Main navigation">
+      <a class="update-status-badge" href="/settings/updates" title="Software updates" data-update-badge><span data-update-icon aria-hidden="true">○</span><span data-update-label>Update status</span></a>
+      <a class="settings-link" href="/settings" aria-label="Settings" title="Settings"{% if settings_section %} aria-current="page"{% endif %}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9.5 3-.5 2.2-1.7 1-2.2-.7-2.5 4.3 1.7 1.5v2L2.6 15l2.5 4.3 2.2-.7 1.7 1 .5 2.2h5l.5-2.2 1.7-1 2.2.7 2.5-4.3-1.7-1.7v-2l1.7-1.5-2.5-4.3-2.2.7-1.7-1-.5-2.2z"/><circle cx="12" cy="12.4" r="3.3"/></svg></a>
+    </nav>
     <div class="theme-toggle" role="group" aria-label="Colour theme">
       <button type="button" data-theme-choice="light" aria-pressed="false" onclick="setTheme('light')">Light</button>
       <button type="button" data-theme-choice="dark" aria-pressed="true" onclick="setTheme('dark')">Dark</button>
     </div>
   </header>
-  <main class="app-shell">
-    <div hx-get="/partials/workspace" hx-trigger="load" hx-swap="outerHTML"><div class="loading">Preparing your frame…</div></div>
+  <main class="app-shell{% if settings_section %} settings-shell{% endif %}">
+    {% if settings_section %}
+    <div class="settings-heading"><div><p class="kicker">CONFIGURATION</p><h1>Settings</h1></div><a class="secondary" href="/">← Back to frame</a></div>
+    <div class="settings-layout">
+      <nav class="settings-nav" aria-label="Settings sections">
+        {% for key, label in [('updates', 'Software updates'), ('provider', 'Photo provider'), ('hardware', 'Display hardware'), ('advanced', 'Advanced & recovery')] %}
+        <a href="/settings/{{ key }}"{% if settings_section == key %} aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}
+      </nav>
+      <section class="settings-content" aria-label="{{ settings_title }}">
+        {% if settings_section == 'updates' %}{% include "_updates.html" %}
+        {% else %}<div hx-get="/partials/workspace?section={{ settings_section }}" hx-trigger="load" hx-swap="outerHTML"><div class="loading">Loading settings…</div></div>{% endif %}
+      </section>
+    </div>
+    {% else %}
+    {% include "_loading_workspace.html" %}
+    {% endif %}
   </main>
   <script>
     function setTheme(theme) {
@@ -273,6 +297,15 @@
       setupAlbumSelection();
       setupScheduleSettings();
     }
+    function workspaceLoadFailed(event) {
+      const loading = event.detail.elt?.closest?.('[data-workspace-loading]');
+      if (!loading) return;
+      loading.querySelector('[data-loading-message]').textContent = 'Photos could not be loaded';
+      loading.querySelector('[data-loading-detail]').textContent = 'Try again, or open photo provider settings to check your connection.';
+      loading.querySelector('[data-loading-retry]').hidden = false;
+      loading.querySelector('[aria-busy]').setAttribute('aria-busy', 'false');
+    }
+    ['htmx:responseError', 'htmx:sendError', 'htmx:timeout'].forEach(name => document.addEventListener(name, workspaceLoadFailed));
     document.addEventListener('DOMContentLoaded', syncInterface);
     document.addEventListener('htmx:afterSwap', syncInterface);
     document.addEventListener('htmx:configRequest', event => {
@@ -327,5 +360,12 @@
       window.scrollTo(0, saved.pageY);
     });
   </script>
+  <aside id="activity-dock" class="activity-dock" aria-label="Current activity" hidden>
+    <div><strong data-activity-title role="status" aria-live="polite" aria-atomic="true"></strong><p data-activity-detail></p></div>
+    <button type="button" class="secondary" data-activity-cancel hidden>Cancel loading</button>
+    <button type="button" class="quiet" data-activity-dismiss aria-label="Dismiss activity status" hidden>×</button>
+    <progress aria-label="Current operation progress" hidden></progress>
+  </aside>
+  <script src="{{ url_for('static', path='/activity.js') }}?v={{ version }}" defer></script>
 </body>
 </html>

@@ -299,6 +299,9 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     with TestClient(app) as client:
         page = client.get("/")
         workspace = client.get("/partials/workspace")
+        provider_settings = client.get("/partials/workspace?section=provider")
+        advanced_settings = client.get("/partials/workspace?section=advanced")
+        hardware_settings = client.get("/partials/workspace?section=hardware")
         frame_status = client.get("/partials/frame-status")
         selected_workspace = client.post("/photo/preview", data={"photo_id": "coast"})
         htmx = client.get("/static/vendor/htmx-2.0.4.min.js")
@@ -324,10 +327,11 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'class="source-state"><span class="status-dot"' in workspace.text
     assert ".source-state" in responsive_css.text
     assert "data-settings-accordion" in workspace.text
-    assert 'name="frame-settings" data-settings-panel="provider"' in workspace.text
+    assert 'name="frame-settings" data-settings-panel="provider"' in provider_settings.text
+    assert 'data-settings-panel="provider"' not in workspace.text
     assert 'name="frame-settings" data-settings-panel="album"' in workspace.text
     assert 'name="frame-settings" data-settings-panel="display"' in workspace.text
-    assert workspace.text.count('class="disclosure-icon"') == 5
+    assert workspace.text.count('class="disclosure-icon"') == 2
     assert "setupSettingsAccordion" in page.text
     assert "activeSettingsPanel" in page.text
     assert "/static/tab-identity.js" in page.text
@@ -337,9 +341,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'id="mdi-image-frame"' in icon.text
     assert 'action="/photo/start"' in selected_workspace.text
     assert "Start rotation here" in selected_workspace.text
-    assert "Advanced / manual hardware settings" in workspace.text
-    assert '<details class="advanced-settings span-2">' in workspace.text
-    assert '<details class="advanced-settings span-2" open' not in workspace.text
+    assert "Display hardware" in hardware_settings.text
     for name in (
         "display_driver",
         "display_model",
@@ -348,8 +350,9 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
         "expected_refresh_seconds",
         "render_timeout_seconds",
     ):
-        assert f'name="{name}"' in workspace.text
-    assert 'data-settings-panel="advanced"' in workspace.text
+        assert f'name="{name}"' in hardware_settings.text
+        assert f'name="{name}"' not in workspace.text
+    assert 'data-settings-panel="advanced"' in advanced_settings.text
     assert 'data-settings-panel="display" data-default-open="false"' in workspace.text
     assert 'data-settings-panel="display" data-default-open="false" open' not in workspace.text
     assert 'action="/photo/next"' in workspace.text
@@ -358,39 +361,39 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert workspace.text.index('id="frame-status"') < workspace.text.index(
         'class="frame-next-action"'
     )
-    assert "Advanced settings" in workspace.text
+    assert "Advanced settings" in advanced_settings.text
     assert "Daily at 03:00 · In album order · Landscape" in workspace.text
-    assert "Simulator · 24-hour" not in workspace.text
-    assert "Network & web security" in workspace.text
-    assert "This device only" in workspace.text
-    assert "Devices on my local network" in workspace.text
-    assert 'name="network_access" value="local_network"' in workspace.text
-    assert "home_network" not in workspace.text
+    assert "Simulator · 24-hour" not in advanced_settings.text
+    assert "Network & web security" in advanced_settings.text
+    assert "This device only" in advanced_settings.text
+    assert "Devices on my local network" in advanced_settings.text
+    assert 'name="network_access" value="local_network"' in advanced_settings.text
+    assert "home_network" not in advanced_settings.text
     assert "home_network" not in page.text
     assert (
         "Devices on this network can connect through this device\u2019s local IP address"
-        in workspace.text
+        in advanced_settings.text
     )
-    assert "home network" not in workspace.text.lower()
-    assert "Trusted LAN" not in workspace.text
-    assert 'name="web_protocol" value="http"' in workspace.text
-    assert 'name="web_protocol" value="https"' in workspace.text
-    assert "data-certificate-controls hidden" in workspace.text
-    assert "Address after restart" in workspace.text
+    assert "home network" not in advanced_settings.text.lower()
+    assert "Trusted LAN" not in advanced_settings.text
+    assert 'name="web_protocol" value="http"' in advanced_settings.text
+    assert 'name="web_protocol" value="https"' in advanced_settings.text
+    assert "data-certificate-controls hidden" in advanced_settings.text
+    assert "Address after restart" in advanced_settings.text
     assert "setupNetworkSettings" in page.text
     assert "confirmNetworkChange" in page.text
-    assert 'class="advanced-card-content advanced-card-body"' in workspace.text
-    assert 'id="network-port"' in workspace.text
-    assert 'aria-describedby="network-port-help"' in workspace.text
-    assert 'aria-describedby="certificate-path-help"' in workspace.text
-    assert 'aria-describedby="private-key-path-help"' in workspace.text
+    assert 'class="advanced-card-content advanced-card-body"' in advanced_settings.text
+    assert 'id="network-port"' in advanced_settings.text
+    assert 'aria-describedby="network-port-help"' in advanced_settings.text
+    assert 'aria-describedby="certificate-path-help"' in advanced_settings.text
+    assert 'aria-describedby="private-key-path-help"' in advanced_settings.text
     assert ".advanced-card-body" in responsive_css.text
     assert "padding: 26px 32px" in responsive_css.text
     assert ".network-field > input" in responsive_css.text
     assert "@media (max-width: 700px)" in responsive_css.text
-    assert "Reset Photoframe to defaults?" in workspace.text
-    assert "Keep current settings" in workspace.text
-    assert "Reset to defaults" in workspace.text
+    assert "Reset Photoframe to defaults?" in advanced_settings.text
+    assert "Keep current settings" in advanced_settings.text
+    assert "Reset to defaults" in advanced_settings.text
     assert 'name="photo_order"' in workspace.text
     assert "Controls future scheduled changes" in workspace.text
 

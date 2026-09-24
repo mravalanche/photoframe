@@ -39,8 +39,10 @@ def shuffled_photo_ids(
 ) -> list[str]:
     """Build a stable deck, retaining eligible existing cards across catalog changes."""
     eligible_ids = [photo.id for photo in eligible_photos(photos, frame)]
-    retained = [photo_id for photo_id in frame.shuffle_photo_ids if photo_id in eligible_ids]
-    missing = [photo_id for photo_id in eligible_ids if photo_id not in retained]
+    eligible_id_set = set(eligible_ids)
+    retained = [photo_id for photo_id in frame.shuffle_photo_ids if photo_id in eligible_id_set]
+    retained_id_set = set(retained)
+    missing = [photo_id for photo_id in eligible_ids if photo_id not in retained_id_set]
     missing.sort(
         key=lambda photo_id: hashlib.sha256(f"{frame.shuffle_seed}:{photo_id}".encode()).digest()
     )

@@ -6,7 +6,8 @@ from pathlib import Path
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from fastapi import BackgroundTasks, FastAPI, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -19,17 +20,22 @@ from ..providers import ConfiguredProviderResolver, DemoProvider, ProviderError,
 from ..renderer import RenderPhase
 from ..schedule import next_occurrence
 from ..selector import active_selection, next_photo
+from ..services.album_change import AlbumChangeJob
 from ..services.configuration import ConfigurationService, ResetIncompleteError
 from ..services.runtime import Runtime
 from ..settings import SecretStore, SettingsRepository
+from ..updater.auth import AuthenticationError, require_same_origin
+from ..updater.maintenance import MaintenanceError
 from .forms import (
     AlbumForm,
     ConnectionForm,
+    HardwareForm,
     NetworkForm,
     NextPhotoForm,
     PhotoForm,
     WorkflowForm,
 )
+from .updates import register_updates
 
 
 def schedule_label(target: datetime | None, timezone: str, now: datetime | None = None) -> str:
@@ -76,6 +82,7 @@ def create_app(
     is_demo = demo_mode if demo_mode is not None else os.getenv("PHOTOFRAME_DEMO_MODE") == "1"
     runtime = Runtime(repository, secrets, provider_resolver, DemoProvider() if is_demo else None)
     configuration = ConfigurationService(repository, secrets, runtime, target)
+    album_change = AlbumChangeJob(configuration)
     if not is_demo:
         runtime.initialise_display()
     templates = Jinja2Templates(directory=package / "templates")
@@ -103,6 +110,54 @@ def create_app(
     app = FastAPI(title="Photoframe", version=__version__)
     app.mount("/static", StaticFiles(directory=package / "static"), name="static")
     app.state.runtime = runtime
+    app.state.album_change = album_change
+    register_updates(app, templates, runtime, target)
+
+    @app.middleware("http")
+    async def maintenance_guard(request: Request, call_next):
+        async def admitted_request():
+            if request.method == "POST" and request.url.path in {
+                "/album/refresh",
+                "/hardware",
+                "/api/album/select",
+                "/api/album/cancel",
+                "/api/album/refresh",
+            }:
+                try:
+                    require_same_origin(
+                        request.headers.get("origin"),
+                        request.url.scheme,
+                        request.headers.get("host", ""),
+                    )
+                except AuthenticationError:
+                    return JSONResponse(
+                        {"message": "Request origin is not allowed"}, status_code=403
+                    )
+            if request.method == "POST" and request.url.path not in {
+                "/album/select",
+                "/api/album/select",
+                "/api/album/cancel",
+                "/api/album/refresh",
+                "/album/refresh",
+                "/hardware",
+            }:
+                try:
+                    with runtime.interactive_operation():
+                        return await call_next(request)
+                except ValueError as exc:
+                    return JSONResponse({"message": str(exc)}, status_code=409)
+            return await call_next(request)
+
+        if not request.url.path.startswith(
+            ("/api/updates/", "/api/activity", "/updates", "/settings", "/health", "/static/")
+        ):
+            try:
+                with runtime.maintenance_gate.operation():
+                    return await admitted_request()
+            except MaintenanceError as exc:
+                return JSONResponse({"message": str(exc)}, status_code=503)
+        return await admitted_request()
+
     worker = RefreshWorker(runtime.refresh_lifecycle, runtime.record_worker_failure)
 
     @app.on_event("startup")
@@ -118,15 +173,19 @@ def create_app(
     ) -> dict:
         current = datetime.now(UTC)
         settings = repository.load()
-        if not runtime.loaded and settings.verification.ok:
+        if (
+            not runtime.maintenance_gate.maintenance
+            and not runtime.loaded
+            and settings.verification.ok
+        ):
             try:
                 runtime.refresh_albums()
-                if settings.frame.album_id:
-                    runtime.refresh_photos()
+                # The refresh worker owns photo loading. Keep this request free
+                # to show the album picker while its counted job runs.
             except (ProviderError, RuntimeError) as exc:
                 error = str(exc)
                 runtime.loaded = True
-        albums, photos = runtime.catalog_snapshot()
+        settings, albums, photos = runtime.workspace_snapshot()
         current_album_available = bool(
             settings.frame.album_id and any(album.id == settings.frame.album_id for album in albums)
         )
@@ -187,6 +246,7 @@ def create_app(
         ]
         return {
             "request": request,
+            "thumbnail_revision": getattr(app.state, "thumbnail_revision", ""),
             "settings": settings,
             "weekday_names": [
                 "Monday",
@@ -251,6 +311,7 @@ def create_app(
             "notice": notice,
             "error": error,
             "demo_mode": is_demo,
+            "app_version": __version__,
             "schedule_order": (
                 "Scheduled shuffle"
                 if settings.frame.photo_order == PhotoOrder.SHUFFLE
@@ -278,10 +339,31 @@ def create_app(
     def workspace(
         request: Request, notice: str | None = None, error: str | None = None
     ) -> HTMLResponse:
+        section = request.headers.get("x-settings-section") or request.query_params.get("section")
+        if section in {"provider", "hardware", "advanced"}:
+            settings = repository.load()
+            context = {
+                "settings": settings,
+                "notice": notice,
+                "error": error,
+                "credential_saved": secrets.exists(),
+                "demo_mode": is_demo,
+                "network_address": settings.network.display_address,
+                "network_summary": (
+                    f"{'This device only' if settings.network.access == NetworkAccess.DEVICE_ONLY else 'Local network'}"
+                    f" · {settings.network.protocol.value.upper()} · {settings.network.port}"
+                ),
+            }
+        else:
+            context = workspace_context(request, notice=notice, error=error)
+        context["settings_section"] = (
+            section if section in {"provider", "hardware", "advanced"} else None
+        )
+        context["thumbnail_revision"] = getattr(app.state, "thumbnail_revision", "")
         return templates.TemplateResponse(
             request,
             "_workspace.html",
-            workspace_context(request, notice=notice, error=error),
+            context,
         )
 
     def render_operation_id(request: Request) -> str | None:
@@ -293,7 +375,37 @@ def create_app(
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "index.html", {})
+        settings = repository.load()
+        occurrence = next_occurrence(settings.frame, settings.device.timezone, datetime.now(UTC))
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            {
+                "initial_settings": settings,
+                "initial_next_change": schedule_label(occurrence.due_at, settings.device.timezone),
+            },
+        )
+
+    @app.get("/settings", response_class=HTMLResponse)
+    @app.get("/settings/{section}", response_class=HTMLResponse)
+    def settings_page(request: Request, section: str = "updates") -> HTMLResponse:
+        titles = {
+            "updates": "Software updates",
+            "provider": "Photo provider",
+            "hardware": "Display hardware",
+            "advanced": "Advanced & recovery",
+        }
+        if section not in titles:
+            raise HTTPException(status_code=404)
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            {
+                "settings_section": section,
+                "settings_title": titles[section],
+                "version": __version__,
+            },
+        )
 
     @app.get("/partials/workspace", response_class=HTMLResponse)
     def workspace_partial(request: Request) -> HTMLResponse:
@@ -312,10 +424,11 @@ def create_app(
     @app.post("/connection", response_class=HTMLResponse)
     async def save_connection(request: Request) -> HTMLResponse:
         try:
-            message = configuration.save_connection(ConnectionForm.parse(await request.form()))
-            return workspace(request, notice=message)
+            form = ConnectionForm.parse(await request.form())
+            message = await run_in_threadpool(configuration.save_connection, form)
+            return await run_in_threadpool(workspace, request, notice=message)
         except Exception as exc:
-            return workspace(request, error=str(exc))
+            return await run_in_threadpool(workspace, request, error=str(exc))
 
     @app.post("/albums/refresh", response_class=HTMLResponse)
     def refresh_albums(request: Request) -> HTMLResponse:
@@ -324,21 +437,95 @@ def create_app(
         except Exception as exc:
             return workspace(request, error=str(exc))
 
+    @app.post("/album/refresh", response_class=HTMLResponse)
+    def refresh_current_album(request: Request) -> HTMLResponse:
+        try:
+            notice = configuration.refresh_current_album()
+            app.state.thumbnail_revision = secure_random.token_hex(8)
+            return workspace(request, notice=notice)
+        except (ProviderError, ValueError, RuntimeError) as exc:
+            return workspace(request, error=str(exc))
+
+    @app.post("/hardware", response_class=HTMLResponse)
+    async def save_hardware(request: Request) -> HTMLResponse:
+        try:
+            form = HardwareForm.parse(await request.form())
+            notice = await run_in_threadpool(configuration.save_hardware, form)
+            return await run_in_threadpool(workspace, request, notice=notice)
+        except (ValueError, RuntimeError) as exc:
+            return await run_in_threadpool(workspace, request, error=str(exc))
+
     @app.post("/album/select", response_class=HTMLResponse)
     async def select_album(request: Request) -> HTMLResponse:
         try:
             form = AlbumForm.parse(await request.form())
-            return workspace(request, notice=configuration.select_album(form.album_id))
+            notice = await run_in_threadpool(configuration.select_album, form.album_id)
+            return await run_in_threadpool(workspace, request, notice=notice)
         except Exception as exc:
             return workspace(request, error=str(exc))
+
+    @app.post("/api/album/select")
+    async def start_album_change(request: Request) -> JSONResponse:
+        try:
+            payload = await request.json()
+            if not isinstance(payload, dict) or not isinstance(payload.get("album_id"), str):
+                raise ValueError("Choose an album from the loaded list")
+            state = album_change.start(payload["album_id"])
+        except ValueError as exc:
+            return JSONResponse({"message": str(exc)}, status_code=409)
+        return JSONResponse(state, status_code=202)
+
+    @app.post("/api/album/cancel")
+    async def cancel_album_load(request: Request) -> JSONResponse:
+        try:
+            payload = await request.json()
+        except ValueError:
+            return JSONResponse({"message": "Send an album operation identifier"}, status_code=400)
+        job_id = payload.get("id") if isinstance(payload, dict) else None
+        if not isinstance(job_id, str):
+            return JSONResponse({"message": "Choose an active album operation"}, status_code=400)
+        if not album_change.cancel(job_id) and not runtime.cancel_library_load(job_id):
+            return JSONResponse(
+                {"message": "This album operation has already changed; refresh its status"},
+                status_code=409,
+            )
+        return JSONResponse({"message": "Cancellation requested"}, status_code=202)
+
+    @app.post("/api/album/refresh")
+    def start_album_refresh() -> JSONResponse:
+        try:
+            album_id = repository.load().frame.album_id
+            if not album_id:
+                raise ValueError("Choose an album before refreshing its photos")
+            state = album_change.start(album_id, refresh=True)
+            # A new revision is safe before preparation completes: catalog and
+            # settings remain atomic, and cached failures can be retried.
+            app.state.thumbnail_revision = secure_random.token_hex(8)
+        except ValueError as exc:
+            return JSONResponse({"message": str(exc)}, status_code=409)
+        return JSONResponse(state, status_code=202)
+
+    @app.get("/api/activity")
+    def activity_status() -> JSONResponse:
+        state = configuration.current_render_state()
+        return JSONResponse(
+            jsonable_encoder(
+                {
+                    "album": album_change.snapshot(),
+                    "library": runtime.library_load_snapshot(),
+                    "render": {**state.model_dump(), "active": state.active},
+                }
+            )
+        )
 
     @app.post("/workflow", response_class=HTMLResponse)
     async def save_workflow(request: Request) -> HTMLResponse:
         try:
             form = WorkflowForm.parse(await request.form())
-            return workspace(request, notice=configuration.save_workflow(form))
+            notice = await run_in_threadpool(configuration.save_workflow, form)
+            return await run_in_threadpool(workspace, request, notice=notice)
         except Exception as exc:
-            return workspace(request, error=str(exc))
+            return await run_in_threadpool(workspace, request, error=str(exc))
 
     @app.post("/network", response_class=HTMLResponse)
     async def save_network(request: Request, background_tasks: BackgroundTasks) -> HTMLResponse:
@@ -403,13 +590,12 @@ def create_app(
     async def next_photo_now(request: Request) -> HTMLResponse:
         try:
             form = NextPhotoForm.parse(await request.form())
-            return workspace(
-                request,
-                notice=configuration.start_next_photo(
-                    form.request_id,
-                    operation_id=render_operation_id(request),
-                ),
+            notice = await run_in_threadpool(
+                configuration.start_next_photo,
+                form.request_id,
+                operation_id=render_operation_id(request),
             )
+            return await run_in_threadpool(workspace, request, notice=notice)
         except (ValueError, ProviderError, RuntimeError) as exc:
             return workspace(request, error=str(exc))
 
@@ -454,7 +640,7 @@ def create_app(
         # Uptime Kuma can use the HTTP code, while the JSON body gives an
         # operator the retry, cache, and stale-health context.
         settings = repository.load()
-        body, healthy = health_payload(settings)
+        body, healthy = health_payload(settings, version=__version__)
         return JSONResponse(jsonable_encoder(body), status_code=200 if healthy else 503)
 
     return app

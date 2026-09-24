@@ -19,7 +19,7 @@ from threading import RLock
 
 from .persistence import atomic_write
 
-DECODABILITY_VERSION = "v2"
+DECODABILITY_VERSION = "v3"
 
 
 @dataclass(frozen=True)
@@ -44,10 +44,14 @@ class PhotoCache:
     def _decodability_file(self, key: str) -> Path:
         return self._file(key).with_suffix(".decodable")
 
-    def get(self, key: str) -> bytes | None:
+    def get(self, key: str, *, max_bytes: int | None = None) -> bytes | None:
         with self._lock:
             path = self._file(key)
             try:
+                # Older installations may have cached originals before the
+                # download limit existed. Never allocate those entire files.
+                if max_bytes is not None and path.stat().st_size > max_bytes:
+                    return None
                 content = path.read_bytes()
                 # atime is unreliable on many Pi filesystems; use mtime as an
                 # LRU marker instead, without changing the file contents.

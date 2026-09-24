@@ -61,7 +61,7 @@ class RefreshCoordinator:
 
 
 def health_payload(
-    settings: AppSettings, now: datetime | None = None
+    settings: AppSettings, now: datetime | None = None, *, version: str | None = None
 ) -> tuple[dict[str, object], bool]:
     """Return a monitor-friendly body plus whether it is healthy (HTTP 200)."""
     current = now or datetime.now(UTC)
@@ -80,6 +80,7 @@ def health_payload(
     return (
         {
             "status": state,
+            **({"version": version} if version is not None else {}),
             "last_success_at": status.last_success_at,
             "last_attempt_at": status.last_attempt_at,
             "next_attempt_at": status.next_attempt_at,

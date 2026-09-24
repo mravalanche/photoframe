@@ -1,5 +1,9 @@
 # Photoframe
 
+Software updates: see the [managed web updater and one-time migration guide](docs/managed-updates.md).
+Managed release installation requires the signing setup described there; existing source installs
+continue to work without it.
+
 [![Tests](https://github.com/mravalanche/photoframe/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/mravalanche/photoframe/actions/workflows/tests.yml?query=branch%3Amain)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](https://github.com/mravalanche/photoframe/blob/main/LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
@@ -53,20 +57,34 @@ firewall reach, trust warnings, and all installer options.
 
 ## First use
 
-1. Under **Photo provider**, enter the Immich server root URL and API key, then save and verify.
+1. Open **Settings → Photo provider** using the cog, enter the Immich server root URL and API key, then save and verify.
 2. Under **Album**, refresh the available albums and choose one.
-3. Under **Display & timing**, choose orientation, rotation, photo order, and display settings.
+3. Under **Schedule & orientation**, choose orientation, rotation and photo order.
+   Configure the physical display separately under **Settings → Display hardware**.
 4. Preview a photo. **Show now** updates the frame; **Start rotation here** changes the schedule.
-5. If another device on the local network needs access, open **Advanced settings** and
+5. If another device on the local network needs access, open **Settings → Advanced & recovery** and
    configure the listener before saving.
 
 The API key is stored locally and is never rendered back into the browser. Native display width
 and height must both be known before an image can be rendered; supported Inky hardware is detected
 at startup when possible.
 
+Frame updates and album preparation appear in a pinned activity bar, including the initial
+library load and **Refresh photos & thumbnails**. The bar shows the current phase and the number
+of matching photos prepared for the frame, downloading and checking images as needed.
+**Cancel loading** stops preparation after the current photo request finishes. You can also choose
+a different album while preparation runs; the latest confirmed choice replaces the pending job.
+The current album and displayed photo remain unchanged until the new album is ready. Reopening
+the page reconnects to the running job. Other settings changes wait until preparation finishes.
+
+To limit memory use on the frame, Immich responses are capped at 32 MiB and albums at 20,000
+assets. Large JPEGs are downsampled before decoding; images that still exceed the decoding limit
+use the provider preview when available. Unsupported images are excluded from the frame's photo
+list.
+
 ## Basic configuration
 
-The collapsed **Advanced settings** panel controls the web listener:
+**Settings → Advanced & recovery** controls the web listener:
 
 - **This device only** binds to `127.0.0.1`.
 - **Devices on my local network** binds to `0.0.0.0`; connect using the frame's LAN IP address.

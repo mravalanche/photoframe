@@ -148,17 +148,88 @@ def test_render_handoff_uses_immutable_prepared_value():
     renderer = MockRenderCoordinator()
     release = Event()
     shown: list[object] = []
+    showing = Event()
     prepared = {"first": object(), "second": object()}
 
     def show(value: object):
         shown.append(value)
+        showing.set()
         release.wait(1)
 
     service = RenderService(renderer, prepared.__getitem__, show)
     service.start("first")
     service.start("second")
+    assert showing.wait(1)
     assert shown == [prepared["first"]]
     release.set()
+
+
+def test_slow_preparation_is_observable_and_excludes_another_render():
+    renderer = MockRenderCoordinator()
+    preparing, release, finished = Event(), Event(), Event()
+    prepared: list[str] = []
+
+    def prepare(photo_id: str):
+        prepared.append(photo_id)
+        preparing.set()
+        assert release.wait(2)
+        return photo_id
+
+    service = RenderService(renderer, prepare, lambda _: finished.set())
+    state = service.start("first", operation_id="intent")
+    try:
+        assert preparing.wait(1)
+        assert state.phase == RenderPhase.PREPARING
+        assert renderer.snapshot().operation_id == "intent"
+        assert renderer.hardware_busy
+        assert service.start("second").photo_id == "first"
+        assert prepared == ["first"]
+    finally:
+        release.set()
+    assert finished.wait(1)
+
+
+def test_preparation_failure_is_reported_without_touching_hardware():
+    renderer = MockRenderCoordinator()
+    failed = Event()
+    shown: list[object] = []
+
+    def prepare(_photo_id: str):
+        raise ValueError("Photo preparation failed")
+
+    service = RenderService(renderer, prepare, shown.append)
+    service.start("first", on_failure=lambda _: failed.set())
+    assert failed.wait(1)
+    assert renderer.snapshot().phase == RenderPhase.FAILED
+    assert shown == []
+
+
+def test_timeout_during_preparation_never_starts_display_refresh():
+    renderer = MockRenderCoordinator()
+    preparing, release = Event(), Event()
+    shown: list[object] = []
+
+    def prepare(_photo_id: str):
+        preparing.set()
+        assert release.wait(2)
+
+    service = RenderService(renderer, prepare, shown.append)
+    service.start("first")
+    try:
+        assert preparing.wait(1)
+        started = renderer.snapshot().started_at
+        assert started is not None
+        renderer.update(DeviceSettings(render_timeout_seconds=10), started + timedelta(seconds=11))
+        assert renderer.hardware_busy
+    finally:
+        release.set()
+    for _ in range(100):
+        if not renderer.hardware_busy:
+            break
+        Event().wait(0.001)
+    assert not renderer.hardware_busy
+    assert renderer.snapshot().phase == RenderPhase.FAILED
+    assert shown == []
 
 
 def test_schedule_label_uses_london_24_hour_time():

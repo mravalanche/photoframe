@@ -1,0 +1,40 @@
+<section class="update-shell" aria-labelledby="software-updates-title">
+  <h2 id="software-updates-title">Software updates</h2>
+  <p class="update-intro">Keep your frame up to date, at your own pace.</p>
+  <section class="update-card" aria-labelledby="status-title">
+    <div class="update-card-heading">
+      <h3 id="status-title" class="update-eyebrow">Update status</h3>
+      <div class="installed-version"><span>Installed version</span><strong id="installed-version">v{{ version }}</strong></div>
+    </div>
+    <p id="update-status-badge" class="update-status-badge update-status-hero" data-tone="neutral"><span data-update-icon aria-hidden="true">—</span><strong data-update-label>Checking installation</strong></p>
+    <p id="update-status" role="status" aria-live="polite">Checking installation…</p>
+    <progress id="update-progress" max="100" value="0" hidden aria-label="Update progress"></progress>
+    <div class="update-metadata">
+      <p id="update-release"></p>
+      <p class="update-last-check"><span>Last checked</span><time id="update-last-check">Never checked</time></p>
+    </div>
+    <p id="update-error" role="alert"></p>
+    <button class="secondary" id="reconnect" type="button" hidden>Reconnect</button>
+    <div id="unmanaged" hidden><button class="secondary" id="public-check" type="button">Check latest stable release</button><p>This installation cannot update from the browser. Your files and configuration are preserved.</p><p>Ask your administrator to follow the <a href="https://github.com/mravalanche/photoframe/blob/develop/docs/managed-updates.md">managed installation migration guide</a>.</p></div>
+  </section>
+  <section class="update-card" id="managed-controls" hidden aria-labelledby="controls-title">
+    <h3 id="controls-title">Manage updates</h3>
+    <div>
+      <label for="update-channel">Update channel</label>
+      <select id="update-channel" aria-describedby="channel-description"><option value="stable">Stable</option><option value="develop">Develop — testing builds</option></select>
+      <p id="channel-description">Stable is recommended for everyday use. Develop contains signed test builds. Changing channels does not install anything or downgrade the app.</p>
+      <label class="update-checkbox"><input id="weekly-checks" type="checkbox"> Check this channel weekly</label>
+      <p>Checks only look for releases. Downloading and restarting always require your choice.</p>
+      <p id="update-steps">Check now to find a newer release. When one is available, download and verify it; then apply it when you are ready to restart.</p>
+      <div class="update-actions" aria-describedby="update-steps">
+        <button class="secondary" id="check-update" type="button">Check now</button>
+        <button class="secondary" id="stage-update" type="button" disabled>Download & verify</button>
+        <button class="primary" id="apply-update" type="button" disabled>Apply & restart</button>
+        <button class="quiet" id="rollback-update" type="button" hidden>Restore previous version</button>
+      </div>
+    </div>
+  </section>
+  <details id="release-notes-section" class="update-card release-notes-section" hidden><summary id="release-notes-title">Release notes<span class="release-notes-hint">What’s changed</span></summary><div id="release-notes" class="release-notes"></div></details>
+  <section class="update-card update-help"><h3>During an update</h3><p>Your photos, settings and schedule are kept. The displayed image remains on the frame while Photoframe restarts. This page reconnects automatically. If the new version cannot start, the updater restores the previous version.</p><details><summary>Recovery and diagnostics</summary><p id="update-diagnostics">No update in progress.</p><p>If reconnection fails, wait a few minutes, then choose Reconnect. If the device remains unavailable, ask your administrator to inspect the photoframe and photoframe-updater service logs.</p></details></section>
+  <dialog id="apply-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-detail"><form method="dialog"><h2 id="confirm-title">Apply update and restart?</h2><p id="confirm-detail">Your frame will pause briefly. Your saved settings and photos will be kept.</p><div class="update-actions"><button class="secondary" value="cancel" autofocus>Cancel</button><button class="primary" id="confirm-action" value="confirm">Apply & restart</button></div></form></dialog>
+</section>

@@ -4,6 +4,8 @@ from io import BytesIO
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+MAX_DECODE_PIXELS = 16_000_000
+
 
 class ImageProcessingError(ValueError):
     """A provider returned image data that cannot be prepared for the frame."""
@@ -13,16 +15,31 @@ def decode_image(source: bytes) -> Image.Image:
     """Decode source bytes through the same RGB path used by the renderer."""
     try:
         with Image.open(BytesIO(source)) as opened:
+            if opened.width * opened.height > MAX_DECODE_PIXELS:
+                # JPEG draft decoding downsamples in the codec, before Pillow
+                # allocates the full camera-resolution image on a small Pi.
+                factor = 2
+                while (opened.width // factor) * (opened.height // factor) > MAX_DECODE_PIXELS:
+                    factor *= 2
+                opened.draft(
+                    "RGB", (max(1, opened.width // factor), max(1, opened.height // factor))
+                )
+            if opened.width * opened.height > MAX_DECODE_PIXELS:
+                raise ImageProcessingError("The photo is too large to decode safely")
             image = ImageOps.exif_transpose(opened)
-            if image.mode in {"RGBA", "LA"} or "transparency" in image.info:
-                background = Image.new("RGBA", image.size, "white")
-                background.alpha_composite(image.convert("RGBA"))
-                decoded = background.convert("RGB")
-            else:
-                decoded = image.convert("RGB")
-            decoded.load()
-            return decoded
-    except (OSError, UnidentifiedImageError, ValueError) as exc:
+            try:
+                if image.mode in {"RGBA", "LA"} or "transparency" in image.info:
+                    with Image.new("RGBA", image.size, "white") as background:
+                        with image.convert("RGBA") as foreground:
+                            background.alpha_composite(foreground)
+                        decoded = background.convert("RGB")
+                else:
+                    decoded = image.convert("RGB")
+                decoded.load()
+                return decoded
+            finally:
+                image.close()
+    except (OSError, UnidentifiedImageError, ValueError, Image.DecompressionBombError) as exc:
         raise ImageProcessingError("The selected photo could not be decoded") from exc
 
 

@@ -1,0 +1,81 @@
+name: Managed release bundle
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: managed-release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  bundle:
+    if: github.repository == 'mravalanche/photoframe'
+    runs-on: ubuntu-24.04-arm
+    container: python:3.12-bookworm
+    environment: managed-releases
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the immutable published tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+      - name: Verify release identity and future-only policy
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          if [ "$RELEASE_PRERELEASE" = "true" ]; then
+            git merge-base --is-ancestor HEAD origin/develop
+          else
+            git merge-base --is-ancestor HEAD origin/main
+          fi
+          python scripts/prepare_release.py
+          test -f release/update-signing-key.pem
+          uv lock --check
+          uv sync --frozen --all-groups
+
+      - name: Run release quality gate
+        run: uv run poe check
+
+      - name: Build locked ARM64 wheelhouse
+        run: |
+          uv export --frozen --no-dev --extra inky --no-emit-project --output-file requirements-release.txt
+          python -m pip wheel --require-hashes --no-deps --wheel-dir wheelhouse -r requirements-release.txt
+          uv build --wheel --out-dir wheelhouse
+          python -m venv /tmp/photoframe-bundle-check
+          /tmp/photoframe-bundle-check/bin/python -m pip --isolated install --no-index --find-links wheelhouse --pre 'photoframe[inky]'
+          /tmp/photoframe-bundle-check/bin/python -m pip check
+          /tmp/photoframe-bundle-check/bin/python -c 'import photoframe; import inky; print(photoframe.__version__)'
+
+      - name: Sign immutable release assets
+        env:
+          PHOTOFRAME_RELEASE_SIGNING_KEY: ${{ secrets.PHOTOFRAME_RELEASE_SIGNING_KEY }}
+          RELEASE_NOTES: ${{ github.event.release.body }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PUBLISHED: ${{ github.event.release.published_at }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          Path('release-notes.txt').write_text(os.environ['RELEASE_NOTES'], encoding='utf-8')
+          PY
+          uv run python -m photoframe.updater.bundle --wheelhouse wheelhouse --output release-assets \
+            --version "${RELEASE_TAG#v}" --commit "$(git rev-parse HEAD)" \
+            --public-key release/update-signing-key.pem --notes release-notes.txt --published-at "$RELEASE_PUBLISHED"
+
+      - name: Publish without replacing existing assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ github.event.release.id }}
+        run: uv run python scripts/publish_release_assets.py release-assets
