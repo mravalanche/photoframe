@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.3.0](https://github.com/mravalanche/photoframe/compare/v1.2.1...v1.3.0) (2026-09-24)
+
+
+### Features
+
+* add managed web updates with verified rollback ([d1f4cc1](https://github.com/mravalanche/photoframe/commit/d1f4cc1a26720e9f6615ea5612308930006410a7))
+* add signed develop release channel ([52c0efb](https://github.com/mravalanche/photoframe/commit/52c0efbc07d23d5ee540fb152d26302ce2644ed9))
+* add verified managed web updates and recovery ([49610ac](https://github.com/mravalanche/photoframe/commit/49610ac433393cfb3651fd443eaa430a9aa2f041))
+* promote develop to main for 1.3.0 release ([b0f97fe](https://github.com/mravalanche/photoframe/commit/b0f97fee2e974bf049113fdfdad188d85315703e))
+* remove passphrase requirement from managed updates ([366ae68](https://github.com/mravalanche/photoframe/commit/366ae68d0d549f0a0dec28c7ae7ccf65f9ab029e))
+* report canonical runtime version ([287d246](https://github.com/mravalanche/photoframe/commit/287d246029bf4e40458c3393d328b628bb0ee4e8))
+* unify settings and improve update and photo recovery UX ([5abfea6](https://github.com/mravalanche/photoframe/commit/5abfea64ec234d5e31929e8d822b4547c32cb90b))
+
+
+### Bug Fixes
+
+* harden updater permissions and interrupted activation recovery ([a98c1ad](https://github.com/mravalanche/photoframe/commit/a98c1ad24bcf4298c6c0c46ed53754664d435730))
+* keep develop build metadata consistent ([34888b9](https://github.com/mravalanche/photoframe/commit/34888b9fe6889b9908007b516ed6f96660fd10ac))
+* support long ARM64 wheel names in managed bundles ([824cf44](https://github.com/mravalanche/photoframe/commit/824cf4446c75461fd29d068409b7b7bec1791fa2))
+
+
+### Documentation
+
+* point frame setup to verified develop candidate ([87c9c93](https://github.com/mravalanche/photoframe/commit/87c9c93bb6c9bcc60b4940e57e47f9e60f7c2c6e))
+* prioritize portrait photos and frame curation roadmap ([58c882e](https://github.com/mravalanche/photoframe/commit/58c882e715fb6c73c9cc3d41775aeb828ec8ee9d))
+
 ## [1.2.1](https://github.com/mravalanche/photoframe/compare/v1.2.0...v1.2.1) (2026-09-04)
 
 
