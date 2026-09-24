@@ -1,6 +1,10 @@
 .header-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 .header-actions a, .settings-heading a { text-decoration: none; display: inline-flex; align-items: center; gap: 7px; min-height: 44px; }
-.header-actions .settings-link { color: var(--text); }
+.header-actions .settings-link { color:var(--muted); width:44px; height:44px; padding:0; justify-content:center; border-radius:8px; flex-shrink:0; transition:background .15s, color .15s; }
+.header-actions .settings-link:hover { color:var(--text); background:var(--surface-2); }
+.header-actions .settings-link[aria-current=page] { color:var(--moss); background:var(--moss-soft); }
+.header-actions .settings-link svg { display:block; }
+.header-actions + .theme-toggle { margin-left:12px; }
 .settings-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:28px; }
 .settings-heading h1 { margin:0; }
 .settings-layout { display:grid; grid-template-columns:210px minmax(0,1fr); gap:28px; align-items:start; }
@@ -30,7 +34,7 @@
   .settings-heading { margin-bottom:20px; }
   .settings-heading h1 { font-size:32px; }
   .header-actions { gap:5px; }
-  .header-actions .settings-link { padding:10px; }
+  .header-actions + .theme-toggle { margin-left:8px; }
   .header-actions .update-status-badge { font-size:11px; max-width:140px; }
 }
 @media(max-width:480px) {

@@ -37,6 +37,7 @@ const context={document:{getElementById:element,querySelector(){return null},dis
   vm.runInNewContext(fs.readFileSync(SCRIPT.replace('updates.js','update-status.js'),'utf8'),context);
   vm.runInNewContext(fs.readFileSync(SCRIPT,'utf8'),context);
   await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(element('installed-version').textContent,'v1.3.0');
   await element('check-update').onclick();
   await element('check-update').onclick();
   assert.equal(generation,2);

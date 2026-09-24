@@ -13,14 +13,14 @@
   </script>
   <title>{{ 'Settings · ' if settings_section else '' }}Photoframe</title>
   <link rel="icon" href="{{ url_for('static', path='/photoframe.svg') }}" type="image/svg+xml">
-  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v=9">
-  <link rel="stylesheet" href="/static/settings.css">
-  <link rel="stylesheet" href="/static/updates.css">
-  <script src="/static/update-status.js" defer></script>
-  {% if settings_section == 'updates' %}<script src="/static/updates.js" defer></script>{% endif %}
-  <script src="/static/thumbnails.js" defer></script>
-  <script src="{{ url_for('static', path='/tab-identity.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}?v={{ version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v={{ version }}">
+  <link rel="stylesheet" href="/static/settings.css?v={{ version }}">
+  <link rel="stylesheet" href="/static/updates.css?v={{ version }}">
+  <script src="/static/update-status.js?v={{ version }}" defer></script>
+  {% if settings_section == 'updates' %}<script src="/static/updates.js?v={{ version }}" defer></script>{% endif %}
+  <script src="/static/thumbnails.js?v={{ version }}" defer></script>
+  <script src="{{ url_for('static', path='/tab-identity.js') }}?v={{ version }}"></script>
   <script src="{{ url_for('static', path='/vendor/htmx-2.0.4.min.js') }}" defer></script>
 </head>
 <body data-page="{{ 'settings' if settings_section else 'frame' }}">
@@ -28,7 +28,7 @@
     <a href="/" class="brand" aria-label="Photoframe home"><span class="brand-mark"><img src="{{ url_for('static', path='/photoframe.svg') }}" alt=""></span><span>Photoframe</span></a>
     <nav class="header-actions" aria-label="Main navigation">
       <a class="update-status-badge" href="/settings/updates" title="Software updates" data-update-badge><span data-update-icon aria-hidden="true">○</span><span data-update-label>Update status</span></a>
-      <a class="settings-link secondary" href="/settings"{% if settings_section %} aria-current="page"{% endif %}><span aria-hidden="true">⚙</span> Settings</a>
+      <a class="settings-link" href="/settings" aria-label="Settings" title="Settings"{% if settings_section %} aria-current="page"{% endif %}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9.5 3-.5 2.2-1.7 1-2.2-.7-2.5 4.3 1.7 1.5v2L2.6 15l2.5 4.3 2.2-.7 1.7 1 .5 2.2h5l.5-2.2 1.7-1 2.2.7 2.5-4.3-1.7-1.7v-2l1.7-1.5-2.5-4.3-2.2.7-1.7-1-.5-2.2z"/><circle cx="12" cy="12.4" r="3.3"/></svg></a>
     </nav>
     <div class="theme-toggle" role="group" aria-label="Colour theme">
       <button type="button" data-theme-choice="light" aria-pressed="false" onclick="setTheme('light')">Light</button>
