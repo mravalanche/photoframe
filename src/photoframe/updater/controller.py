@@ -111,7 +111,11 @@ class UpdateController:
             "managed": self.installation.enabled,
             "weekly": self.preferences.get("weekly", False),
             "next_check": self.preferences.get("next_check"),
-            "last_check": self.preferences.get("last_check"),
+            "last_check": (
+                self.preferences.get("last_check")
+                if self.installation.enabled
+                else self.public_checked_at or None
+            ),
             "check_error": self.last_error,
             "public_release": self.public_release,
         }

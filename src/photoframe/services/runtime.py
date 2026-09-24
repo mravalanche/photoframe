@@ -164,13 +164,15 @@ class Runtime:
         photos: list[Photo],
         displayed: Photo | None,
         change: Callable[[AppSettings], None],
+        *,
+        preview_id: str | None = None,
     ) -> None:
         prepared_catalog = list(photos)
         with self._runtime_lock:
             self.repository.update(change)
             self._preserved_display_photo = displayed
             self.photos = prepared_catalog
-            self.selected_preview_id = None
+            self.selected_preview_id = preview_id
 
     def clear_photos(self) -> None:
         """Clear the loaded photo catalog without exposing runtime locking."""
@@ -202,17 +204,17 @@ class Runtime:
     def _cache_key(self, photo_id: str) -> str:
         return f"{self.repository.load().provider.kind}:{photo_id}"
 
-    def photo_is_decodable(self, photo_id: str) -> bool:
+    def photo_is_decodable(self, photo_id: str, *, retry_unsupported: bool = False) -> bool:
         """Verify an asset once, persisting the installed-pipeline verdict."""
         key = self._cache_key(photo_id)
         # Status requests for the current album must not wait behind a network
         # download being checked for a candidate album.
         known = self.cache.decodability(key)
-        if known is not None:
+        if known is not None and not (retry_unsupported and not known):
             return known
         with self._eligibility_lock:
             known = self.cache.decodability(key)
-            if known is not None:
+            if known is not None and not (retry_unsupported and not known):
                 return known
             try:
                 self.render_source(photo_id)
@@ -243,6 +245,8 @@ class Runtime:
         frame: FrameSettings,
         photos: list[Photo] | None = None,
         progress: Callable[[int, int], None] | None = None,
+        *,
+        retry_unsupported: bool = False,
     ) -> EligibilitySummary:
         candidates = photos if photos is not None else self.catalog_snapshot()[1]
         total = sum(photo.matches(frame.orientation) for photo in candidates)
@@ -252,7 +256,7 @@ class Runtime:
 
         def check(photo: Photo) -> bool:
             nonlocal checked
-            supported = self.photo_is_decodable(photo.id)
+            supported = self.photo_is_decodable(photo.id, retry_unsupported=retry_unsupported)
             checked += 1
             if progress:
                 progress(checked, total)

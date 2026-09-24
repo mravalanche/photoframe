@@ -62,6 +62,30 @@ class NextPhotoForm:
 
 
 @dataclass(frozen=True)
+class HardwareForm:
+    expected_refresh_seconds: int
+    render_timeout_seconds: int
+    display_driver: DisplayDriver
+    display_model: str | None
+    display_size: tuple[int, int] | None
+
+    @classmethod
+    def parse(cls, form: Mapping[str, object]) -> HardwareForm:
+        width = _text(form, "display_width_px")
+        height = _text(form, "display_height_px")
+        if bool(width) != bool(height):
+            raise ValueError("Enter both native display dimensions, or leave both blank")
+        model = _text(form, "display_model")
+        return cls(
+            expected_refresh_seconds=int(_text(form, "expected_refresh_seconds")),
+            render_timeout_seconds=int(_text(form, "render_timeout_seconds")),
+            display_driver=DisplayDriver(_text(form, "display_driver", "auto")),
+            display_model=model or None,
+            display_size=(int(width), int(height)) if width else None,
+        )
+
+
+@dataclass(frozen=True)
 class WorkflowForm:
     orientation: Orientation
     rotation_seconds: int
@@ -71,21 +95,20 @@ class WorkflowForm:
     weekly_time: str
     photo_order: PhotoOrder | None
     timezone: str | None
-    expected_refresh_seconds: int
-    render_timeout_seconds: int
-    display_driver: DisplayDriver
-    display_model: str | None
-    display_size: tuple[int, int] | None
+    hardware: HardwareForm | None
 
     @classmethod
     def parse(cls, form: Mapping[str, object]) -> WorkflowForm:
-        width = _text(form, "display_width_px")
-        height = _text(form, "display_height_px")
-        if bool(width) != bool(height):
-            raise ValueError("Enter both native display dimensions, or leave both blank")
         order = _text(form, "photo_order")
         timezone = _text(form, "timezone")
-        model = _text(form, "display_model")
+        hardware_keys = {
+            "expected_refresh_seconds",
+            "render_timeout_seconds",
+            "display_driver",
+            "display_model",
+            "display_width_px",
+            "display_height_px",
+        }
         return cls(
             orientation=Orientation(_text(form, "orientation")),
             rotation_seconds=int(_text(form, "rotation_seconds")),
@@ -95,11 +118,7 @@ class WorkflowForm:
             weekly_time=_text(form, "weekly_time", "03:00"),
             photo_order=PhotoOrder(order) if order else None,
             timezone=timezone or None,
-            expected_refresh_seconds=int(_text(form, "expected_refresh_seconds")),
-            render_timeout_seconds=int(_text(form, "render_timeout_seconds")),
-            display_driver=DisplayDriver(_text(form, "display_driver", "auto")),
-            display_model=model or None,
-            display_size=(int(width), int(height)) if width else None,
+            hardware=HardwareForm.parse(form) if hardware_keys.intersection(form) else None,
         )
 
 

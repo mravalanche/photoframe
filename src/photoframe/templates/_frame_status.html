@@ -10,7 +10,7 @@
     {% elif render_state.phase == RenderPhase.IDLE and selected_photo %}<div class="frame-transition manual" role="status" aria-live="polite" aria-atomic="true" data-frame-transition="manual-preview"><span class="transition-mark" aria-hidden="true">↗</span><div><strong>Manual preview selected — frame unchanged</strong><span>{{ selected_photo.filename }} is ready to review below. Choose Show now to update the display.</span></div></div>
     {% elif render_state.phase == RenderPhase.IDLE and scheduled_transition_soon %}<div class="frame-transition scheduled" role="status" aria-live="polite" aria-atomic="true" data-frame-transition="scheduled"><span class="transition-spinner" aria-hidden="true"></span><div><strong>Scheduled change approaching</strong><span>{{ next_photo.filename }} is due in {{ seconds_until_change }} seconds.</span></div></div>{% endif %}
     <div class="digital-frame {{ settings.frame.orientation.value }}">
-      {% if displayed_photo %}<img src="/thumbnail/{{ displayed_photo.id }}" alt="Photo currently represented on the frame">
+      {% if displayed_photo %}<img src="/thumbnail/{{ displayed_photo.id }}{% if thumbnail_revision %}?refresh={{ thumbnail_revision }}{% endif %}" alt="Photo currently represented on the frame">
       {% else %}<div class="frame-empty"><span>PF</span><p>Your selected photo will appear here</p></div>{% endif %}
     </div>
   </div>

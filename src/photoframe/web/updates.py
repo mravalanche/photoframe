@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from .. import __version__
 from ..lifecycle import RefreshWorker
@@ -31,9 +31,7 @@ def register_updates(app, templates, runtime, data_dir):
 
     @app.get("/updates")
     def updates(request: Request):
-        return templates.TemplateResponse(
-            request=request, name="updates.html", context={"version": __version__}
-        )
+        return RedirectResponse("/settings/updates", status_code=307)
 
     @app.get("/api/updates/status")
     def status():

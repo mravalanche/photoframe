@@ -57,6 +57,10 @@ const poll=async state=>{jobs.push(state);timers.pop()();await flush();};
  assert.equal(title.textContent,'Album change not confirmed');assert.equal(dock.hidden,false);
  dismiss.listeners.click();await poll({album:{phase:'idle'},render:{phase:'idle'}});
  assert.equal(dock.hidden,true);
+ context.document.body.dataset={page:'settings'};
+ await poll({album:{id:'other-tab',phase:'loading',active:true},render:{phase:'idle'}});
+ await poll({album:{id:'other-tab',phase:'complete',active:false},render:{phase:'idle'}});
+ assert.equal(refreshes.length,1,'Other tabs must not replace a Settings form');
 })();
 """.replace("SCRIPT", json.dumps(str(script)))
     subprocess.run([node, "-e", scenario], check=True)
