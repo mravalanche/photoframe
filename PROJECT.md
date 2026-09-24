@@ -365,6 +365,67 @@ The physical Pi soak and update/rollback acceptance drill remain outstanding.
 The normal reviewed, green-CI path into develop still applies; promotion to main requires the
 recorded physical-device update and rollback drill.
 
+### Frame testing feedback and settings redesign — recorded 2026-09-24
+
+**Status: recorded for later implementation on develop. Do not start implementation until
+the user resumes the discussion after resetting usage.** This is a separate follow-up from
+the unmerged photo-control feature branch. The following are user-reported observations
+and requested outcomes; root causes and the final navigation design are not yet established.
+
+- [ ] **Missing image on load and manual album recovery.** The user reported that the image
+  was not visible when loading the app. Investigate initial load/restart behaviour rather
+  than relying on manual refresh as the fix. Establish whether the missing image was the
+  browser preview, album thumbnails, physical display, or more than one of these. Provide
+  an obvious manual album refresh/retry that reloads the selected album and obtains missing
+  thumbnails. Show loading, success, empty and failure states, with actionable recovery.
+  Confirm recovery works after a temporary provider/network failure without a reset or
+  album re-selection. Preserve the selected album and last successful physical image;
+  catalog/thumbnail recovery must not imply that a physical render succeeded. Coordinate
+  refresh with existing album-change/render work and retain resource bounds on the Pi.
+
+- [ ] **Useful update status and consistent controls.** The user describes the update entry
+  as a bare, unformatted hyperlink at the top of the page with no useful information.
+  Replace it with an integrated status treatment: a tick and text for a successfully checked,
+  up-to-date installation; a distinct icon and text for an available update; and clear
+  checking, never-checked, offline and error states. Do not imply up-to-date before a
+  successful check or rely on colour/icons alone. Show the running version, selected
+  Stable/Develop channel and relevant available version without ambiguity. Show a relative
+  timestamp such as "Last checked 5 minutes ago", distinguishing a failed check attempt
+  from the last successful check and identifying cached information. Update relative time
+  while the page remains open. Style Check now, Download & verify, Apply & restart and
+  rollback with the same buttons, hierarchy, spacing, disabled and busy states as the
+  rest of the app. Preserve signed-update verification and explicit restart confirmation.
+
+- [ ] **Readable release notes.** Render release-note Markdown as formatted content, with
+  safe handling of HTML and links. Put notes in a clearly labelled section, separate from
+  application status, latest-release information, channel messaging and check timestamps.
+  Verify headings, paragraphs, lists, links and code blocks on mobile; long content must
+  remain readable without horizontal page overflow. Keep app-generated messages visually
+  distinct from release-provided content.
+
+- [ ] **Separate daily use from occasional configuration.** Reconsider the overall page
+  structure. Keep album picking, advancing/showing the image and scheduling in the everyday
+  frame workspace. Move provider setup, advanced configuration and software updates into
+  a coherent Settings area. Access it through a cog or similar control at the top of the
+  page that fits the existing design and has an accessible name and obvious focus state.
+  Put Software updates first in Settings, with less frequently used sections further down.
+  Consider side tabs/navigation on wider screens; this is a design option to evaluate,
+  not a fixed implementation requirement. Decide and review the remaining section order
+  and the mobile navigation pattern before coding the structural redesign.
+
+**Mobile accessibility is critical throughout.** Review narrow-screen layout, comfortable
+touch targets, keyboard navigation, visible focus, accessible names and status announcements.
+Side navigation must adapt to mobile without clipped labels, tiny controls, horizontal page
+scrolling or excessive scrolling to find status/actions. If tabs are chosen, implement the
+appropriate tab semantics and keyboard/focus behaviour. Preserve navigation context and
+avoid losing unsaved edits when moving between sections. Validate the revised flows on a
+phone-sized viewport and the physical frame before declaring the reported issue resolved.
+
+Suggested discussion order when work resumes: diagnose the missing-image/recovery issue;
+agree the daily-workspace versus Settings structure and mobile navigation; then implement
+the coherent update status, controls and release-note presentation within that structure.
+No application changes or release are authorised by this note-taking request alone.
+
 ### Feature priorities — agreed 2026-09-20
 
 The order below is the product backlog, separate from the engineering and release-readiness
