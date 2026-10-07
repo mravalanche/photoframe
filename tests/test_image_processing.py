@@ -49,7 +49,9 @@ def test_photo_backgrounds_are_distinct_and_keep_photo_colour():
         upper, lower = soft.getpixel((4, 8)), soft.getpixel((4, 72))
         assert upper != lower  # Soft photo retains a blurred impression of the picture.
         assert wash.getpixel((4, 8)) == wash.getpixel((4, 72))  # Colour wash is flat.
-        red, green, blue = wash.getpixel((4, 40))
+        pixel = wash.getpixel((4, 40))
+        assert isinstance(pixel, tuple) and len(pixel) == 3
+        red, green, blue = pixel
         assert red - blue > 40 and green > blue
 
 
