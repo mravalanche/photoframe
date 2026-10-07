@@ -32,8 +32,8 @@ def test_provider_form_stays_in_settings_after_save(tmp_path):
     client = TestClient(app)
     response = client.post(
         "/connection",
-        headers={"X-Settings-Section": "provider"},
-        data={"server_url": "https://example.test", "api_key": ""},
+        headers={**ORIGIN, "X-Settings-Section": "provider"},
+        data={"server_url": "http://demo.local", "api_key": ""},
     )
     assert 'data-settings-panel="provider"' in response.text
     assert 'id="frame-status"' not in response.text
@@ -55,7 +55,7 @@ def test_refresh_reloads_thumbnails_without_rendering(tmp_path):
     assert "The picture on your frame and its schedule are unchanged." in response.text
     revision = re.search(r'/thumbnail/[^"?]+\?refresh=([a-f0-9]+)', response.text)
     assert revision
-    assert revision[1] in client.get("/partials/frame-status").text
+    assert revision[1] not in client.get("/partials/frame-status").text
     after = runtime.repository.load()
     assert after.frame.schedule_anchor == before.frame.schedule_anchor
     assert (
@@ -72,6 +72,33 @@ def test_new_expensive_mutations_reject_foreign_or_missing_origin(tmp_path):
         assert client.post(route).status_code == 403
         assert client.post(route, headers={"Origin": "https://foreign.test"}).status_code == 403
     assert app.state.runtime.repository.load() == before
+
+
+def test_all_browser_mutations_reject_missing_or_foreign_origin(tmp_path):
+    app = create_app(tmp_path, demo_mode=True)
+    client = TestClient(app)
+    before = app.state.runtime.repository.load()
+    for route in (
+        "/connection",
+        "/photo/framing",
+        "/photo/hide",
+        "/photo/unhide",
+        "/render/start",
+        "/reset",
+    ):
+        assert client.post(route).status_code == 403
+        assert (
+            client.post(
+                route,
+                headers={"Origin": "https://foreign.test", "Referer": "http://testserver/"},
+            ).status_code
+            == 403
+        )
+    assert app.state.runtime.repository.load() == before
+    assert (
+        client.post("/photo/preview/clear", headers={"Referer": "http://testserver/"}).status_code
+        == 200
+    )
 
 
 def test_source_release_check_reports_timestamp_and_error(tmp_path):

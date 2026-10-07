@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from photoframe.models import AppSettings, FrameSettings, ScheduleMode
 from photoframe.schedule import CATCH_UP_WINDOW, catch_up_occurrence, next_occurrence
+from photoframe.selector import active_selection
 from photoframe.services.configuration import ConfigurationService
 from photoframe.settings import SettingsRepository
 from photoframe.web.routes import create_app
@@ -124,11 +125,15 @@ def _schedule_snapshot(settings: AppSettings) -> dict[str, object]:
 def test_next_route_is_distinct_idempotent_and_schedule_neutral(tmp_path: Path):
     app = create_app(tmp_path, demo_mode=True)
     runtime = app.state.runtime
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         initial = client.get("/partials/workspace")
         before = _schedule_snapshot(runtime.repository.load())
-        current_id = re.search(r'<img src="/thumbnail/([^"/]+)" alt="Photo currently', initial.text)
-        assert current_id
+        assert "No photo recorded" in initial.text
+        settings = runtime.repository.load()
+        selected = active_selection(
+            runtime.photo_eligibility(settings.frame).eligible, settings.frame
+        )
+        assert selected.photo is not None
         client.post("/photo/preview", data={"photo_id": "forest"})
 
         request_id = _request_id(initial.text)
@@ -137,7 +142,7 @@ def test_next_route_is_distinct_idempotent_and_schedule_neutral(tmp_path: Path):
         assert started.status_code == 200
         assert "automatic schedule is unchanged" in started.text
         assert "pending preview was cleared" in started.text
-        assert state.photo_id != current_id.group(1)
+        assert state.photo_id != selected.photo.id
         assert runtime.preview_id() is None
         assert _schedule_snapshot(runtime.repository.load()) == before
 
@@ -173,7 +178,7 @@ def test_next_feedback_is_session_owned_and_expires_from_fixed_completion_time(
     owner_intent = "38ebca82-c30a-4727-bb05-37fb455c97d6"
     owner_headers = {"X-Photoframe-Render-Intent": owner_intent}
     other_headers = {"X-Photoframe-Render-Intent": "a70cc8a8-fbd9-4b98-8290-011d0eabfa06"}
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         page = client.get("/partials/workspace", headers=owner_headers)
         before = _schedule_snapshot(runtime.repository.load())
         started = client.post(
@@ -215,7 +220,7 @@ def test_next_feedback_is_session_owned_and_expires_from_fixed_completion_time(
 def test_invalid_next_operation_identity_is_not_treated_as_session_owned(tmp_path: Path):
     app = create_app(tmp_path, demo_mode=True)
     runtime = app.state.runtime
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         page = client.get("/partials/workspace")
         response = client.post(
             "/photo/next",
@@ -236,7 +241,7 @@ def test_next_failure_preserves_displayed_photo_and_schedule(tmp_path: Path):
             setattr(settings.device, "render_timeout_seconds", 10),
         )
     )
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         page = client.get("/partials/workspace")
         before = _schedule_snapshot(runtime.repository.load())
         client.post("/photo/next", data={"request_id": _request_id(page.text)})
@@ -263,7 +268,7 @@ def test_next_prefers_live_display_over_stale_persisted_cursor(tmp_path: Path):
     )
     runtime.renderer.last_rendered_photo_id = "forest"
 
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         page = client.get("/partials/workspace")
         before = _schedule_snapshot(runtime.repository.load())
         client.post("/photo/next", data={"request_id": _request_id(page.text)})
@@ -275,7 +280,7 @@ def test_next_prefers_live_display_over_stale_persisted_cursor(tmp_path: Path):
 def test_manual_show_now_persists_the_authoritative_display_cursor(tmp_path: Path):
     app = create_app(tmp_path, demo_mode=True)
     runtime = app.state.runtime
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         client.post("/photo/preview", data={"photo_id": "forest"})
         client.post("/render/start")
         state = runtime.renderer.snapshot()
@@ -338,13 +343,13 @@ def test_next_disabled_reasons_are_exposed(tmp_path: Path):
     app = create_app(tmp_path, demo_mode=True)
     runtime = app.state.runtime
     runtime.photos = runtime.photos[:1]
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         one_photo = client.get("/partials/workspace")
     assert "Add another eligible photo to use Next photo" in one_photo.text
     assert 'aria-describedby="next-photo-description next-photo-disabled-reason"' in one_photo.text
 
     empty_app = create_app(tmp_path / "empty", demo_mode=False)
-    with TestClient(empty_app) as client:
+    with TestClient(empty_app, headers={"Origin": "http://testserver"}) as client:
         no_album = client.get("/partials/workspace")
     assert "Choose an album first" in no_album.text
 
@@ -365,7 +370,7 @@ def test_weekly_schedule_save_preview_and_reload_round_trip(tmp_path: Path):
         "expected_refresh_seconds": "8",
         "render_timeout_seconds": "90",
     }
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         preview = client.post("/schedule/preview", data=data)
         saved = client.post("/workflow", data=data)
         reloaded = client.get("/partials/workspace")

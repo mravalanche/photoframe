@@ -4,18 +4,22 @@ from __future__ import annotations
 
 import secrets as secure_random
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
+from pathlib import Path
 from threading import Event, Lock, RLock
 from time import monotonic
 
 from PIL import Image
+from PIL.PngImagePlugin import PngInfo
 
 from ..cache import CacheStats, PhotoCache
 from ..display import InkyDisplay, apply_profile, discover_inky
 from ..image_processing import ImageProcessingError, image_is_decodable, prepare_for_display
 from ..lifecycle import RefreshCoordinator
-from ..models import Album, AppSettings, FrameSettings, Photo, PhotoOrder
+from ..models import Album, AppSettings, FrameSettings, Photo, PhotoFraming, PhotoOrder
+from ..persistence import atomic_write
 from ..providers import PhotoProvider, ProviderError, ProviderResolver
 from ..renderer import MockRenderCoordinator, RenderService
 from ..schedule import catch_up_occurrence
@@ -92,6 +96,46 @@ class Runtime:
     def prepared_image(self) -> Image.Image | None:
         with self._runtime_lock:
             return self._prepared_image
+
+    @property
+    def display_snapshot_path(self) -> Path:
+        return self.repository.data_dir / "displayed-photo.png"
+
+    def displayed_snapshot_photo(self) -> Photo | None:
+        try:
+            token = self.repository.load().refresh_status.display_snapshot_token
+            if not token:
+                return None
+            with Image.open(self.display_snapshot_path) as image:
+                if image.info.get("photoframe_token") != token:
+                    return None
+                return Photo.model_validate_json(image.info["photoframe_photo"])
+        except (OSError, KeyError, ValueError):
+            return None
+
+    def record_display_snapshot(self, photo_id: str) -> None:
+        """Promote only completed output; draft or failed preparations never replace it."""
+        with self._runtime_lock:
+            photo = self.photo(photo_id)
+            if self._prepared_image is None or photo is None:
+                return
+            preview = self._prepared_image.copy()
+        token = secure_random.token_hex(16)
+        try:
+            preview.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+            metadata = PngInfo()
+            metadata.add_text("photoframe_token", token)
+            metadata.add_text("photoframe_photo", photo.model_dump_json())
+            output = BytesIO()
+            preview.save(output, "PNG", pnginfo=metadata)
+            atomic_write(self.display_snapshot_path, output.getvalue(), mode=0o600)
+        except OSError:
+            token = None
+        finally:
+            preview.close()
+        self.repository.update(
+            lambda saved: setattr(saved.refresh_status, "display_snapshot_token", token)
+        )
 
     def has_display(self) -> bool:
         with self._runtime_lock:
@@ -219,6 +263,20 @@ class Runtime:
         with self._runtime_lock:
             self.photos = []
 
+    def clear_account_data(self) -> None:
+        """Drop content and display metadata when the photo account changes."""
+        with self._runtime_lock:
+            self.albums = []
+            self.photos = []
+            self.selected_preview_id = None
+            self._preserved_display_photo = None
+            self._prepared_image = None
+            self._loaded = False
+            self.renderer.reset(forget_display=True)
+        with suppress(FileNotFoundError):
+            self.display_snapshot_path.unlink()
+        self.cache.clear()
+
     def replace_photos(self, photos: list[Photo]) -> None:
         """Publish a fully loaded catalog after its settings change has committed."""
         with self._runtime_lock:
@@ -242,7 +300,10 @@ class Runtime:
             self.selected_preview_id = photo_id
 
     def _cache_key(self, photo_id: str) -> str:
-        return f"{self.repository.load().provider.kind}:{photo_id}"
+        return f"{self.repository.load().frame.photo_scope}:{photo_id}"
+
+    def known_unsupported(self, photo_id: str) -> bool:
+        return self.cache.decodability(self._cache_key(photo_id)) is False
 
     def photo_is_decodable(self, photo_id: str, *, retry_unsupported: bool = False) -> bool:
         """Verify an asset once, persisting the installed-pipeline verdict."""
@@ -290,7 +351,7 @@ class Runtime:
         checkpoint: Callable[[], None] | None = None,
     ) -> EligibilitySummary:
         candidates = photos if photos is not None else self.catalog_snapshot()[1]
-        total = sum(photo.matches(frame.orientation) for photo in candidates)
+        total = sum(frame.allows(photo) for photo in candidates)
         checked = 0
         if progress:
             progress(checked, total)
@@ -335,6 +396,24 @@ class Runtime:
             with self._claim_lock:
                 self._interactive_inflight -= 1
 
+    @contextmanager
+    def photo_edit(self) -> Iterator[None]:
+        """Serialize preference edits against refresh, render, and album changes."""
+        with self._claim_lock:
+            if (
+                self._album_change_inflight
+                or self._lifecycle_inflight
+                or self._interactive_inflight > 1
+            ):
+                raise ValueError("The frame is busy; try saving this photo shortly")
+            if self.renderer.snapshot().active or self.renderer.hardware_busy:
+                raise ValueError("Wait for the current frame update before changing this photo")
+            self._album_change_inflight = True
+        try:
+            yield
+        finally:
+            self.release_album_change()
+
     def wait_for_refresh(self, checkpoint: Callable[[], None] | None = None) -> None:
         deadline = monotonic() + 90
         while not self._refresh_idle.wait(timeout=0.1):
@@ -354,27 +433,54 @@ class Runtime:
     def renderable_photos(self, photos: list[Photo], frame: FrameSettings) -> list[Photo]:
         return self.photo_eligibility(frame, photos).eligible
 
-    def prepare_photo(self, photo_id: str) -> Image.Image:
-        target_size = self.repository.load().device.display_size
+    def prepare_photo(
+        self, photo_id: str, framing: PhotoFraming | None = None, *, preview: bool = False
+    ) -> Image.Image:
+        # A preview must not queue behind another full decode on a memory-limited Pi.
+        if preview:
+            if not self._eligibility_lock.acquire(blocking=False):
+                raise ValueError("Another photo preview is loading")
+            try:
+                return self._prepare_photo(photo_id, framing, preview=True)
+            finally:
+                self._eligibility_lock.release()
+        with self._eligibility_lock:
+            return self._prepare_photo(photo_id, framing, preview=False)
+
+    def _prepare_photo(
+        self, photo_id: str, framing: PhotoFraming | None = None, *, preview: bool = False
+    ) -> Image.Image:
+        settings = self.repository.load()
+        target_size = settings.device.display_size
         if not target_size:
             raise ImageProcessingError(
                 "Set the frame's native display width and height before rendering"
             )
+        if preview and max(target_size) > 1200:
+            scale = 1200 / max(target_size)
+            target_size = (
+                max(1, round(target_size[0] * scale)),
+                max(1, round(target_size[1] * scale)),
+            )
         try:
             source = self.render_source(photo_id)
-            prepared = prepare_for_display(source, target_size)
+            preference = framing or settings.frame.preference(photo_id)
+            prepared = prepare_for_display(
+                source, target_size, fit_mode=preference.fit_mode, matte=preference.matte
+            )
         except ImageProcessingError:
             self.cache.set_decodability(self._cache_key(photo_id), False)
             raise
-        with self._runtime_lock:
-            self._prepared_image = prepared
+        if not preview:
+            with self._runtime_lock:
+                self._prepared_image = prepared
         return prepared
 
     def cache_photo(self, photo_id: str) -> bytes:
         """Get an original locally first, then acquire and safely cache it."""
         settings = self.repository.load()
         self.cache.set_max_bytes(settings.refresh.cache_max_bytes)
-        key = f"{settings.provider.kind}:{photo_id}"
+        key = self._cache_key(photo_id)
         cached = self.cache.get(key, max_bytes=32 * 1024 * 1024)
         if cached is not None:
             return cached
@@ -401,6 +507,8 @@ class Runtime:
                 except OSError:
                     failures.append(label)
             # SettingsRepository.save performs one validated atomic replacement.
+            with suppress(FileNotFoundError):
+                self.display_snapshot_path.unlink()
             self.repository.save(AppSettings())
             self.albums = []
             self.photos = []
@@ -540,6 +648,8 @@ class Runtime:
             )
 
             def completed(photo_id: str) -> None:
+                self.record_display_snapshot(photo_id)
+
                 def save_completion(saved):
                     saved.refresh_status.last_completed_schedule_anchor = anchor
                     saved.refresh_status.last_completed_schedule_slot = (
