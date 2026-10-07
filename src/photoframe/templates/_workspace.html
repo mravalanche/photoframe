@@ -41,7 +41,7 @@
     {% if browse_photos %}
     <div class="thumbnail-rail">
       {% for photo in browse_photos %}<form method="post" action="/photo/preview" hx-post="/photo/preview" hx-target="#workspace" hx-swap="outerHTML" class="thumbnail {{ 'selected' if selected_photo and selected_photo.id == photo.id }}">
-        <input type="hidden" name="photo_id" value="{{ photo.id }}"><button type="submit" aria-label="Preview {{ photo.filename }}"><img src="/thumbnail/{{ photo.id }}{% if thumbnail_revision %}?refresh={{ thumbnail_revision }}{% endif %}" loading="lazy" alt=""><span>{{ photo.filename }}</span></button>
+        <input type="hidden" name="photo_id" value="{{ photo.id }}"><button type="submit" aria-label="Preview {{ photo.filename }}"><img src="/thumbnail/{{ photo.id }}{% if thumbnail_revision %}?refresh={{ thumbnail_revision }}{% endif %}" loading="lazy" alt=""><span>{{ photo.filename }}</span></button><span class="thumbnail-loading htmx-indicator" role="status">Opening…</span>
       </form>{% endfor %}
     </div>
     <p class="interaction-note">Preview a photo, then choose <strong>Show now</strong> to put it on the frame.</p>
@@ -50,19 +50,19 @@
   {% endif %}
 
   {% if just_hidden_photo %}<div class="photo-hidden-notice" role="status"><span>{{ just_hidden_photo.filename }} hidden from this frame.</span><form method="post" action="/photo/unhide" hx-post="/photo/unhide" hx-target="#workspace" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ just_hidden_photo.id }}"><button class="secondary">Undo</button></form></div>{% endif %}
-  {% if settings.frame.album_id %}<details class="hidden-photos"><summary>Hidden photos ({{ hidden_photos|length }})</summary>
-    {% for photo in hidden_photos %}<form class="hidden-photo-row" method="post" action="/photo/unhide" hx-post="/photo/unhide" hx-target="#workspace" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ photo.id }}"><span>{{ photo.filename }}</span><button class="secondary">Restore</button></form>{% else %}<p>No hidden photos in this album.</p>{% endfor %}
+  {% if settings.frame.album_id %}<details class="hidden-photos"><summary>Hidden from this frame ({{ hidden_photos|length }})</summary>
+    {% for photo in hidden_photos %}<form class="hidden-photo-row" method="post" action="/photo/unhide" hx-post="/photo/unhide" hx-target="#workspace" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ photo.id }}"><span>{{ photo.filename }}</span><button class="secondary">Restore</button></form>{% else %}<p>Photos you hide appear here. Photos needing framing stay in the list above.</p>{% endfor %}
   </details>{% endif %}
 
   {% if selected_photo and render_state.phase == RenderPhase.IDLE %}
   <section class="selected-preview photo-editor" aria-labelledby="selected-title">
-    <div class="selected-image"><img src="/photos/{{ selected_photo.id }}/prepared?fit_mode={{ selected_framing.fit_mode }}&amp;matte={{ selected_framing.matte }}" alt="Frame preview of {{ selected_photo.filename }}"></div>
+    <div class="selected-image" aria-busy="true"><img src="/photos/{{ selected_photo.id }}/prepared?fit_mode={{ selected_framing.fit_mode }}&amp;matte={{ selected_framing.matte }}" alt="Frame preview of {{ selected_photo.filename }}"><div class="preview-feedback loading" data-preview-feedback role="status" aria-live="polite"><span data-preview-message>Preparing preview…</span><button type="button" class="secondary" data-preview-retry hidden>Retry</button></div></div>
     <div class="selected-copy"><p class="kicker">PHOTO PREVIEW</p><h2 id="selected-title">{{ selected_photo.filename }}</h2>
       <form data-saved-fit="{{ selected_framing.fit_mode }}" data-saved-matte="{{ selected_framing.matte }}" class="framing-form form-grid" method="post" action="/photo/framing" hx-post="/photo/framing" hx-target="#workspace" hx-swap="outerHTML">
         <input type="hidden" name="photo_id" value="{{ selected_photo.id }}">
         <label>Fit<select name="fit_mode"><option value="fit" {{ 'selected' if selected_framing.fit_mode == 'fit' }}>Show whole photo</option><option value="fill" {{ 'selected' if selected_framing.fit_mode == 'fill' }}>Fill frame</option></select></label>
-        <label>Background<select name="matte"><option value="blur" {{ 'selected' if selected_framing.matte == 'blur' }}>Soft photo</option><option value="colour" {{ 'selected' if selected_framing.matte == 'colour' }}>Colour wash</option><option value="white" {{ 'selected' if selected_framing.matte == 'white' }}>White</option><option value="black" {{ 'selected' if selected_framing.matte == 'black' }}>Black</option></select><small>Used when showing the whole photo.</small></label>
-        <div class="form-actions span-2"><button class="secondary">Save framing</button><span data-framing-hint role="status">{{ 'Ready to show' if selected_rotation_eligible else 'Save framing to include this photo' }}</span></div>
+        <label>Background<select name="matte"><option value="blur" {{ 'selected' if selected_framing.matte == 'blur' }}>Soft photo</option><option value="colour" {{ 'selected' if selected_framing.matte == 'colour' }}>Colour wash</option><option value="white" {{ 'selected' if selected_framing.matte == 'white' }}>White</option><option value="black" {{ 'selected' if selected_framing.matte == 'black' }}>Black</option></select></label><small class="framing-help span-2">Background appears when showing the whole photo.</small>
+        <div class="form-actions span-2"><button class="secondary">Save framing</button><span data-framing-hint role="status">{{ 'Ready to show' if selected_rotation_eligible else 'Save framing to include this photo' }}</span><span class="framing-saving htmx-indicator" role="status">Saving…</span></div>
       </form>
       {% if not selected_rotation_eligible %}<p class="framing-required" role="status">Save framing before showing this photo.</p>{% endif %}
       <div class="selected-actions"><form method="post" action="/render/start" hx-post="/render/start" hx-target="#workspace" hx-swap="outerHTML"><button class="primary large" {% if not selected_rotation_eligible %}disabled{% endif %}>Show now</button></form><form class="rotation-action" method="post" action="/photo/start" hx-post="/photo/start" hx-target="#workspace" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ selected_photo.id }}"><button class="secondary" {% if not selected_rotation_eligible %}disabled{% endif %}>Start rotation here</button></form><form class="cancel-action" method="post" action="/photo/preview/clear" hx-post="/photo/preview/clear" hx-target="#workspace" hx-swap="outerHTML"><button class="quiet">Close preview</button></form></div>

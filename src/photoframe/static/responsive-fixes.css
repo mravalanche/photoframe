@@ -1082,11 +1082,24 @@ body.has-activity { padding-bottom: calc(160px + env(safe-area-inset-bottom)); }
 .hidden-photo-row span { overflow-wrap: anywhere; min-width: 0; }
 .hidden-photo-row button { flex-shrink: 0; }
 .photo-editor { align-items: start; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr); }
-.photo-editor .selected-image { height: auto; padding: 0; overflow: hidden; }
+.photo-editor .selected-image { height: auto; min-height: 160px; padding: 0; overflow: hidden; position: relative; display: grid; place-items: center; }
 .photo-editor .selected-image img { width: 100%; height: auto; display: block; object-fit: contain; }
 .photo-editor .selected-copy { min-width: 0; }
 .photo-editor h2 { overflow-wrap: anywhere; }
 .framing-form { margin-bottom: 18px; }
+.framing-form > label { align-self: start; align-content: start; min-width: 0; }
+.framing-help { color: var(--muted); font-size: 11px; }
+.framing-saving { display: none; }
+.framing-form.htmx-request [data-framing-hint] { display: none; }
+.framing-form.htmx-request .framing-saving { display: inline; }
+.thumbnail { position: relative; }
+.thumbnail-loading { display: none; position: absolute; inset-inline: 8px; bottom: 8px; padding: 4px 8px; border-radius: 6px; background: var(--surface); color: var(--text); font-size: 11px; text-align: center; }
+.thumbnail.htmx-request .thumbnail-loading { display: block; }
+.preview-feedback { position: absolute; inset-inline: 8px; bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 6px 10px; border-radius: 7px; background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--text); font-size: 12px; text-align: center; }
+.preview-feedback[hidden] { display: none; }
+.preview-feedback.loading::before { content: ''; width: 13px; height: 13px; flex: 0 0 auto; border: 2px solid var(--moss); border-top-color: transparent; border-radius: 50%; animation: preview-spin 850ms linear infinite; }
+@keyframes preview-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .preview-feedback.loading::before { animation: none; border-top-color: var(--moss); } }
 .hide-photo-form { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
 .hide-photo-form small { display: block; }
 .photo-editor .framing-required { display: block; font-size: 13px; color: var(--amber); }
