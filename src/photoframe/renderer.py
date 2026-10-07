@@ -217,11 +217,13 @@ class MockRenderCoordinator:
             raise
         return self.snapshot()
 
-    def reset(self) -> None:
+    def reset(self, *, forget_display: bool = False) -> None:
         with self._state_lock:
             if self._display_lock.locked():
                 return
             self.state = RenderState()
+            if forget_display:
+                self.last_rendered_photo_id = None
             self._hardware_refresh = False
             self._on_failure = None
             self._on_complete = None

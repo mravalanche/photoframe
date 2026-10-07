@@ -1,6 +1,6 @@
 <section class="update-shell" aria-labelledby="software-updates-title">
   <h2 id="software-updates-title">Software updates</h2>
-  <p class="update-intro">Keep your frame up to date, at your own pace.</p>
+  <p class="update-intro">Check and install Photoframe updates.</p>
   <section class="update-card" aria-labelledby="status-title">
     <div class="update-card-heading">
       <h3 id="status-title" class="update-eyebrow">Update status</h3>
@@ -22,10 +22,10 @@
     <div>
       <label for="update-channel">Update channel</label>
       <select id="update-channel" aria-describedby="channel-description"><option value="stable">Stable</option><option value="develop">Develop — testing builds</option></select>
-      <p id="channel-description">Stable is recommended for everyday use. Develop contains signed test builds. Changing channels does not install anything or downgrade the app.</p>
+      <p id="channel-description">Use Stable for everyday updates or Develop to test upcoming releases. Switching channels won't install an update.</p>
       <label class="update-checkbox"><input id="weekly-checks" type="checkbox"> Check this channel weekly</label>
-      <p>Checks only look for releases. Downloading and restarting always require your choice.</p>
-      <p id="update-steps">Check now to find a newer release. When one is available, download and verify it; then apply it when you are ready to restart.</p>
+      <p>Weekly checks won't download or install updates.</p>
+      <p id="update-steps">Check for an update, download it, then apply it when you're ready to restart.</p>
       <div class="update-actions" aria-describedby="update-steps">
         <button class="secondary" id="check-update" type="button">Check now</button>
         <button class="secondary" id="stage-update" type="button" disabled>Download & verify</button>
@@ -35,6 +35,6 @@
     </div>
   </section>
   <details id="release-notes-section" class="update-card release-notes-section" hidden><summary id="release-notes-title">Release notes<span class="release-notes-hint">What’s changed</span></summary><div id="release-notes" class="release-notes"></div></details>
-  <section class="update-card update-help"><h3>During an update</h3><p>Your photos, settings and schedule are kept. The displayed image remains on the frame while Photoframe restarts. This page reconnects automatically. If the new version cannot start, the updater restores the previous version.</p><details><summary>Recovery and diagnostics</summary><p id="update-diagnostics">No update in progress.</p><p>If reconnection fails, wait a few minutes, then choose Reconnect. If the device remains unavailable, ask your administrator to inspect the photoframe and photoframe-updater service logs.</p></details></section>
+  <section class="update-card update-help"><h3>During an update</h3><p>Your photos and settings are kept. The frame continues showing its current photo, and this page reconnects after the restart. If the update fails to start, the previous version is restored.</p><details><summary>Recovery and diagnostics</summary><p id="update-diagnostics">No update in progress.</p><p>If this page doesn't reconnect, wait a few minutes and choose Reconnect. If that fails, check the Photoframe service logs.</p></details></section>
   <dialog id="apply-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-detail"><form method="dialog"><h2 id="confirm-title">Apply update and restart?</h2><p id="confirm-detail">Your frame will pause briefly. Your saved settings and photos will be kept.</p><div class="update-actions"><button class="secondary" value="cancel" autofocus>Cancel</button><button class="primary" id="confirm-action" value="confirm">Apply & restart</button></div></form></dialog>
 </section>

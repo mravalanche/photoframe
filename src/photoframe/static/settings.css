@@ -15,8 +15,6 @@
 .settings-content { min-width:0; }
 .settings-content .update-shell { width:100%; margin:0; }
 .settings-content .setting-card { width:100%; }
-.settings-content .setting-summary-main small { display:none; }
-.settings-content .setting-card > summary { font-size:16px; }
 .settings-content .workspace { gap:20px; }
 .setup-callout { border:1px solid var(--moss-deep); border-radius:10px; padding:16px; background:var(--moss-soft); }
 .setup-callout a { color:var(--text); font-weight:700; }
@@ -46,7 +44,9 @@
 }
 
 .settings-intro { padding:20px 20px 0; }
-.settings-intro p { color:var(--muted); }
+.settings-intro h2 { margin:0; font-size:18px; line-height:1.35; }
+.settings-intro h2:focus-visible { outline:2px solid var(--moss); outline-offset:3px; }
+.settings-intro p { color:var(--muted); margin:5px 0 0; font-size:12px; }
 .hardware-settings .advanced-settings-grid { grid-column:1/-1; }
 
 .workspace-loading { display:grid; gap:24px; }

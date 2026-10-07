@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from ..models import (
     CertificateMode,
     DisplayDriver,
+    FrameSettings,
     NetworkAccess,
     NetworkSettings,
     Orientation,
@@ -19,6 +20,26 @@ from ..models import (
 
 def _text(form: Mapping[str, object], key: str, default: str = "") -> str:
     return str(form.get(key, default)).strip()
+
+
+def parse_rotation_seconds(form: Mapping[str, object], *, default: int | None = None) -> int:
+    """Parse the human interval and legacy seconds without rounding durations."""
+    if "interval_value" in form or "interval_unit" in form:
+        units = {"seconds": 1, "minutes": 60, "hours": 3600, "days": 86400}
+        unit = _text(form, "interval_unit")
+        if unit not in units:
+            raise ValueError("Choose seconds, minutes, hours or days for the interval")
+        raw = _text(form, "interval_value")
+        multiplier = units[unit]
+    else:
+        raw = _text(form, "rotation_seconds", str(default) if default is not None else "")
+        multiplier = 1
+    if not raw.isascii() or not raw.isdecimal() or len(raw) > 7:
+        raise ValueError("Enter a whole-number interval between 30 seconds and 30 days")
+    seconds = int(raw) * multiplier
+    if not 30 <= seconds <= 2_592_000:
+        raise ValueError("Choose an interval between 30 seconds and 30 days")
+    return seconds
 
 
 @dataclass(frozen=True)
@@ -98,7 +119,15 @@ class WorkflowForm:
     hardware: HardwareForm | None
 
     @classmethod
-    def parse(cls, form: Mapping[str, object]) -> WorkflowForm:
+    def parse(
+        cls, form: Mapping[str, object], *, saved_frame: FrameSettings | None = None
+    ) -> WorkflowForm:
+        mode = ScheduleMode(_text(form, "schedule_mode", "interval"))
+        previous = saved_frame or FrameSettings()
+        interval_default = previous.rotation_seconds if mode != ScheduleMode.INTERVAL else None
+        daily_default = previous.daily_time if mode != ScheduleMode.DAILY else "03:00"
+        weekly_day_default = previous.weekly_day if mode != ScheduleMode.WEEKLY else 0
+        weekly_time_default = previous.weekly_time if mode != ScheduleMode.WEEKLY else "03:00"
         order = _text(form, "photo_order")
         timezone = _text(form, "timezone")
         hardware_keys = {
@@ -111,11 +140,11 @@ class WorkflowForm:
         }
         return cls(
             orientation=Orientation(_text(form, "orientation")),
-            rotation_seconds=int(_text(form, "rotation_seconds")),
-            schedule_mode=ScheduleMode(_text(form, "schedule_mode", "interval")),
-            daily_time=_text(form, "daily_time", "03:00"),
-            weekly_day=int(_text(form, "weekly_day", "0")),
-            weekly_time=_text(form, "weekly_time", "03:00"),
+            rotation_seconds=parse_rotation_seconds(form, default=interval_default),
+            schedule_mode=mode,
+            daily_time=_text(form, "daily_time", daily_default),
+            weekly_day=int(_text(form, "weekly_day", str(weekly_day_default))),
+            weekly_time=_text(form, "weekly_time", weekly_time_default),
             photo_order=PhotoOrder(order) if order else None,
             timezone=timezone or None,
             hardware=HardwareForm.parse(form) if hardware_keys.intersection(form) else None,

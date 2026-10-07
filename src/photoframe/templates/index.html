@@ -85,7 +85,7 @@
     window.addEventListener('pagehide', () => tabSession.release());
     window.addEventListener('pageshow', () => tabSession.reclaim());
     function setupSettingsAccordion() {
-      const panels = Array.from(document.querySelectorAll('[data-settings-panel]'));
+      const panels = Array.from(document.querySelectorAll('[data-settings-accordion] > [data-settings-panel]'));
       if (!panels.length) return;
       const serverChoice = panels.find(panel => panel.open)?.dataset.settingsPanel;
       const defaultChoice = panels.find(panel => panel.dataset.defaultOpen === 'true')?.dataset.settingsPanel;
@@ -172,7 +172,7 @@
       if (pendingAlbumSelection && !pendingChoice) {
         const missingName = pendingAlbumSelection.name;
         pendingAlbumSelection = null;
-        announceAlbum(`${missingName} is no longer available. Pending selection cleared.`);
+        announceAlbum(`${missingName} is no longer available. Selection cancelled.`);
       }
       choices.forEach(choice => {
         const input = choice.querySelector('input[type="radio"]');
@@ -193,7 +193,7 @@
       if (confirmButton) confirmButton.textContent = pendingAlbumSelection
         ? `Use ${pendingAlbumSelection.name}` : 'Use album';
       if (pendingAlbumSelection) announceAlbum(
-        `${pendingAlbumSelection.name} selected for review. Confirm to use this album.`,
+        `Choose Use album to switch to ${pendingAlbumSelection.name}.`,
       );
     }
     function setupAlbumSelection() {
@@ -214,7 +214,7 @@
             name: choice.dataset.albumName,
           };
           renderAlbumSelection(picker);
-          if (!pendingAlbumSelection) announceAlbum(`${choice.dataset.albumName} remains Current.`);
+          if (!pendingAlbumSelection) announceAlbum(`${choice.dataset.albumName} is already selected.`);
         });
       }
       const cancel = document.querySelector('[data-album-cancel]');
@@ -230,25 +230,158 @@
             ? picker.querySelector(`[data-album-id="${CSS.escape(focusId)}"] input`)
             : picker.querySelector('input');
           focusTarget?.focus({ preventScroll: true });
-          announceAlbum(name ? `${name} selection cancelled.` : 'Pending selection cleared.');
+          announceAlbum(name ? `${name} selection cancelled.` : 'Selection cancelled.');
         });
       }
       renderAlbumSelection(picker);
+    }
+    function previewFeedback(state, message, loading = false, error = false) {
+      const feedback = state.editor.querySelector('[data-preview-feedback]');
+      feedback.hidden = !message;
+      feedback.classList.toggle('loading', loading);
+      feedback.querySelector('[data-preview-message]').textContent = message;
+      feedback.querySelector('[data-preview-retry]').hidden = !error;
+      state.editor.querySelector('.selected-image').setAttribute('aria-busy', String(loading));
+    }
+    function retryFramingPreview(state) {
+      if (state.retries >= 4 || !state.editor.isConnected) {
+        previewFeedback(state, 'Preview unavailable. Try again.', false, true);
+        return;
+      }
+      const delay = Math.min(600 * 2 ** state.retries, 4000);
+      state.retries += 1;
+      state.loading = true;
+      previewFeedback(state, 'Waiting for preview…', true);
+      window.setTimeout(() => {
+        state.loading = false;
+        state.displayedUrl = '';
+        if (state.editor.isConnected) loadFramingPreview(state);
+      }, delay);
+    }
+    function loadFramingPreview(state) {
+      if (state.loading || state.initialLoading) return;
+      const url = state.desiredUrl;
+      if (url === state.displayedUrl && state.image.naturalWidth) {
+        previewFeedback(state, '');
+        return;
+      }
+      state.loading = true;
+      previewFeedback(state, 'Updating preview…', true);
+      const next = new Image();
+      next.alt = state.image.alt;
+      next.onload = () => {
+        if (state.desiredUrl === url && state.editor.isConnected) {
+          state.image.replaceWith(next);
+          state.image = next;
+          state.displayedUrl = url;
+          state.retries = 0;
+        }
+        state.loading = false;
+        if (state.desiredUrl !== url) loadFramingPreview(state);
+        else previewFeedback(state, '');
+      };
+      next.onerror = () => {
+        state.loading = false;
+        if (state.desiredUrl !== url) loadFramingPreview(state);
+        else retryFramingPreview(state);
+      };
+      next.src = url;
+    }
+    function setupFramingPreviews() {
+      document.querySelectorAll('.photo-editor').forEach(editor => {
+        if (editor.previewState) return;
+        const image = editor.querySelector('.selected-image img');
+        const state = {
+          editor, image, displayedUrl: image.src, desiredUrl: image.src,
+          initialLoading: !image.complete, loading: false, retries: 0,
+        };
+        editor.previewState = state;
+        const initialDone = () => {
+          state.initialLoading = false;
+          if (state.desiredUrl !== state.displayedUrl) loadFramingPreview(state);
+          else if (image.naturalWidth) previewFeedback(state, '');
+          else retryFramingPreview(state);
+        };
+        if (state.initialLoading) {
+          image.addEventListener('load', initialDone, { once: true });
+          image.addEventListener('error', initialDone, { once: true });
+        } else initialDone();
+        editor.querySelector('[data-preview-retry]').addEventListener('click', () => {
+          state.retries = 0;
+          state.displayedUrl = '';
+          loadFramingPreview(state);
+        });
+      });
+    }
+    document.addEventListener('change', event => {
+      const form = event.target.closest?.('.framing-form');
+      if (!form) return;
+      const editor = form.closest('.photo-editor');
+      const state = editor.previewState;
+      const mode = form.elements.fit_mode.value;
+      const matte = form.elements.matte.value;
+      const dirty = mode !== form.dataset.savedFit || matte !== form.dataset.savedMatte;
+      const url = new URL(state.image.src);
+      url.searchParams.set('fit_mode', mode);
+      url.searchParams.set('matte', matte);
+      if (state.desiredUrl !== url.href) state.retries = 0;
+      state.desiredUrl = url.href;
+      previewFeedback(state, 'Updating preview…', true);
+      loadFramingPreview(state);
+      editor.querySelectorAll('.selected-actions .primary, .rotation-action button').forEach(button => {
+        button.disabled = dirty || !!editor.querySelector('.framing-required');
+      });
+      form.querySelector('[data-framing-hint]').textContent = dirty ? 'Save framing to show this photo' : editor.querySelector('.framing-required') ? 'Save framing to include this photo' : 'Ready to show';
+    });
+    const intervalSteps = [30, 60, 300, 900, 1800, 3600, 10800, 21600, 43200, 86400];
+    const intervalLabels = ['30 seconds', '1 minute', '5 minutes', '15 minutes', '30 minutes', '1 hour', '3 hours', '6 hours', '12 hours', '1 day'];
+    const intervalFactors = {seconds: 1, minutes: 60, hours: 3600, days: 86400};
+    function syncIntervalEditor(form) {
+      const slider = form.querySelector('[data-interval-slider]');
+      const custom = form.querySelector('[data-interval-custom]');
+      if (!slider || !custom) return;
+      const label = intervalLabels[Number(slider.value)];
+      slider.setAttribute('aria-valuetext', label);
+      slider.disabled = custom.checked || form.elements.schedule_mode.value !== 'interval';
+      form.querySelector('[data-interval-custom-fields]').hidden = !custom.checked;
+      form.querySelector('[data-interval-label]').textContent = custom.checked
+        ? (form.elements.interval_value.value ? `${form.elements.interval_value.value} ${form.elements.interval_unit.value}` : 'custom interval')
+        : label;
+    }
+    function setIntervalFromSlider(form) {
+      const seconds = intervalSteps[Number(form.querySelector('[data-interval-slider]').value)];
+      const unit = seconds % 86400 === 0 ? 'days' : seconds % 3600 === 0 ? 'hours' : seconds % 60 === 0 ? 'minutes' : 'seconds';
+      form.elements.interval_value.value = String(seconds / intervalFactors[unit]);
+      form.elements.interval_unit.value = unit;
+      form.elements.interval_unit.dataset.previousUnit = unit;
+      form.querySelector('[data-interval-conversion]').textContent = '';
     }
     function updateScheduleControls(form) {
       if (!form) return;
       const mode = form.elements.schedule_mode?.value || 'interval';
       form.querySelectorAll('[data-schedule-fields]').forEach(field => {
         field.hidden = field.dataset.scheduleFields !== mode;
+        field.querySelectorAll('input, select').forEach(input => { input.disabled = field.hidden; });
       });
+      const interval = form.elements.interval_value;
+      const factors = {seconds: 1, minutes: 60, hours: 3600, days: 86400};
+      const factor = factors[form.elements.interval_unit?.value] || 1;
+      if (interval) {
+        interval.min = factor === 1 ? '30' : '1';
+        interval.max = String(2592000 / factor);
+      }
+      syncIntervalEditor(form);
       window.clearTimeout(form._schedulePreviewTimer);
+      const previewVersion = (form._schedulePreviewVersion || 0) + 1;
+      form._schedulePreviewVersion = previewVersion;
       form._schedulePreviewTimer = window.setTimeout(async () => {
         try {
           const response = await fetch('/schedule/preview', {
             method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'fetch'},
           });
           const preview = form.querySelector('[data-schedule-preview]');
-          if (preview) preview.textContent = await response.text();
+          const text = await response.text();
+          if (preview && form._schedulePreviewVersion === previewVersion) preview.textContent = text;
         } catch (_error) {
           // Keep the last authoritative server-rendered value if previewing is unavailable.
         }
@@ -256,11 +389,55 @@
     }
     function setupScheduleSettings() {
       document.querySelectorAll('[data-schedule-form]').forEach(form => {
-        updateScheduleControls(form);
-        if (form.dataset.scheduleReady) return;
+        if (form.dataset.scheduleReady) {
+          updateScheduleControls(form);
+          return;
+        }
         form.dataset.scheduleReady = 'true';
+        const slider = form.querySelector('[data-interval-slider]');
+        const custom = form.querySelector('[data-interval-custom]');
+        if (slider && custom) {
+          const seconds = Number(form.elements.interval_value.value) * intervalFactors[form.elements.interval_unit.value];
+          if (custom.checked) {
+            slider.value = String(intervalSteps.reduce((best, value, index) =>
+              Math.abs(Math.log(seconds / value)) < Math.abs(Math.log(seconds / intervalSteps[best])) ? index : best, 0));
+          }
+          slider.addEventListener('input', () => setIntervalFromSlider(form));
+          custom.addEventListener('change', () => {
+            if (custom.checked) {
+              if (form._customInterval) {
+                form.elements.interval_value.value = form._customInterval.value;
+                form.elements.interval_unit.value = form._customInterval.unit;
+                form.elements.interval_unit.dataset.previousUnit = form._customInterval.unit;
+              }
+            } else {
+              form._customInterval = {value: form.elements.interval_value.value, unit: form.elements.interval_unit.value};
+              setIntervalFromSlider(form);
+            }
+          });
+        }
         form.addEventListener('input', () => updateScheduleControls(form));
+        const unit = form.elements.interval_unit;
+        if (unit) {
+          unit.dataset.previousUnit = unit.value;
+          unit.addEventListener('change', () => {
+            const factors = {seconds: 1, minutes: 60, hours: 3600, days: 86400};
+            const input = form.elements.interval_value;
+            const converted = Number(input.value) * factors[unit.dataset.previousUnit] / factors[unit.value];
+            const hint = form.querySelector('[data-interval-conversion]');
+            if (Number.isInteger(converted) && converted >= 1 && converted <= 2592000 / factors[unit.value]) {
+              input.value = String(converted);
+              if (hint) hint.textContent = '';
+            } else {
+              input.value = '';
+              if (hint) hint.textContent = 'Enter a whole number in the new unit.';
+              input.focus();
+            }
+            unit.dataset.previousUnit = unit.value;
+          });
+        }
         form.addEventListener('change', () => updateScheduleControls(form));
+        updateScheduleControls(form);
       });
     }
     function confirmNetworkChange(form) {
@@ -295,6 +472,7 @@
       setupSettingsAccordion();
       setupNetworkSettings();
       setupAlbumSelection();
+      setupFramingPreviews();
       setupScheduleSettings();
     }
     function workspaceLoadFailed(event) {
@@ -326,11 +504,11 @@
       }
       const settingsPanel = event.detail.elt?.closest?.('[data-settings-panel]');
       if (settingsPanel) {
-        const summary = settingsPanel.querySelector(':scope > summary');
+        const anchor = settingsPanel.querySelector(':scope > summary, :scope > .settings-intro h2');
         activeSettingsPanel = settingsPanel.dataset.settingsPanel;
         settingsPanelViewState = {
           panelId: activeSettingsPanel,
-          summaryTop: summary?.getBoundingClientRect().top,
+          anchorTop: anchor?.getBoundingClientRect().top,
         };
       }
       const thumbnail = event.detail.elt?.closest?.('.thumbnail');
@@ -345,11 +523,12 @@
       if (settingsPanelViewState) {
         const savedPanel = settingsPanelViewState;
         settingsPanelViewState = null;
-        const summary = document.querySelector(`[data-settings-panel="${savedPanel.panelId}"] > summary`);
-        if (summary) {
-          const newTop = summary.getBoundingClientRect().top;
-          if (Number.isFinite(savedPanel.summaryTop)) window.scrollBy(0, newTop - savedPanel.summaryTop);
-          summary.focus({ preventScroll: true });
+        const panel = document.querySelector(`[data-settings-panel="${savedPanel.panelId}"]`);
+        const anchor = panel?.querySelector(':scope > summary, :scope > .settings-intro h2');
+        if (anchor) {
+          const newTop = anchor.getBoundingClientRect().top;
+          if (Number.isFinite(savedPanel.anchorTop)) window.scrollBy(0, newTop - savedPanel.anchorTop);
+          anchor.focus({ preventScroll: true });
         }
       }
       if (!previewScrollState) return;

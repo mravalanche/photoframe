@@ -61,13 +61,16 @@ firewall reach, trust warnings, and all installer options.
 2. Under **Album**, refresh the available albums and choose one.
 3. Under **Schedule & orientation**, choose orientation, rotation and photo order.
    Configure the physical display separately under **Settings → Display hardware**.
-4. Preview a photo. **Show now** updates the frame; **Start rotation here** changes the schedule.
+4. Preview a photo. Choose its framing, then use **Show now** to update the frame or
+   **Start rotation here** to change where rotation resumes.
 5. If another device on the local network needs access, open **Settings → Advanced & recovery** and
    configure the listener before saving.
 
 The API key is stored locally and is never rendered back into the browser. Native display width
 and height must both be known before an image can be rendered; supported Inky hardware is detected
 at startup when possible.
+Changing the Immich server requires a new API key. Changing either the server or key clears the
+selected album, hidden-photo choices and local photo cache so another account cannot reuse them.
 
 Frame updates and album preparation appear in a pinned activity bar, including the initial
 library load and **Refresh photos & thumbnails**. The bar shows the current phase and the number
@@ -83,6 +86,18 @@ use the provider preview when available. Unsupported images are excluded from th
 list.
 
 ## Basic configuration
+
+Portrait and square photos appear in the photo browser. Choose **Show whole photo** to keep the
+full image, with a soft photo, colour, white or black background. **Fill frame** crops the edges.
+Save framing to include a photo in rotation; **Show now** updates the physical frame immediately.
+These choices do not change the original in Immich.
+
+**Hide from this frame** removes a photo from rotation without deleting it from Immich. Use
+**Undo** or restore it from **Hidden photos**. A hidden photo already on the frame stays visible
+until the next update.
+
+For interval schedules, choose a common duration with the slider or an exact duration from
+30 seconds to 30 days with **Custom interval**. Daily and weekly schedules are still available.
 
 **Settings → Advanced & recovery** controls the web listener:
 

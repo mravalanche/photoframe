@@ -20,8 +20,11 @@ from ..models import (
     DisplayDriver,
     NetworkSettings,
     Orientation,
+    PhotoFraming,
     PhotoOrder,
+    PhotoPreference,
     ProviderKind,
+    RefreshStatus,
     ScheduleMode,
 )
 from ..renderer import RenderPhase, RenderState
@@ -126,15 +129,39 @@ class ConfigurationService:
         self._next_request_id_set: set[str] = set()
 
     def save_connection(self, form: ConnectionInput) -> str:
+        candidate_url = HttpUrl(form.server_url)
+        previous_url = self.repository.load().provider.server_url
+        source_changed = previous_url != candidate_url or bool(form.api_key)
+        if previous_url != candidate_url and not form.api_key:
+            raise ValueError("Enter an API key when changing the server address")
         try:
+            if source_changed:
+                self.runtime.wait_for_refresh()
+                with self.runtime.photo_edit():
 
-            def connection_change(settings: AppSettings) -> None:
-                settings.provider.kind = ProviderKind.IMMICH
-                settings.provider.server_url = HttpUrl(form.server_url)
+                    def invalidate(settings: AppSettings) -> None:
+                        settings.verification.ok = False
+                        settings.frame.album_id = None
+                        settings.frame.album_name = None
+                        settings.frame.starting_photo_id = None
+                        settings.frame.shuffle_photo_ids = []
+                        settings.frame.shuffle_seed = 0
+                        settings.frame.photo_preferences.clear()
+                        settings.refresh_status = RefreshStatus()
 
-            self.repository.update(connection_change)
-            if form.api_key:
-                self.secrets.set_api_key(form.api_key)
+                    self.repository.update(invalidate)
+                    self.runtime.clear_account_data()
+                    if form.api_key:
+                        self.secrets.set_api_key(form.api_key)
+
+                    def connection_change(settings: AppSettings) -> None:
+                        settings.provider.kind = ProviderKind.IMMICH
+                        settings.provider.server_url = candidate_url
+                        settings.provider.source_epoch = secure_random.token_hex(16)
+
+                    self.repository.update(connection_change)
+            else:
+                self.repository.update(lambda settings: setattr(settings.verification, "ok", False))
             message = self.runtime.provider().validate_connection()
             checked_at = datetime.now(UTC)
 
@@ -301,7 +328,14 @@ class ConfigurationService:
                 settings.frame.starting_photo_id = None
             if settings.frame.photo_order == PhotoOrder.SHUFFLE:
                 settings.frame.shuffle_photo_ids = shuffled_photo_ids(eligible, settings.frame)
-            settings.refresh_status.next_attempt_at = None
+            selected_at = datetime.now(UTC)
+            settings.refresh_status.last_attempt_at = selected_at
+            settings.refresh_status.last_success_at = selected_at
+            settings.refresh_status.next_attempt_at = selected_at + timedelta(
+                seconds=settings.refresh.catalog_refresh_seconds
+            )
+            settings.refresh_status.consecutive_failures = 0
+            settings.refresh_status.last_error = None
 
         with load.committing() if load else nullcontext():
             self.runtime.commit_album(photos, displayed_before, choose_album)
@@ -327,8 +361,7 @@ class ConfigurationService:
             settings.refresh_status.last_completed_schedule_key = None
             settings.refresh_status.last_attempted_schedule_key = None
             if not any(
-                photo.id == settings.frame.starting_photo_id
-                and photo.matches(settings.frame.orientation)
+                photo.id == settings.frame.starting_photo_id and settings.frame.allows(photo)
                 for photo in photos
             ):
                 settings.frame.starting_photo_id = None
@@ -351,7 +384,7 @@ class ConfigurationService:
         self.runtime.reconcile_shuffle()
         if form.hardware is not None:
             self.runtime.initialise_display()
-        return "Frame settings saved; the next automatic update is scheduled"
+        return "Frame settings saved"
 
     @staticmethod
     def _apply_hardware(settings: AppSettings, form: HardwareInput) -> None:
@@ -396,9 +429,70 @@ class ConfigurationService:
         )
 
     def preview_photo(self, photo_id: str) -> None:
-        self._require_eligible(photo_id)
+        self.require_browsable(photo_id)
         self.runtime.set_preview(photo_id)
         self.runtime.renderer.reset()
+
+    def require_browsable(self, photo_id: str) -> None:
+        photo = self.runtime.photo(photo_id)
+        settings = self.repository.load()
+        if (
+            not settings.verification.ok
+            or photo is None
+            or settings.frame.preference(photo_id).hidden
+        ):
+            raise ValueError("That photo is unavailable or hidden from this frame")
+        if not self.runtime.photo_is_decodable(photo_id):
+            raise ValueError("That image is not eligible or cannot be decoded by this PhotoFrame")
+
+    def save_framing(self, photo_id: str, framing: PhotoFraming) -> str:
+        with self.runtime.photo_edit():
+            self.require_browsable(photo_id)
+
+            def save(settings: AppSettings) -> None:
+                preferences = settings.frame.photo_preferences.setdefault(
+                    settings.frame.photo_scope, {}
+                )
+                previous = settings.frame.preference(photo_id)
+                preferences[photo_id] = PhotoPreference(
+                    fit_mode=framing.fit_mode,
+                    matte=framing.matte,
+                    hidden=previous.hidden,
+                    included=True,
+                )
+
+            self.repository.update(save)
+            self.runtime.reconcile_shuffle()
+        return "Framing saved; photo added to rotation"
+
+    def set_hidden(self, photo_id: str, hidden: bool) -> str:
+        with self.runtime.photo_edit():
+            if self.runtime.photo(photo_id) is None:
+                raise ValueError("Choose a photo from the current album")
+
+            def save(settings: AppSettings) -> None:
+                preferences = settings.frame.photo_preferences.setdefault(
+                    settings.frame.photo_scope, {}
+                )
+                preference = settings.frame.preference(photo_id).model_copy(deep=True)
+                preference.hidden = hidden
+                preferences[photo_id] = preference
+                if hidden and settings.frame.starting_photo_id == photo_id:
+                    settings.frame.starting_photo_id = None
+
+            self.repository.update(save)
+            if hidden and self.runtime.preview_id() == photo_id:
+                self.runtime.set_preview(None)
+            self.runtime.reconcile_shuffle()
+            settings = self.repository.load()
+            remaining = self.runtime.photo_eligibility(settings.frame).eligible
+        if hidden:
+            return (
+                "Photo hidden. No photos remain in rotation; restore one to resume."
+                if not remaining
+                else "Photo hidden. Restore it under Hidden photos."
+            )
+        return "Photo restored"
 
     def clear_preview(self) -> None:
         self.runtime.set_preview(None)
@@ -443,11 +537,16 @@ class ConfigurationService:
     def start_render(self, operation_id: str | None = None) -> None:
         if self.runtime.maintenance_gate.maintenance:
             raise ValueError("Photoframe is preparing to restart for an update")
+        if self.runtime.renderer.snapshot().active or self.runtime.renderer.hardware_busy:
+            raise ValueError("Wait for the current frame update before showing another photo")
         photo = self.runtime.photo(self.runtime.preview_id())
         if not photo:
             raise ValueError("Select an image preview before sending it to the frame")
 
+        self._require_eligible(photo.id)
+
         def completed(photo_id: str) -> None:
+            self.runtime.record_display_snapshot(photo_id)
             self.repository.update(
                 lambda saved: setattr(saved.refresh_status, "last_rendered_photo_id", photo_id)
             )
@@ -505,6 +604,7 @@ class ConfigurationService:
             self.runtime.set_preview(None)
 
             def completed(photo_id: str) -> None:
+                self.runtime.record_display_snapshot(photo_id)
                 self.repository.update(
                     lambda saved: setattr(saved.refresh_status, "last_rendered_photo_id", photo_id)
                 )

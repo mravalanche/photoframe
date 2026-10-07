@@ -56,7 +56,7 @@ def test_confirmed_album_then_next_preserves_display_and_schedule(tmp_path: Path
     provider = MultiAlbumProvider()
     app = create_app(tmp_path, lambda _kind: provider)
     runtime = app.state.runtime
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         client.post(
             "/connection",
             data={"server_url": "https://immich.test", "api_key": "secret"},
@@ -86,7 +86,7 @@ def test_confirmed_album_then_next_preserves_display_and_schedule(tmp_path: Path
             before.refresh_status.last_attempted_schedule_key
         )
         assert runtime.renderer.rendered_photo_id() == "current-a"
-        assert 'src="/thumbnail/current-a"' in confirmed.text
+        assert 'src="/thumbnail/current-a' in confirmed.text
 
         request_id = re.search(r'name="request_id" value="([^"]+)"', confirmed.text)
         assert request_id
@@ -111,7 +111,7 @@ def test_confirmed_album_then_next_preserves_display_and_schedule(tmp_path: Path
 
 def test_complete_local_web_flow(tmp_path: Path):
     app = create_app(tmp_path, lambda _kind: FakeProvider())
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         assert client.get("/").status_code == 200
         response = client.post(
             "/connection", data={"server_url": "https://immich.test", "api_key": "secret"}
@@ -120,9 +120,9 @@ def test_complete_local_web_flow(tmp_path: Path):
         assert "Connected for test" in response.text
         assert "secret" not in response.text
         response = client.post("/album/select", data={"album_id": "album"})
-        assert "1 eligible" in response.text
-        assert "1 wrong orientation" in response.text
-        assert "0 unsupported or unreadable" in response.text
+        assert "1 in rotation" in response.text
+        assert "1 need framing" in response.text
+        assert "0 unavailable" in response.text
         assert "wide.jpg" in response.text
         response = client.post(
             "/workflow",
@@ -137,7 +137,9 @@ def test_complete_local_web_flow(tmp_path: Path):
             },
         )
         assert "tall.jpg" in response.text
-        assert "Every 5 minutes · In album order · Portrait" in response.text
+        assert "Every 5 minutes" in response.text
+        assert "Album order" in response.text
+        assert "Portrait frame" in response.text
         health = client.get("/health")
         assert health.status_code == 200
         assert health.json()["status"] == "healthy"
@@ -176,7 +178,7 @@ class PreviewFallbackProvider(MixedFormatProvider):
 
 def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path):
     app = create_app(tmp_path, lambda _kind: FakeProvider())
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
         client.post("/album/select", data={"album_id": "album"})
         client.post(
@@ -194,9 +196,9 @@ def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path)
         runtime = app.state.runtime
         original_start = runtime.repository.load().frame.starting_photo_id
         response = client.post("/photo/preview", data={"photo_id": "wide"})
-        assert "MANUAL PREVIEW" in response.text
+        assert "PHOTO PREVIEW" in response.text
         assert 'data-frame-transition="manual-preview"' in response.text
-        assert "Manual preview selected — frame unchanged" in response.text
+        assert "Preview selected" in response.text
         assert "Show now" in response.text
         assert runtime.repository.load().frame.starting_photo_id == original_start
         response = client.post("/render/start", headers=RENDER_HEADERS)
@@ -210,7 +212,7 @@ def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path)
 
 def test_render_requires_native_display_dimensions(tmp_path: Path):
     app = create_app(tmp_path, lambda _kind: FakeProvider())
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
         client.post("/album/select", data={"album_id": "album"})
         client.post("/photo/preview", data={"photo_id": "wide"})
@@ -224,12 +226,12 @@ def test_render_requires_native_display_dimensions(tmp_path: Path):
 
 def test_demo_mode_is_local_and_renderable(tmp_path: Path):
     app = create_app(tmp_path, demo_mode=True)
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         page = client.get("/partials/workspace")
         assert "Quiet places" in page.text
         assert "SELECTED ALBUM" in page.text
         assert "Demo library" in page.text
-        assert "Local preview · no network" in page.text
+        assert "Demo photos" in page.text
         assert 'name="timezone"' not in page.text
         assert 'class="album-thumbnail" src="/thumbnail/coast"' in page.text
         assert "Northumberland coast.jpg" in page.text
@@ -239,7 +241,7 @@ def test_demo_mode_is_local_and_renderable(tmp_path: Path):
 def test_unsupported_assets_are_filtered_once_and_reported_by_category(tmp_path: Path):
     provider = MixedFormatProvider()
     app = create_app(tmp_path, lambda _kind: provider)
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         client.post(
             "/connection",
             data={
@@ -252,9 +254,9 @@ def test_unsupported_assets_are_filtered_once_and_reported_by_category(tmp_path:
         refreshed = client.get("/partials/workspace")
         rejected = client.post("/photo/preview", data={"photo_id": "heic"})
 
-    assert "1 eligible" in response.text
-    assert "1 wrong orientation" in response.text
-    assert "1 unsupported or unreadable" in response.text
+    assert "1 in rotation" in response.text
+    assert "1 need framing" in response.text
+    assert "1 unavailable" in response.text
     assert 'aria-label="Preview wide.jpg"' in response.text
     assert 'aria-label="Preview phone.heic"' not in response.text
     assert "phone.heic" not in refreshed.text
@@ -266,7 +268,7 @@ def test_unsupported_assets_are_filtered_once_and_reported_by_category(tmp_path:
 def test_decodable_provider_preview_keeps_heic_original_eligible(tmp_path: Path):
     provider = PreviewFallbackProvider()
     app = create_app(tmp_path, lambda _kind: provider)
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         client.post(
             "/connection",
             data={
@@ -282,12 +284,12 @@ def test_decodable_provider_preview_keeps_heic_original_eligible(tmp_path: Path)
         )
         rendered = client.post("/render/start")
 
-    assert "2 eligible" in response.text
-    assert "1 wrong orientation" in response.text
-    assert "0 unsupported or unreadable" in response.text
+    assert "2 in rotation" in response.text
+    assert "1 need framing" in response.text
+    assert "0 unavailable" in response.text
     assert 'aria-label="Preview phone.heic"' in response.text
     assert "phone.heic" in refreshed.text
-    assert "MANUAL PREVIEW" in previewed.text
+    assert "PHOTO PREVIEW" in previewed.text
     assert "Preparing image" in rendered.text
     assert app.state.runtime.prepared_image is not None
     assert provider.original_calls.count("heic") == 1
@@ -296,7 +298,7 @@ def test_decodable_provider_preview_keeps_heic_original_eligible(tmp_path: Path)
 
 def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     app = create_app(tmp_path, demo_mode=True)
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         page = client.get("/")
         workspace = client.get("/partials/workspace")
         provider_settings = client.get("/partials/workspace?section=provider")
@@ -327,7 +329,8 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'class="source-state"><span class="status-dot"' in workspace.text
     assert ".source-state" in responsive_css.text
     assert "data-settings-accordion" in workspace.text
-    assert 'name="frame-settings" data-settings-panel="provider"' in provider_settings.text
+    assert '<section class="setting-card" data-settings-panel="provider"' in provider_settings.text
+    assert '<details class="setting-card"' not in provider_settings.text
     assert 'data-settings-panel="provider"' not in workspace.text
     assert 'name="frame-settings" data-settings-panel="album"' in workspace.text
     assert 'name="frame-settings" data-settings-panel="display"' in workspace.text
@@ -353,16 +356,19 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
         assert f'name="{name}"' in hardware_settings.text
         assert f'name="{name}"' not in workspace.text
     assert 'data-settings-panel="advanced"' in advanced_settings.text
+    assert '<details class="setting-card' not in advanced_settings.text
     assert 'data-settings-panel="display" data-default-open="false"' in workspace.text
     assert 'data-settings-panel="display" data-default-open="false" open' not in workspace.text
     assert 'action="/photo/next"' in workspace.text
     assert 'action="/photo/next"' not in frame_status.text
-    assert "The scheduled update time will not change." in workspace.text
+    assert "without changing your schedule" in workspace.text
     assert workspace.text.index('id="frame-status"') < workspace.text.index(
         'class="frame-next-action"'
     )
-    assert "Advanced settings" in advanced_settings.text
-    assert "Daily at 03:00 · In album order · Landscape" in workspace.text
+    assert "Advanced &amp; recovery" in advanced_settings.text
+    assert "Daily at 03:00" in workspace.text
+    assert "Album order" in workspace.text
+    assert "Landscape frame" in workspace.text
     assert "Simulator · 24-hour" not in advanced_settings.text
     assert "Network & web security" in advanced_settings.text
     assert "This device only" in advanced_settings.text
@@ -391,16 +397,16 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert "padding: 26px 32px" in responsive_css.text
     assert ".network-field > input" in responsive_css.text
     assert "@media (max-width: 700px)" in responsive_css.text
-    assert "Reset Photoframe to defaults?" in advanced_settings.text
+    assert "Reset Photoframe?" in advanced_settings.text
     assert "Keep current settings" in advanced_settings.text
     assert "Reset to defaults" in advanced_settings.text
     assert 'name="photo_order"' in workspace.text
-    assert "Controls future scheduled changes" in workspace.text
+    assert "In album order" in workspace.text
 
 
 def test_album_picker_is_local_until_confirm_and_exposes_accessible_states(tmp_path: Path):
     app = create_app(tmp_path, lambda _kind: FakeProvider())
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
         page = client.get("/")
         workspace = client.get("/partials/workspace")
@@ -431,7 +437,7 @@ def test_album_picker_is_local_until_confirm_and_exposes_accessible_states(tmp_p
 
 def test_album_confirm_is_the_only_route_mutation_point_and_marks_current(tmp_path: Path):
     app = create_app(tmp_path, lambda _kind: FakeProvider())
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
         before = app.state.runtime.repository.load()
         assert before.frame.album_id is None
@@ -462,7 +468,7 @@ def test_album_confirm_keeps_the_picture_currently_represented_on_frame(tmp_path
     runtime.loaded = True
     runtime.renderer.last_rendered_photo_id = old_photo.id
 
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         response = client.post("/album/select", data={"album_id": "album"})
 
     assert "still-on-frame.jpg" in response.text
@@ -483,7 +489,7 @@ def test_missing_current_album_is_reported_without_automatic_replacement(tmp_pat
     runtime.loaded = True
     runtime.albums = [Album(id="album", name="Family")]
 
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         response = client.get("/partials/workspace")
 
     assert "Old family album · Unavailable" in response.text
@@ -502,7 +508,7 @@ def test_network_change_requires_confirmation_and_requests_restart(tmp_path: Pat
         "web_protocol": "http",
         "certificate_mode": "automatic",
     }
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         rejected = client.post("/network", data=payload)
         accepted = client.post("/network", data={**payload, "confirm_endpoint_change": "yes"})
 
@@ -518,7 +524,7 @@ def test_network_port_validation_is_user_facing(tmp_path: Path):
     from photoframe.settings import SettingsRepository
 
     app = create_app(tmp_path, demo_mode=True)
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         response = client.post(
             "/network",
             data={
@@ -539,7 +545,7 @@ def test_automatic_https_generates_private_material_outside_ui(tmp_path: Path):
     from photoframe.settings import SettingsRepository
 
     app = create_app(tmp_path, demo_mode=True)
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         response = client.post(
             "/network",
             data={
@@ -562,7 +568,7 @@ def test_invalid_supplied_tls_files_do_not_replace_saved_configuration(tmp_path:
     from photoframe.settings import SettingsRepository
 
     app = create_app(tmp_path, demo_mode=True)
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         response = client.post(
             "/network",
             data={
@@ -586,7 +592,7 @@ def test_valid_supplied_tls_files_are_preserved(tmp_path: Path):
     certificate, key = generate_local_certificate(tmp_path / "supplied")
     before = (certificate.read_bytes(), key.read_bytes())
     app = create_app(tmp_path / "app", demo_mode=True)
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         response = client.post(
             "/network",
             data={
@@ -606,7 +612,7 @@ def test_valid_supplied_tls_files_are_preserved(tmp_path: Path):
 
 def test_shuffle_setting_persists_and_start_here_anchors_new_round(tmp_path: Path):
     app = create_app(tmp_path, demo_mode=True)
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         response = client.post(
             "/workflow",
             data={
@@ -620,7 +626,7 @@ def test_shuffle_setting_persists_and_start_here_anchors_new_round(tmp_path: Pat
                 "display_driver": "mock",
             },
         )
-        assert "Scheduled shuffle" in response.text
+        assert "Shuffle" in response.text
         assert "Every 5 minutes · Shuffle · Landscape" in response.text
         runtime = app.state.runtime
         saved = runtime.repository.load()
@@ -638,11 +644,11 @@ def test_shuffle_setting_persists_and_start_here_anchors_new_round(tmp_path: Pat
 
 def test_reset_clears_configuration_secret_cache_and_runtime(tmp_path: Path):
     app = create_app(tmp_path, lambda _kind: FakeProvider())
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
         client.post("/album/select", data={"album_id": "album"})
         runtime = app.state.runtime
-        runtime.cache.put("immich:wide", b"cached-photo")
+        runtime.cache.put(runtime._cache_key("wide"), b"cached-photo")
         assert runtime.cache.stats().files == 1
 
         response = client.post("/reset")
@@ -662,7 +668,7 @@ def test_reset_clears_configuration_secret_cache_and_runtime(tmp_path: Path):
 
 def test_reset_truthfully_reports_partial_cache_cleanup(tmp_path: Path, monkeypatch):
     app = create_app(tmp_path, lambda _kind: FakeProvider())
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
         runtime = app.state.runtime
         monkeypatch.setattr(runtime.cache, "clear", lambda: (_ for _ in ()).throw(OSError()))
@@ -676,7 +682,7 @@ def test_reset_truthfully_reports_partial_cache_cleanup(tmp_path: Path, monkeypa
 
 def test_background_polling_never_replaces_the_settings_workspace(tmp_path: Path):
     app = create_app(tmp_path, demo_mode=True)
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         workspace = client.get("/partials/workspace")
         client.post("/photo/preview", data={"photo_id": "coast"})
         render_started = client.post("/render/start")
@@ -707,7 +713,7 @@ def test_scheduled_transition_is_prominent_in_the_frame_preview(tmp_path: Path):
         )
     )
 
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         response = client.get("/partials/frame-status")
 
     assert 'data-frame-transition="scheduled"' in response.text
@@ -718,7 +724,7 @@ def test_scheduled_transition_is_prominent_in_the_frame_preview(tmp_path: Path):
 
 def test_successful_render_auto_dismisses_but_failure_remains(tmp_path: Path):
     app = create_app(tmp_path, demo_mode=True)
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         client.post("/photo/preview", data={"photo_id": "coast"})
         client.post("/render/start", headers=RENDER_HEADERS)
         runtime = app.state.runtime
@@ -764,7 +770,7 @@ def test_successful_render_auto_dismisses_but_failure_remains(tmp_path: Path):
 def test_manual_render_popup_is_correlated_to_the_initiating_browser(tmp_path: Path):
     app = create_app(tmp_path, demo_mode=True)
     other_browser = {"X-Photoframe-Render-Intent": "a70cc8a8-fbd9-4b98-8290-011d0eabfa06"}
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         client.post("/photo/preview", data={"photo_id": "coast"})
         initiated = client.post("/render/start", headers=RENDER_HEADERS)
         same_browser = client.get("/partials/frame-status", headers=RENDER_HEADERS)
@@ -785,7 +791,7 @@ def test_scheduled_render_status_remains_global_and_uncorrelated(tmp_path: Path)
     runtime = app.state.runtime
     runtime.renderer.start("coast")
 
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         workspace = client.get("/partials/workspace", headers=RENDER_HEADERS)
 
     assert runtime.renderer.snapshot().operation_id is None
@@ -800,7 +806,7 @@ def test_completed_render_visibility_uses_fixed_server_deadlines(tmp_path: Path)
     settings = runtime.repository.load()
     now = datetime.now(UTC)
 
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         client.post("/photo/preview", data={"photo_id": "coast"})
 
         recently_started = now - timedelta(seconds=settings.device.expected_refresh_seconds + 3)
