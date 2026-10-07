@@ -17,18 +17,20 @@ def classify_photos(
     photos: list[Photo], frame: FrameSettings, is_decodable: Callable[[Photo], bool]
 ) -> EligibilitySummary:
     """Separate candidates using metadata orientation and verified decode support."""
-    orientation_matches = [photo for photo in photos if photo.matches(frame.orientation)]
+    orientation_matches = [photo for photo in photos if frame.allows(photo)]
     eligible = [photo for photo in orientation_matches if is_decodable(photo)]
     eligible = eligible_photos(eligible, frame)
     return EligibilitySummary(
         eligible=eligible,
-        wrong_orientation=len(photos) - len(orientation_matches),
+        wrong_orientation=sum(
+            not frame.preference(photo.id).hidden and not frame.allows(photo) for photo in photos
+        ),
         unsupported=len(orientation_matches) - len(eligible),
     )
 
 
 def eligible_photos(photos: list[Photo], frame: FrameSettings) -> list[Photo]:
-    eligible = [photo for photo in photos if photo.matches(frame.orientation)]
+    eligible = [photo for photo in photos if frame.allows(photo)]
     earliest = datetime.min.replace(tzinfo=UTC)
     eligible.sort(key=lambda photo: ((photo.taken_at or earliest).isoformat(), photo.id))
     return eligible

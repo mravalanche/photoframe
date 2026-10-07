@@ -61,7 +61,7 @@
       complete: 'Album ready', failed: 'Album change failed', cancelled: 'Album loading cancelled',
     } : {preparing:'Preparing photo', sending:'Sending to frame', waiting:'Refreshing e-ink display', complete:'Frame updated', failed:'Frame update failed'};
     let message = job.message || (kind === 'album' ? job.album_name || 'Preparing your album…' : 'Please wait while the frame updates.');
-    if (kind === 'album' && job.phase === 'checking' && job.total != null) message = `${job.completed} of ${job.total} photos prepared for this frame. Downloading and checking images as needed. ${job.album_name || ''}`;
+    if (kind === 'album' && job.phase === 'checking' && job.total != null) message = `${job.completed} of ${job.total} photos ready. ${job.album_name || ''}`;
     if (kind === 'frame' && job.phase === 'waiting') message = 'Waiting for the display to finish. E-ink refreshes can take a minute.';
     show(headings[job.phase] || 'Working…', message, job.active, job.phase === 'failed', kind === 'album' && job.phase === 'checking' ? job : null);
     if (cancel) {
