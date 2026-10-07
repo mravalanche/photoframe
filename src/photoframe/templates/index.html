@@ -85,7 +85,7 @@
     window.addEventListener('pagehide', () => tabSession.release());
     window.addEventListener('pageshow', () => tabSession.reclaim());
     function setupSettingsAccordion() {
-      const panels = Array.from(document.querySelectorAll('[data-settings-panel]'));
+      const panels = Array.from(document.querySelectorAll('[data-settings-accordion] > [data-settings-panel]'));
       if (!panels.length) return;
       const serverChoice = panels.find(panel => panel.open)?.dataset.settingsPanel;
       const defaultChoice = panels.find(panel => panel.dataset.defaultOpen === 'true')?.dataset.settingsPanel;
@@ -422,11 +422,11 @@
       }
       const settingsPanel = event.detail.elt?.closest?.('[data-settings-panel]');
       if (settingsPanel) {
-        const summary = settingsPanel.querySelector(':scope > summary');
+        const anchor = settingsPanel.querySelector(':scope > summary, :scope > .settings-intro h2');
         activeSettingsPanel = settingsPanel.dataset.settingsPanel;
         settingsPanelViewState = {
           panelId: activeSettingsPanel,
-          summaryTop: summary?.getBoundingClientRect().top,
+          anchorTop: anchor?.getBoundingClientRect().top,
         };
       }
       const thumbnail = event.detail.elt?.closest?.('.thumbnail');
@@ -441,11 +441,12 @@
       if (settingsPanelViewState) {
         const savedPanel = settingsPanelViewState;
         settingsPanelViewState = null;
-        const summary = document.querySelector(`[data-settings-panel="${savedPanel.panelId}"] > summary`);
-        if (summary) {
-          const newTop = summary.getBoundingClientRect().top;
-          if (Number.isFinite(savedPanel.summaryTop)) window.scrollBy(0, newTop - savedPanel.summaryTop);
-          summary.focus({ preventScroll: true });
+        const panel = document.querySelector(`[data-settings-panel="${savedPanel.panelId}"]`);
+        const anchor = panel?.querySelector(':scope > summary, :scope > .settings-intro h2');
+        if (anchor) {
+          const newTop = anchor.getBoundingClientRect().top;
+          if (Number.isFinite(savedPanel.anchorTop)) window.scrollBy(0, newTop - savedPanel.anchorTop);
+          anchor.focus({ preventScroll: true });
         }
       }
       if (!previewScrollState) return;
