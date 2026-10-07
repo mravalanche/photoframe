@@ -20,9 +20,13 @@ deleted under the active repository ruleset, which has no bypass actors.
 The initial private-key copy is retained outside Git in the administrator's restricted
 local signing directory. Keep an encrypted offline backup before publishing and never
 attach the private key to a release or commit it. GitHub cannot return a stored secret.
-The first signed develop candidate, v1.3.0.dev3, has passed the ARM64 build, offline
-installation check and independent signature/digest verification. Physical Pi acceptance
-and the first stable managed release remain outstanding.
+The first stable managed release is
+[v1.4.0](https://github.com/mravalanche/photoframe/releases/tag/v1.4.0).
+Its ARM64 bundle passed the build and quality gate, and its signature and archive
+digest were independently verified. A Pi Zero 2 W with a 7-inch Inky Impression v1
+passed the reported update, scheduled render, restart, and manual rollback soak.
+The wider failure-injection drill in `docs/managed-updates.md` remains outstanding;
+the repository owner approved the documented exception for this release.
 
 ## Establishing or replacing trust
 
@@ -37,8 +41,10 @@ first managed release, the repository owner must:
    release tags, and store the private PEM as its secret
    `PHOTOFRAME_RELEASE_SIGNING_KEY`. Restrict who can modify this environment.
 4. Complete the real Pi acceptance drill in `docs/managed-updates.md`, then use the
-   ordinary develop-to-main and Release Please flow. A future published stable
-   release builds on ARM64/Python 3.12, runs the quality gate, and signs its bundle.
+   ordinary develop-to-main and Release Please flow. Published stable releases build
+   on ARM64/Python 3.12, run the quality gate, and sign their bundles. The wider
+   failure-injection drill was explicitly deferred for v1.4.0; complete it before
+   treating those failure cases as physically validated.
 
 The workflow refuses missing keys, mismatched public/private keys, unsupported prereleases,
 versions at or below 1.2.1, and replacement of existing assets. A published source
