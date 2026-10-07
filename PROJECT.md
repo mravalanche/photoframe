@@ -361,9 +361,11 @@ candidate that passed the repository check.
 The managed web updater, privileged helper boundary, signed bundle pipeline, one-time migration,
 and device acceptance drill are documented in [Managed updates](docs/managed-updates.md).
 Production signing trust is configured; see [Signing setup](release/README.md).
-The physical Pi soak and update/rollback acceptance drill remain outstanding.
-The normal reviewed, green-CI path into develop still applies; promotion to main requires the
-recorded physical-device update and rollback drill.
+The v1.4.0 release passed a reported Pi Zero 2 W/Inky Impression v1 soak, including
+scheduled render, restart, update, and manual rollback. The wider failure-injection
+drill remains outstanding; the owner explicitly accepted that documented gap for v1.4.0.
+Future promotions still require a recorded physical-device soak and the normal reviewed,
+green-CI path through develop.
 
 ### Feature priorities — agreed 2026-09-20
 
@@ -495,7 +497,5 @@ leaves photo loading to the background worker so the album picker can appear ear
 Unvalidated photos are not made eligible. Measure responsiveness on the physical frame;
 the original missing-image incident has not been reproduced on that device.
 
-Release state: the initial Settings/recovery work shipped in signed candidate `v1.3.0.dev4`.
-Device testing prompted a further presentation and album-loading follow-up. Ship that follow-up
-through a pull request to `develop` before preparing another development release.
-Physical Pi acceptance remains required.
+Release state: the Settings/recovery work and later photo-control and presentation updates
+shipped in stable `v1.4.0`. The remaining physical failure-injection drill is tracked above.

@@ -8,11 +8,13 @@ they never download or install automatically.
 
 ## First release and supported device
 
-This feature is an integration candidate until a real-device soak has passed.
 The production public signing key is pinned in this branch; see
 [release signing setup](../release/README.md) for its fingerprint and release controls.
-The first installable signed develop candidate is [v1.3.0.dev3](https://github.com/mravalanche/photoframe/releases/tag/v1.3.0.dev3).
-Physical-device acceptance is still required before the first stable managed release.
+The first stable managed release is
+[v1.4.0](https://github.com/mravalanche/photoframe/releases/tag/v1.4.0).
+The owner reported a successful update, scheduled render, restart, and manual rollback
+on a Pi Zero 2 W with a 7-inch Inky Impression v1. The wider drill below has not been
+reported as passed; the owner explicitly approved shipping v1.4.0 with that gap recorded.
 v1.2.0 and v1.2.1 remain source/manual releases and cannot bootstrap this
 updater. Missing or invalid signatures fail closed.
 
@@ -209,7 +211,6 @@ The independent helper must include this channel support; merely replacing an ol
 cannot upgrade a privileged helper. No managed release predates the introduction of this
 channel. Any manually provisioned earlier helper needs an explicit administrator migration.
 
-First validate the candidate's startup, existing settings, album switching, scheduled render,
-and reboot on the physical frame. A later develop candidate exercises download/apply and
-retained-version rollback. Follow the complete acceptance drill before the first stable release.
-The separate photo-control feature branch is not included until explicitly merged later.
+For future candidates, validate startup, existing settings, album switching, scheduled render,
+and reboot on the physical frame. Exercise download/apply and retained-version rollback.
+Complete the remaining failure-injection checks above before claiming full physical acceptance.
