@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.4.0](https://github.com/mravalanche/photoframe/compare/v1.3.0...v1.4.0) (2026-10-07)
+
+
+### Features
+
+* add photo controls and improve mobile frame UI ([453a46c](https://github.com/mravalanche/photoframe/commit/453a46c531a90e446a443c52c684d47e371d3a82))
+* portrait photo controls and mobile UI refresh ([b1fc9dd](https://github.com/mravalanche/photoframe/commit/b1fc9dd18d585bb5806d948681bf7b8be00d0d0e))
+
+
+### Bug Fixes
+
+* clarify and load photo background previews ([3eb1593](https://github.com/mravalanche/photoframe/commit/3eb1593c71819de46bad2b739bc9618a577693ee))
+* improve photo background previews and loading feedback ([6f2a855](https://github.com/mravalanche/photoframe/commit/6f2a85566d5e91d844db57045e1945e8ac4cd81c))
+* remove redundant settings accordions ([16490a7](https://github.com/mravalanche/photoframe/commit/16490a7755427693d826449d24ca3b98abcc2883))
+* show settings tab content without accordions ([f61fb39](https://github.com/mravalanche/photoframe/commit/f61fb3929fdb08a3deb9b957f3aaef0974d82a32))
+
 ## [1.3.0](https://github.com/mravalanche/photoframe/compare/v1.2.1...v1.3.0) (2026-09-24)
 
 
