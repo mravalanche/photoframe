@@ -1,7 +1,7 @@
 from io import BytesIO
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from photoframe.cache import PhotoCache
 from photoframe.image_processing import (
@@ -34,6 +34,23 @@ def test_prepare_for_display_applies_exif_orientation_before_fit():
     prepared = prepare_for_display(jpeg((1600, 1000), orientation=6), (480, 800))
 
     assert prepared.size == (480, 800)
+
+
+def test_photo_backgrounds_are_distinct_and_keep_photo_colour():
+    output = BytesIO()
+    with Image.new("RGB", (80, 120), (110, 110, 110)) as source:
+        draw = ImageDraw.Draw(source)
+        draw.rectangle((8, 8, 72, 76), fill=(230, 100, 35))
+        source.save(output, "PNG")
+    with (
+        prepare_for_display(output.getvalue(), (120, 80), fit_mode="fit", matte="blur") as soft,
+        prepare_for_display(output.getvalue(), (120, 80), fit_mode="fit", matte="colour") as wash,
+    ):
+        upper, lower = soft.getpixel((4, 8)), soft.getpixel((4, 72))
+        assert upper != lower  # Soft photo retains a blurred impression of the picture.
+        assert wash.getpixel((4, 8)) == wash.getpixel((4, 72))  # Colour wash is flat.
+        red, green, blue = wash.getpixel((4, 40))
+        assert red - blue > 40 and green > blue
 
 
 def test_decodability_uses_the_installed_image_pipeline():

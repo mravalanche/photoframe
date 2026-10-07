@@ -235,18 +235,99 @@
       }
       renderAlbumSelection(picker);
     }
+    function previewFeedback(state, message, loading = false, error = false) {
+      const feedback = state.editor.querySelector('[data-preview-feedback]');
+      feedback.hidden = !message;
+      feedback.classList.toggle('loading', loading);
+      feedback.querySelector('[data-preview-message]').textContent = message;
+      feedback.querySelector('[data-preview-retry]').hidden = !error;
+      state.editor.querySelector('.selected-image').setAttribute('aria-busy', String(loading));
+    }
+    function retryFramingPreview(state) {
+      if (state.retries >= 4 || !state.editor.isConnected) {
+        previewFeedback(state, 'Preview unavailable. Try again.', false, true);
+        return;
+      }
+      const delay = Math.min(600 * 2 ** state.retries, 4000);
+      state.retries += 1;
+      state.loading = true;
+      previewFeedback(state, 'Waiting for preview…', true);
+      window.setTimeout(() => {
+        state.loading = false;
+        state.displayedUrl = '';
+        if (state.editor.isConnected) loadFramingPreview(state);
+      }, delay);
+    }
+    function loadFramingPreview(state) {
+      if (state.loading || state.initialLoading) return;
+      const url = state.desiredUrl;
+      if (url === state.displayedUrl && state.image.naturalWidth) {
+        previewFeedback(state, '');
+        return;
+      }
+      state.loading = true;
+      previewFeedback(state, 'Updating preview…', true);
+      const next = new Image();
+      next.alt = state.image.alt;
+      next.onload = () => {
+        if (state.desiredUrl === url && state.editor.isConnected) {
+          state.image.replaceWith(next);
+          state.image = next;
+          state.displayedUrl = url;
+          state.retries = 0;
+        }
+        state.loading = false;
+        if (state.desiredUrl !== url) loadFramingPreview(state);
+        else previewFeedback(state, '');
+      };
+      next.onerror = () => {
+        state.loading = false;
+        if (state.desiredUrl !== url) loadFramingPreview(state);
+        else retryFramingPreview(state);
+      };
+      next.src = url;
+    }
+    function setupFramingPreviews() {
+      document.querySelectorAll('.photo-editor').forEach(editor => {
+        if (editor.previewState) return;
+        const image = editor.querySelector('.selected-image img');
+        const state = {
+          editor, image, displayedUrl: image.src, desiredUrl: image.src,
+          initialLoading: !image.complete, loading: false, retries: 0,
+        };
+        editor.previewState = state;
+        const initialDone = () => {
+          state.initialLoading = false;
+          if (state.desiredUrl !== state.displayedUrl) loadFramingPreview(state);
+          else if (image.naturalWidth) previewFeedback(state, '');
+          else retryFramingPreview(state);
+        };
+        if (state.initialLoading) {
+          image.addEventListener('load', initialDone, { once: true });
+          image.addEventListener('error', initialDone, { once: true });
+        } else initialDone();
+        editor.querySelector('[data-preview-retry]').addEventListener('click', () => {
+          state.retries = 0;
+          state.displayedUrl = '';
+          loadFramingPreview(state);
+        });
+      });
+    }
     document.addEventListener('change', event => {
       const form = event.target.closest?.('.framing-form');
       if (!form) return;
       const editor = form.closest('.photo-editor');
-      const image = editor.querySelector('.selected-image img');
+      const state = editor.previewState;
       const mode = form.elements.fit_mode.value;
       const matte = form.elements.matte.value;
       const dirty = mode !== form.dataset.savedFit || matte !== form.dataset.savedMatte;
-      const url = new URL(image.src);
+      const url = new URL(state.image.src);
       url.searchParams.set('fit_mode', mode);
       url.searchParams.set('matte', matte);
-      image.src = url.href;
+      if (state.desiredUrl !== url.href) state.retries = 0;
+      state.desiredUrl = url.href;
+      previewFeedback(state, 'Updating preview…', true);
+      loadFramingPreview(state);
       editor.querySelectorAll('.selected-actions .primary, .rotation-action button').forEach(button => {
         button.disabled = dirty || !!editor.querySelector('.framing-required');
       });
@@ -391,6 +472,7 @@
       setupSettingsAccordion();
       setupNetworkSettings();
       setupAlbumSelection();
+      setupFramingPreviews();
       setupScheduleSettings();
     }
     function workspaceLoadFailed(event) {

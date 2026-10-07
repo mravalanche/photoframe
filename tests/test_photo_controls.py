@@ -51,7 +51,9 @@ def test_portrait_is_browsable_but_rotation_requires_explicit_framing(tmp_path, 
     assert [p.id for p in runtime.photo_eligibility(runtime.repository.load().frame).eligible] == [
         "wide"
     ]
-    assert "tall.jpg" in client.get("/partials/workspace").text
+    initial_workspace = client.get("/partials/workspace").text
+    assert "tall.jpg" in initial_workspace
+    assert "Hidden from this frame (0)" in initial_workspace
     client.post("/photo/preview", data={"photo_id": "tall"})
     assert runtime.preview_id() == "tall"
     assert "not eligible" in client.post("/render/start").text
@@ -97,6 +99,7 @@ def test_hide_last_photo_is_local_restorable_and_blocks_stale_actions(tmp_path):
     )
     client.post("/photo/preview", data={"photo_id": "wide"})
     response = client.post("/photo/hide", data={"photo_id": "wide"})
+    assert "Hidden from this frame (1)" in response.text
     assert "No photos remain in rotation" in response.text
     assert runtime.repository.load().refresh_status.last_rendered_photo_id == "wide"
     assert runtime.preview_id() is None
