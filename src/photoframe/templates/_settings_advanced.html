@@ -1,4 +1,4 @@
-      <details class="setting-card advanced-card span-2" name="frame-settings" data-settings-panel="advanced" data-default-open="true" open><summary><span class="setting-summary-main"><strong>Advanced settings</strong></span><span class="setting-summary-end"><span class="setting-status">{{ network_summary }}</span><span class="disclosure-icon" aria-hidden="true"></span></span></summary>
+      <section class="setting-card advanced-card span-2" data-settings-panel="advanced" aria-labelledby="advanced-title"><div class="settings-intro"><h2 id="advanced-title" tabindex="-1">Advanced &amp; recovery</h2><p>{{ network_summary }}</p></div>
         <div class="advanced-card-content advanced-card-body">
           <div class="advanced-section-heading"><div><h3>Network & web security</h3><p>Choose which devices can open Photoframe.</p></div><span class="endpoint-badge">Current: {{ network_address }}</span></div>
           <form method="post" action="/network" hx-post="/network" hx-target="#workspace" hx-swap="outerHTML" class="network-form" data-network-form data-original-signature="{{ settings.network.access.value }}|{{ settings.network.port }}|{{ settings.network.protocol.value }}|{{ settings.network.certificate_mode.value }}|{{ settings.network.certificate_path or '' }}|{{ settings.network.private_key_path or '' }}" onsubmit="return confirmNetworkChange(this)">
@@ -14,4 +14,4 @@
 
           <div class="maintenance-content"><div><h3>Reset & recovery</h3><p>Remove this Photoframe’s configuration and local photo data. The app will remain installed.</p></div><button type="button" class="danger-button" onclick="openResetDialog()">Reset Photoframe</button></div>
         </div>
-      </details>
+      </section>

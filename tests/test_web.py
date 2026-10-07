@@ -329,7 +329,8 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'class="source-state"><span class="status-dot"' in workspace.text
     assert ".source-state" in responsive_css.text
     assert "data-settings-accordion" in workspace.text
-    assert 'name="frame-settings" data-settings-panel="provider"' in provider_settings.text
+    assert '<section class="setting-card" data-settings-panel="provider"' in provider_settings.text
+    assert '<details class="setting-card"' not in provider_settings.text
     assert 'data-settings-panel="provider"' not in workspace.text
     assert 'name="frame-settings" data-settings-panel="album"' in workspace.text
     assert 'name="frame-settings" data-settings-panel="display"' in workspace.text
@@ -355,6 +356,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
         assert f'name="{name}"' in hardware_settings.text
         assert f'name="{name}"' not in workspace.text
     assert 'data-settings-panel="advanced"' in advanced_settings.text
+    assert '<details class="setting-card' not in advanced_settings.text
     assert 'data-settings-panel="display" data-default-open="false"' in workspace.text
     assert 'data-settings-panel="display" data-default-open="false" open' not in workspace.text
     assert 'action="/photo/next"' in workspace.text
@@ -363,7 +365,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert workspace.text.index('id="frame-status"') < workspace.text.index(
         'class="frame-next-action"'
     )
-    assert "Advanced settings" in advanced_settings.text
+    assert "Advanced &amp; recovery" in advanced_settings.text
     assert "Daily at 03:00" in workspace.text
     assert "Album order" in workspace.text
     assert "Landscape frame" in workspace.text

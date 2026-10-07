@@ -102,7 +102,7 @@ const documentMock = {{
   querySelectorAll(selector) {{
     if (selector === '[data-theme-choice]') return [themeButton];
     if (selector === '[data-notice][data-auto-dismiss]') return [notice];
-    if (selector === '[data-settings-panel]') return [panel];
+    if (selector === '[data-settings-accordion] > [data-settings-panel]') return [panel];
     return [];
   }},
 }};
