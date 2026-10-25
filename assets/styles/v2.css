@@ -89,6 +89,7 @@
   html { font-family: var(--font-sans); }
   body { background: var(--color-base-200); color: var(--color-base-content); }
   button, input, select, textarea { font: inherit; }
+  [hidden] { display: none !important; }
   :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 }
 
@@ -99,6 +100,12 @@
   .pf-supporting { color: color-mix(in oklab, var(--color-base-content) 68%, transparent); }
   .pf-measure { max-width: 70ch; }
   .pf-tabular { font-variant-numeric: tabular-nums; }
+  [data-update-badge][data-tone="working"], #update-status-badge[data-tone="working"] { background: var(--color-info); color: var(--color-info-content); border-color: var(--color-info); }
+  [data-update-badge][data-tone="available"], #update-status-badge[data-tone="available"] { background: var(--color-accent); color: var(--color-accent-content); border-color: var(--color-accent); }
+  [data-update-badge][data-tone="success"], #update-status-badge[data-tone="success"] { background: var(--color-success); color: var(--color-success-content); border-color: var(--color-success); }
+  [data-update-badge][data-tone="warning"], #update-status-badge[data-tone="warning"] { background: var(--color-warning); color: var(--color-warning-content); border-color: var(--color-warning); }
+  [data-update-badge][data-tone="error"], #update-status-badge[data-tone="error"] { background: var(--color-error); color: var(--color-error-content); border-color: var(--color-error); }
+  #update-status-badge { border-radius: var(--radius-box); padding: .75rem 1rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -11,8 +11,18 @@ def main(directory: Path) -> None:
         raise SystemExit(f"Expected one Photoframe wheel in {directory}; found {len(wheels)}")
     with ZipFile(wheels[0]) as archive:
         stylesheet = archive.read("photoframe/static/v2.css")
+        packaged = set(archive.namelist())
     if len(stylesheet) < 1000:
         raise SystemExit("The packaged v2 stylesheet is missing or unexpectedly small")
+    required_fonts = {
+        "photoframe/static/fonts/inter-latin-wght-normal.woff2",
+        "photoframe/static/fonts/newsreader-latin-wght-normal.woff2",
+        "photoframe/static/fonts/inter-OFL.txt",
+        "photoframe/static/fonts/newsreader-OFL.txt",
+    }
+    missing = required_fonts - packaged
+    if missing:
+        raise SystemExit(f"The packaged UI is missing fonts or licenses: {sorted(missing)}")
     print(f"Packaged v2 stylesheet: {len(stylesheet):,} bytes")
 
 

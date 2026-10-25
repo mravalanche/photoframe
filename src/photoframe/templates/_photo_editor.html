@@ -4,17 +4,17 @@
   <div class="card-body grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(12rem,1fr)_minmax(0,1.5fr)]">
     <div class="selected-image relative grid aspect-[3/2] place-items-center overflow-hidden rounded-box bg-base-200" aria-busy="true">
       <img class="max-h-full max-w-full object-contain" src="/photos/{{ selected_photo.id }}/prepared?fit_mode={{ selected_framing.fit_mode }}&amp;matte={{ selected_framing.matte }}" alt="Frame preview of {{ selected_photo.filename }}">
-      <div class="preview-feedback loading absolute inset-x-2 bottom-2 flex items-center justify-center gap-2 rounded-box bg-base-100/95 px-3 py-2 text-sm shadow-sm" data-preview-feedback role="status" aria-live="polite"><span data-preview-message>Preparing preview…</span><button type="button" class="btn btn-outline btn-sm" data-preview-retry hidden>Retry</button></div>
+      <div class="preview-feedback is-loading absolute inset-x-2 bottom-2 flex items-center justify-center gap-2 rounded-box bg-base-100/95 px-3 py-2 text-sm shadow-sm" data-preview-feedback role="status" aria-live="polite"><span data-preview-message>Preparing preview…</span><button type="button" class="btn btn-outline btn-sm" data-preview-retry hidden>Retry</button></div>
     </div>
     <div class="selected-copy min-w-0 space-y-4">
-      <div><p class="pf-eyebrow text-primary">Photo preview</p><h2 id="selected-title" class="pf-section-title break-words">{{ selected_photo.filename }}</h2><p class="mt-1 text-sm text-base-content/70">Adjust this photo before adding it to the frame.</p></div>
+      <div><p class="pf-eyebrow text-primary">Photo preview</p><h2 id="selected-title" class="pf-section-title scroll-mt-24 break-words">{{ selected_photo.filename }}</h2><p class="mt-1 text-sm text-base-content/70">Adjust this photo before adding it to the frame.</p></div>
       <form data-saved-fit="{{ selected_framing.fit_mode }}" data-saved-matte="{{ selected_framing.matte }}" class="framing-form grid gap-3 sm:grid-cols-2" method="post" action="/photo/framing" hx-post="/photo/framing" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML">
         <input type="hidden" name="photo_id" value="{{ selected_photo.id }}">
         {{ forms.select_field('selected-fit', 'fit_mode', 'Fit', [('fit', 'Show whole photo'), ('fill', 'Fill frame')], selected_framing.fit_mode) }}
         {{ forms.select_field('selected-matte', 'matte', 'Background', [('blur', 'Soft photo'), ('colour', 'Colour wash'), ('white', 'White'), ('black', 'Black')], selected_framing.matte, help='Shown when using the whole photo.') }}
         <div class="form-actions flex flex-wrap items-center gap-3 sm:col-span-2">{{ actions.button('Save framing', 'secondary', type='submit') }}<span class="text-sm text-base-content/70" data-framing-hint role="status">{{ 'Ready to show' if selected_rotation_eligible else 'Save framing to include this photo' }}</span><span class="framing-saving htmx-indicator text-sm" role="status">Saving…</span></div>
       </form>
-      {% if not selected_rotation_eligible %}<p class="framing-required text-sm font-medium text-warning" role="status">Save framing before showing this photo.</p>{% endif %}
+      {% if not selected_rotation_eligible %}<p class="framing-required text-sm font-medium text-warning-content" role="status">Save framing before showing this photo.</p>{% endif %}
       <div class="selected-actions flex flex-wrap items-center gap-2">
         <form method="post" action="/render/start" hx-post="/render/start" hx-target="#workspace" hx-swap="outerHTML"><button class="primary btn btn-primary" type="submit" {% if not selected_rotation_eligible %}disabled{% endif %}>Show now</button></form>
         <form class="rotation-action" method="post" action="/photo/start" hx-post="/photo/start" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ selected_photo.id }}">{{ actions.button('Start rotation here', 'secondary', type='submit', disabled=not selected_rotation_eligible) }}</form>

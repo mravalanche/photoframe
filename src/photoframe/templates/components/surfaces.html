@@ -2,7 +2,7 @@
 {% macro card(title='', subtitle='', heading_id='', variant='default', extra_classes='', attrs={}) -%}
 <section class="card border border-base-300{% if variant == 'soft' %} bg-base-200{% elif variant == 'emphasis' %} bg-primary text-primary-content{% else %} bg-base-100{% endif %}{% if extra_classes %} {{ extra_classes }}{% endif %}"{% if heading_id %} aria-labelledby="{{ heading_id }}"{% endif %}{% if attrs %} {{ attrs|xmlattr }}{% endif %}>
   <div class="card-body gap-4">
-    {% if title %}<div><h2 class="card-title"{% if heading_id %} id="{{ heading_id }}"{% endif %}>{{ title }}</h2>{% if subtitle %}<p class="text-sm opacity-75">{{ subtitle }}</p>{% endif %}</div>{% endif %}
+    {% if title %}<div><h2 class="card-title" tabindex="-1"{% if heading_id %} id="{{ heading_id }}"{% endif %}>{{ title }}</h2>{% if subtitle %}<p class="text-sm opacity-75">{{ subtitle }}</p>{% endif %}</div>{% endif %}
     {{ caller() }}
   </div>
 </section>

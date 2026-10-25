@@ -2,11 +2,8 @@
 {% import "components/data.html" as data %}
 {% import "components/feedback.html" as feedback %}
 {% import "components/surfaces.html" as surfaces %}
-<section class="library-section space-y-5" aria-labelledby="library-title">
-  <div class="section-heading flex flex-wrap items-end justify-between gap-3">
-    <div><p class="pf-eyebrow text-primary">Library</p><h2 id="library-title" class="pf-section-title">Photos</h2></div>
-    <p class="eligibility-summary flex flex-wrap gap-2 text-sm">{{ feedback.badge(eligible|length ~ ' in rotation', 'success') }}{{ feedback.badge(hidden_photos|length ~ ' hidden') }}{{ feedback.badge(wrong_orientation_count ~ ' need framing', 'warning') }}{{ feedback.badge(unsupported_count ~ ' unavailable') }}</p>
-  </div>
+<section class="library-section space-y-5" aria-label="Photo library">
+  <p class="eligibility-summary flex flex-wrap gap-2 text-sm">{{ feedback.badge(eligible|length ~ ' in rotation', 'success') }}{{ feedback.badge(hidden_photos|length ~ ' hidden') }}{{ feedback.badge(wrong_orientation_count ~ ' need framing', 'warning') }}{{ feedback.badge(unsupported_count ~ ' unavailable') }}</p>
   <form method="post" action="/album/refresh" data-album-refresh-form hx-post="/album/refresh" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML" hx-disabled-elt="find button" hx-indicator="#album-refresh-progress" class="album-recovery flex flex-wrap items-center gap-3" hx-sync="this:drop">
     {{ actions.button('Refresh photos & thumbnails', 'secondary', 'sm', type='submit', disabled=render_state.active) }}
     <span id="album-refresh-progress" class="htmx-indicator text-sm" role="status">Refreshing photos…</span>

@@ -7,7 +7,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3"><p id="update-status-badge" class="update-status-badge inline-flex items-center gap-2 text-lg font-semibold" data-tone="neutral"><span data-update-icon aria-hidden="true">—</span><strong data-update-label>Checking installation</strong></p><p class="text-sm text-base-content/70">Installed <strong id="installed-version" class="font-semibold text-base-content">v{{ version }}</strong></p></div>
     <p id="update-status" class="text-sm text-base-content/70" role="status" aria-live="polite">Checking installation…</p>
     <progress id="update-progress" class="progress progress-primary w-full" max="100" value="0" hidden aria-label="Update progress"></progress>
-    <p id="update-error" class="empty:hidden text-sm text-error" role="alert"></p>
+    <p id="update-error" class="empty:hidden text-sm text-error-content" role="alert"></p>
     {{ actions.button('Reconnect', 'secondary', id='reconnect', attrs={'hidden': true}) }}
     <div id="unmanaged" class="space-y-2 border-t border-base-300 pt-4 text-sm" hidden>{{ actions.button('Check latest stable release', 'secondary', id='public-check') }}<p>This installation cannot update from the browser. Your files and configuration are preserved.</p><p>Ask your administrator to follow the <a class="link link-primary" href="https://github.com/mravalanche/photoframe/blob/develop/docs/managed-updates.md">managed installation migration guide</a>.</p></div>
 
