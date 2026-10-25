@@ -29,6 +29,7 @@ class PhotoProvider:
         return output.getvalue(), "image/png"
 
     thumbnail = original
+    render_preview = original
 
 
 def frame(tmp_path):

@@ -30,6 +30,9 @@ class FakeProvider:
     def thumbnail(self, photo_id: str) -> tuple[bytes, str]:
         return b"image", "image/jpeg"
 
+    def render_preview(self, photo_id: str) -> tuple[bytes, str]:
+        return self.thumbnail(photo_id)
+
     def original(self, photo_id: str) -> tuple[bytes, str]:
         image = Image.new("RGB", (1200, 800), "navy")
         output = BytesIO()
@@ -174,6 +177,59 @@ class PreviewFallbackProvider(MixedFormatProvider):
         if photo_id == "heic":
             return FakeProvider.original(self, photo_id)
         return super().thumbnail(photo_id)
+
+
+def test_small_browser_thumbnail_and_larger_frame_preview_are_separate(tmp_path: Path):
+    class RenditionProvider(FakeProvider):
+        def thumbnail(self, photo_id: str) -> tuple[bytes, str]:
+            return b"small", "image/webp"
+
+        def render_preview(self, photo_id: str) -> tuple[bytes, str]:
+            return b"large", "image/jpeg"
+
+    app = create_app(tmp_path, lambda _kind: RenditionProvider())
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
+        client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
+        client.post("/album/select", data={"album_id": "album"})
+        small = client.get("/thumbnail/wide")
+        large = client.get("/thumbnail/wide?size=preview")
+        unknown = client.get("/thumbnail/not-in-album?size=preview")
+
+    assert (small.content, small.headers["content-type"]) == (b"small", "image/webp")
+    assert (large.content, large.headers["content-type"]) == (b"large", "image/jpeg")
+    assert small.headers["cache-control"] == "private, max-age=300"
+    assert large.headers["cache-control"] == "private, max-age=300"
+    assert unknown.status_code == 404
+
+
+def test_undecodable_original_uses_large_preview_for_frame_not_small_thumbnail(tmp_path: Path):
+    class FallbackProvider(MixedFormatProvider):
+        def __init__(self):
+            super().__init__()
+            self.small_calls = 0
+            self.preview_calls = 0
+
+        def thumbnail(self, photo_id: str) -> tuple[bytes, str]:
+            self.small_calls += 1
+            return b"small thumbnail", "image/webp"
+
+        def render_preview(self, photo_id: str) -> tuple[bytes, str]:
+            self.preview_calls += 1
+            return FakeProvider.original(self, photo_id)
+
+    provider = FallbackProvider()
+    app = create_app(tmp_path, lambda _kind: provider)
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
+        client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
+        client.post("/album/select", data={"album_id": "album"})
+        small = client.get("/thumbnail/heic")
+        source = app.state.runtime.render_source("heic")
+
+    assert small.content == b"small thumbnail"
+    assert provider.small_calls == 1
+    assert provider.preview_calls == 1
+    with Image.open(BytesIO(source)) as image:
+        assert image.size == (1200, 800)
 
 
 def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path):

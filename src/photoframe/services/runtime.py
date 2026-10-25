@@ -335,7 +335,7 @@ class Runtime:
         # Immich commonly stores originals as HEIC while exposing a generated
         # JPEG preview. That preview is still a genuine render source for the
         # frame, so validate and cache it before excluding the asset.
-        fallback, _media_type = self.provider().thumbnail(photo_id)
+        fallback, _media_type = self.provider().render_preview(photo_id)
         if not image_is_decodable(fallback):
             raise ImageProcessingError("The selected photo could not be decoded")
         self.cache.put(self._cache_key(photo_id), fallback)

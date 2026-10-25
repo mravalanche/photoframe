@@ -46,6 +46,9 @@ class ControlledProvider:
     def thumbnail(self, photo_id):
         return self.source, "image/jpeg"
 
+    def render_preview(self, photo_id):
+        return self.thumbnail(photo_id)
+
     def validate_connection(self):
         return "Connected"
 
