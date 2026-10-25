@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.0](https://github.com/mravalanche/photoframe/compare/v1.4.0...v1.5.0) (2026-10-25)
+
+
+### Features
+
+* add default photo layout and layout overview ([1731ce4](https://github.com/mravalanche/photoframe/commit/1731ce43dc9da96abe3664f9f25f084270938177))
+* show photo layouts in a responsive table ([04c7ec1](https://github.com/mravalanche/photoframe/commit/04c7ec1d1438fe59c9f475a5e4913f3699c5fbc4))
+
+
+### Documentation
+
+* record 1.4.0 release and remaining device drill ([dde08e3](https://github.com/mravalanche/photoframe/commit/dde08e36ba0c015ee3680740fb29226a5cac73db))
+* record 1.4.0 release and remaining device drill ([dea1c20](https://github.com/mravalanche/photoframe/commit/dea1c20731c4eed9a03f606e005435b89cfeff02))
+
 ## [1.4.0](https://github.com/mravalanche/photoframe/compare/v1.3.0...v1.4.0) (2026-10-07)
 
 
