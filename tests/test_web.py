@@ -337,7 +337,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'name="frame-settings" data-settings-panel="album"' in workspace.text
     assert 'name="frame-settings" data-settings-panel="default-layout"' in workspace.text
     assert 'name="frame-settings" data-settings-panel="display"' in workspace.text
-    assert workspace.text.count('class="disclosure-icon"') == 3
+    assert workspace.text.count('class="disclosure-icon"') == 4
     assert "setupSettingsAccordion" in page.text
     assert "activeSettingsPanel" in page.text
     assert "/static/tab-identity.js" in page.text

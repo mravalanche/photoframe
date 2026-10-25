@@ -150,7 +150,7 @@ def test_default_layout_applies_to_unsaved_photos_and_preserves_custom_choices(t
     ):
         assert preview.tobytes() == hardware.tobytes()
     page = client.get("/partials/workspace").text
-    assert "Photo layouts (2)" in page
+    assert "Photo layouts" in page and "2 photos" in page
     assert "Whole photo · Soft photo" in page
     assert "Whole photo · Black" in page
 
