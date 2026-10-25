@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 
 from photoframe.web import create_app
 
+PHOTOS_VIEW = {"X-Photoframe-View": "photos"}
+
 
 @pytest.mark.parametrize(
     ("seconds", "value", "unit"),
@@ -64,24 +66,28 @@ def test_portrait_controls_and_last_hidden_photo_remain_recoverable(tmp_path: Pa
         _albums, photos = runtime.catalog_snapshot()
         assert photos
         portrait = next(photo for photo in photos if photo.height > photo.width)
-        page = client.post("/photo/preview", data={"photo_id": portrait.id}).text
+        page = client.post(
+            "/photo/preview", headers=PHOTOS_VIEW, data={"photo_id": portrait.id}
+        ).text
         assert "Show whole photo" in page
         assert "Fill frame" in page
         assert "Save framing to include this photo" in page
         assert f"/photos/{portrait.id}/prepared?" in page
         assert "The original stays in your library" in page
         for photo in photos:
-            page = client.post("/photo/hide", data={"photo_id": photo.id}).text
-        assert '<details class="photo-layouts setting-card">' in page
-        assert '<table class="photo-layout-table">' in page
+            page = client.post("/photo/hide", headers=PHOTOS_VIEW, data={"photo_id": photo.id}).text
+        assert 'id="photo-layouts"' in page
+        assert 'id="photo-layout-table"' in page
         assert '<th scope="col">Photo</th>' in page
         assert '<th scope="col">Layout</th>' in page
         assert '<th scope="col">Status</th>' in page
         assert '<th scope="col">Action</th>' in page
-        assert page.count('scope="row" class="photo-layout-name"') == len(photos)
+        assert page.count('scope="row" class="photo-layout-name') == len(photos)
         assert f'aria-label="Restore {portrait.filename}"' in page
         assert "Undo" in page
         assert "Restore" in page
         assert "No photos to preview" in page
-        restored = client.post("/photo/unhide", data={"photo_id": portrait.id}).text
+        restored = client.post(
+            "/photo/unhide", headers=PHOTOS_VIEW, data={"photo_id": portrait.id}
+        ).text
         assert f'aria-label="Preview {portrait.filename}"' in restored

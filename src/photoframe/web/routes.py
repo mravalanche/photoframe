@@ -383,10 +383,15 @@ def create_app(
             ),
         }
 
+    def requested_view(request: Request) -> str:
+        candidate = request.headers.get("x-photoframe-view") or request.query_params.get("view")
+        return candidate if candidate in {"frame", "photos"} else "frame"
+
     def workspace(
         request: Request, notice: str | None = None, error: str | None = None
     ) -> HTMLResponse:
         section = request.headers.get("x-settings-section") or request.query_params.get("section")
+        view = requested_view(request)
         if section in {"provider", "hardware", "advanced"}:
             settings = repository.load()
             context = {
@@ -406,6 +411,7 @@ def create_app(
         context["settings_section"] = (
             section if section in {"provider", "hardware", "advanced"} else None
         )
+        context["view"] = view
         context["thumbnail_revision"] = getattr(app.state, "thumbnail_revision", "")
         return templates.TemplateResponse(
             request,
@@ -421,8 +427,10 @@ def create_app(
             return None
 
     @app.get("/", response_class=HTMLResponse)
+    @app.get("/photos", response_class=HTMLResponse)
     def index(request: Request) -> HTMLResponse:
         settings = repository.load()
+        view = "photos" if request.url.path == "/photos" else "frame"
         occurrence = next_occurrence(settings.frame, settings.device.timezone, datetime.now(UTC))
         return templates.TemplateResponse(
             request,
@@ -430,8 +438,15 @@ def create_app(
             {
                 "initial_settings": settings,
                 "initial_next_change": schedule_label(occurrence.due_at, settings.device.timezone),
+                "view": view,
+                "version": __version__,
             },
         )
+
+    @app.get("/ui/showcase", response_class=HTMLResponse)
+    def ui_showcase(request: Request, theme: str = "photoframe-light") -> HTMLResponse:
+        chosen = theme if theme in {"photoframe-light", "photoframe-dark"} else "photoframe-light"
+        return templates.TemplateResponse(request, "showcase.html", {"theme": chosen})
 
     @app.get("/settings", response_class=HTMLResponse)
     @app.get("/settings/{section}", response_class=HTMLResponse)
@@ -629,6 +644,8 @@ def create_app(
             context["just_hidden_photo"] = (
                 runtime.photo(form.photo_id) if request.url.path == "/photo/hide" else None
             )
+            context["view"] = requested_view(request)
+            context["thumbnail_revision"] = getattr(app.state, "thumbnail_revision", "")
             return templates.TemplateResponse(request, "_workspace.html", context)
         except (ValueError, ProviderError, RuntimeError) as exc:
             return await run_in_threadpool(workspace, request, error=str(exc))

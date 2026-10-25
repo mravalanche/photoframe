@@ -88,7 +88,7 @@ const vm = require('node:vm');
 const identity = require({json.dumps(str(identity_script))});
 const documentListeners = {{}};
 const windowListeners = {{}};
-const themeButton = {{ dataset: {{ themeChoice: 'dark' }}, setAttribute(name, value) {{ this[name] = value; }} }};
+const themeButton = {{ dataset: {{ themeChoice: 'light' }}, setAttribute(name, value) {{ this[name] = value; }} }};
 const notice = {{ dataset: {{ autoDismiss: '6000' }} }};
 const panel = {{
   open: false,
@@ -96,9 +96,9 @@ const panel = {{
   addEventListener(name, callback) {{ this[name] = callback; }},
 }};
 const documentMock = {{
-  documentElement: {{ dataset: {{ theme: 'dark' }} }},
+  documentElement: {{ dataset: {{ theme: 'photoframe-dark' }} }},
   addEventListener(name, callback) {{ documentListeners[name] = callback; }},
-  querySelector() {{ return null; }},
+  querySelector(selector) {{ return selector === 'meta[name="theme-color"]' ? {{content: ''}} : null; }},
   querySelectorAll(selector) {{
     if (selector === '[data-theme-choice]') return [themeButton];
     if (selector === '[data-notice][data-auto-dismiss]') return [notice];

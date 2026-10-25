@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="photoframe-inked-mark" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Photoframe — Inked Pixels</title>
+  <desc id="desc">A framed mountain photograph emerging from square pixels as if inked onto an e-paper display.</desc>
+
+  <style>
+    :root { --icon-bg: #1c2721; --icon-ink: #fffefa; --icon-mid: #999d98; }
+    .bg { fill: var(--icon-bg); }
+    .ink { fill: var(--icon-ink); }
+    .mid { fill: var(--icon-mid); }
+    .stroke { stroke: var(--icon-ink); }
+  </style>
+  <rect width="512" height="512" rx="104" class="bg" />
+
+  <g class="ink">
+    <rect x="96" y="192" width="32" height="32" /><rect x="160" y="160" width="32" height="32" /><rect x="128" y="256" width="32" height="32" /><rect x="64" y="288" width="32" height="32" /><rect x="160" y="320" width="32" height="32" /><rect x="192" y="352" width="32" height="32" /></g>
+
+  <path d="M215 145 H397 Q414 145 414 163 V349 Q414 366 396 366 H213" fill="none" class="stroke" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M196 145 H173 M173 366 H196" fill="none" class="stroke" stroke-width="32" stroke-linecap="round" />
+
+  <clipPath id="picture"><rect x="203" y="164" width="193" height="183" rx="2" /></clipPath>
+  <g clip-path="url(#picture)">
+    <circle cx="267" cy="215" r="30" class="ink" />
+    <path d="M203 310 L255 259 L293 285 L330 237 L396 313 V348 H203Z" class="mid" />
+    <path d="M203 332 L256 299 L290 320 L352 274 L396 311 V350 H203Z" class="ink" />
+    </g>
+
+  <g class="ink">
+    </g>
+</svg>

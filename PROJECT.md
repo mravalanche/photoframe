@@ -42,9 +42,14 @@ The application is deliberately small and single-process:
 - `selector.py`, `image_processing.py`, `renderer.py`, `display.py`, `lifecycle.py`, and `cache.py`
   separate scheduling, preparation, hardware output, refresh, and local-cache responsibilities.
 
-The browser UI uses server-rendered Jinja fragments and a vendored HTMX 2.0.4 production build.
-It has no runtime CDN dependency. FastAPI's generated API page remains available at `/docs`,
-although the form routes do not yet have complete typed OpenAPI request schemas.
+The browser UI uses FastAPI-rendered Jinja fragments and a vendored HTMX 2.0.4 production build.
+The four main destinations are Frame, Photos, Updates, and Settings. Photo actions swap the Photos
+region, while background status polls update their own fragments. The interface uses shared Jinja
+components, locally built Tailwind and daisyUI styles, and self-hosted fonts. Its two themes and
+review screenshots are documented in [the v2 design system](docs/ui-v2-design-system.md). Node is
+only needed to rebuild checked-in assets; the running app has no CDN dependency. FastAPI's generated
+API page remains available at `/docs`, although the form routes do not yet have complete typed
+OpenAPI request schemas.
 
 ### Data directory
 
@@ -469,11 +474,12 @@ Before tagging or pushing a release candidate:
 
 Implemented for review on a feature branch based on `develop`:
 
-- The header has an accessible icon-only Settings cog and compact software-update status. Settings opens
+- The header has a compact software-update status. The persistent mobile dock exposes Frame, Photos,
+  Updates and Settings, with one contextual progress or next-action tray above it. Settings opens
   Software updates first, followed by Photo provider, Display hardware, and Advanced & recovery.
-  Desktop side navigation becomes a two-column section chooser on small screens. Shared theme,
-  buttons, typography, status colours and focus styles apply throughout.
-- Album choice, preview/next-photo controls, photo order and schedule remain on the frame page.
+  Shared themes, buttons, typography, status colours and focus styles apply throughout.
+- Album choice, next-photo control, photo order and schedule remain on the Frame page. Photo previews,
+  per-photo layouts, the layout table and hidden-photo recovery live on the Photos page.
   Hardware saves preserve the schedule and run under the exclusive operation guard. Existing
   combined workflow submissions remain supported; schedule-only saves preserve hardware.
 - Software updates show a status icon with text, relative last-check time (exact time available

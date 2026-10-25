@@ -1,0 +1,4 @@
+{# Caller supplies tr/td content so domain tables stay semantic and flexible. #}
+{% macro table(caption, headers, id='', striped=true) -%}
+<div class="overflow-x-auto rounded-box border border-base-300" role="region" aria-label="{{ caption }}" tabindex="0"><table class="table{% if striped %} table-zebra{% endif %}"{% if id %} id="{{ id }}"{% endif %}><caption class="sr-only">{{ caption }}</caption><thead><tr>{% for heading in headers %}<th scope="col">{{ heading }}</th>{% endfor %}</tr></thead><tbody>{{ caller() }}</tbody></table></div>
+{%- endmacro %}

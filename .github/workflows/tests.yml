@@ -22,6 +22,18 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Set up Node for local CSS build
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Verify committed Tailwind and daisyUI stylesheet
+        run: |
+          npm ci
+          npm run build:css
+          git diff --exit-code -- src/photoframe/static/v2.css
+
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -38,6 +50,16 @@ jobs:
 
       - name: Install locked development dependencies
         run: uv sync --frozen --all-groups
+
+      - name: Verify generated browser and mobile icons
+        run: |
+          uv run python scripts/build_app_icons.py
+          git diff --exit-code -- src/photoframe/static/*.svg src/photoframe/static/*.png src/photoframe/static/*.ico
+
+      - name: Check that the Python wheel includes the compiled UI
+        run: |
+          uv build --wheel --out-dir /tmp/photoframe-ui-wheel
+          python scripts/check_ui_wheel.py /tmp/photoframe-ui-wheel
 
       - name: Run tests
         run: uv run pytest

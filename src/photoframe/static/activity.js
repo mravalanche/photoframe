@@ -6,6 +6,8 @@
   const progress = dock.querySelector('progress');
   const dismiss = dock.querySelector('[data-activity-dismiss]');
   const cancel = dock.querySelector('[data-activity-cancel]');
+  const contextAction = dock.querySelector('[data-context-action]');
+  let contextActionHandler = null, updateState = null, contextualVisible = false;
   let cancelling = false;
   let timer, polling = false, submitting = false, trackedAlbum = null, state = null;
   let currentKey = null, refreshedAlbum = null, pendingFrame = false;
@@ -19,8 +21,11 @@
   function show(heading, message, active, failed = false, counts = null) {
     dock.hidden = false;
     if (cancel) cancel.hidden = true;
+    if (contextAction) contextAction.hidden = true;
+    contextActionHandler = null;
+    contextualVisible = false;
     document.body.classList.add('has-activity');
-    dock.classList.toggle('activity-failed', failed);
+    dock.classList.toggle('border-error', failed);
     if (title.textContent !== heading) title.textContent = heading;
     if (detail.textContent !== message) detail.textContent = message;
     progress.hidden = !active;
@@ -31,8 +36,61 @@
     dismiss.hidden = active;
   }
   function hide() { dock.hidden = true; document.body.classList.remove('has-activity'); }
+  function showContext() {
+    const updatesPage = document.getElementById('managed-controls');
+    const phases = new Set(['queued', 'checking', 'downloading', 'staging', 'verifying', 'activating', 'restarting', 'health_check', 'rolling_back']);
+    let heading, message, active = false, failed = false, counts = null, label, handler;
+    if (updatesPage && (updateState?.managed || updateState?.phase === 'unavailable')) {
+      if (phases.has(updateState.phase)) {
+        heading = 'Update in progress'; message = updateState.message || 'The frame is preparing your update.';
+        active = true; counts = {completed: updateState.progress || 0, total: 100};
+        label = 'View status'; handler = () => document.getElementById('status-title')?.scrollIntoView({behavior: 'smooth', block: 'start'});
+      } else if (updateState.staged_version) {
+        heading = 'Ready to install'; message = `v${updateState.staged_version} is verified. Apply when you are ready to restart.`;
+        label = 'Apply & restart'; handler = () => document.getElementById('apply-update')?.click();
+      } else if (updateState.upgrade_available) {
+        heading = 'Update available'; message = 'Download and verify it before restarting.';
+        label = 'Download & verify'; handler = () => document.getElementById('stage-update')?.click();
+      } else if (updateState.phase === 'unavailable') {
+        heading = 'Connection interrupted'; failed = true;
+        message = updateState.retry_paused ? 'Check the device, then reconnect.' : 'Waiting for Photoframe to reconnect…';
+        active = !updateState.retry_paused;
+        if (updateState.retry_paused) {
+          label = 'Reconnect'; handler = () => document.getElementById('reconnect')?.click();
+        }
+      }
+    } else {
+      const selected = document.querySelector('.photo-editor');
+      const title = selected?.querySelector('#selected-title')?.textContent?.trim();
+      if (title) {
+        const showButton = selected.querySelector('.selected-actions form[action="/render/start"] button');
+        heading = showButton && !showButton.disabled ? 'Photo ready to show' : 'Photo needs framing';
+        message = title;
+        label = showButton && !showButton.disabled ? 'Show now' : 'Adjust layout';
+        handler = showButton && !showButton.disabled
+          ? () => showButton.click()
+          : () => selected.scrollIntoView({behavior: 'smooth', block: 'start'});
+      } else {
+        const nextButton = document.querySelector('.next-photo-form button[type="submit"]');
+        if (nextButton && !nextButton.disabled) {
+          heading = 'Frame ready'; message = 'Show another photo whenever you like.';
+          label = 'Next photo'; handler = () => nextButton.click();
+        }
+      }
+    }
+    if (!heading) { hide(); return; }
+    show(heading, message, active, failed, counts);
+    contextualVisible = true;
+    dismiss.hidden = true;
+    if (contextAction && handler) {
+      contextAction.textContent = label;
+      contextAction.hidden = false;
+      contextActionHandler = handler;
+    }
+  }
   function render() {
-    if (!state) return;
+    if (submitting || pendingFrame) return;
+    if (!state) { showContext(); return; }
     const album = albumOperation(state), frame = state.render || {};
     // A different album can replace the running job; only block double submits.
     setAlbumBusy(submitting);
@@ -40,20 +98,19 @@
     if (album.active && announcement && announcement.textContent !== 'Album change in progress. Follow the pinned status below.') {
       announcement.textContent = 'Album change in progress. Follow the pinned status below.';
     }
-    if (submitting || pendingFrame) return;
     let kind, job;
     if (album.active) { kind = 'album'; job = album; }
     else if (frame.active) { kind = 'frame'; job = frame; }
     else if (album.id && (album.phase === 'failed' || terminal(album.phase) && trackedAlbum === album.id)) { kind = 'album'; job = album; }
     else if (frame.phase === 'failed' || (frame.phase === 'complete' && frame.operation_id && frame.operation_id === currentRenderIntent())) { kind = 'frame'; job = frame; }
-    else { if (localError) show('Album change not confirmed', localError, false, true); else hide(); return; }
+    else { if (localError) show('Album change not confirmed', localError, false, true); else showContext(); return; }
     localError = null;
     const key = keyOf(kind, job);
     currentKey = key;
-    if (key === dismissed) { hide(); return; }
+    if (key === dismissed) { showContext(); return; }
     if (job.phase === 'complete') {
       if (completionKey !== key) { completionKey = key; completedAt = job.finished_at ? Date.parse(job.finished_at) : Date.now(); }
-      if (Date.now() - completedAt > 8000) { hide(); return; }
+      if (Date.now() - completedAt > 8000) { showContext(); return; }
     }
     const headings = kind === 'album' ? {
       loading: 'Loading album', checking: 'Preparing photos', saving: 'Saving album',
@@ -75,6 +132,7 @@
     const panel = document.querySelector('[data-settings-panel="album"] > summary');
     const top = panel?.getBoundingClientRect().top;
     const headers = {};
+    headers['X-Photoframe-View'] = document.body.dataset?.page === 'photos' ? 'photos' : 'frame';
     const intent = currentRenderIntent();
     if (intent) headers['X-Photoframe-Render-Intent'] = intent;
     const response = await fetch('/partials/workspace', {headers, cache:'no-store', signal:AbortSignal.timeout(10000)});
@@ -107,7 +165,7 @@
       if (!dock.hidden || submitting) show('Connection interrupted', 'Reconnecting to check progress. The frame may still be working.', true);
     } finally {
       polling = false;
-      timer = setTimeout(poll, failures ? Math.min(15000, failures * 2000) : albumOperation(state).active || state?.render?.active || !dock.hidden ? 1000 : 5000);
+      timer = setTimeout(poll, failures ? Math.min(15000, failures * 2000) : albumOperation(state).active || state?.render?.active || (!dock.hidden && !contextualVisible) ? 1000 : 5000);
     }
   }
   cancel?.addEventListener('click', async () => {
@@ -126,6 +184,8 @@
     try { if (dismissed) window.sessionStorage.setItem('photoframe-dismissed-activity', dismissed); } catch (_) { /* Storage may be disabled. */ }
     hide();
   });
+  contextAction?.addEventListener('click', () => contextActionHandler?.());
+  document.addEventListener('photoframe:update-status', event => { updateState = event.detail; render(); });
   document.addEventListener('submit', async event => {
     const form = event.target.closest?.('[data-album-confirm-form], [data-album-refresh-form]');
     if (!form) return;

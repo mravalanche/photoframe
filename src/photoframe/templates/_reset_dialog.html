@@ -1,4 +1,11 @@
-  <dialog class="reset-dialog" data-reset-dialog aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-description">
-    <form method="dialog" class="reset-dialog-card"><div><p class="kicker">RESET & RECOVERY</p><h2 id="reset-dialog-title">Reset Photoframe?</h2><p id="reset-dialog-description">This clears your saved Immich key, album choice, frame settings and local photo cache. Photoframe will return to HTTP at 127.0.0.1:8000 and may restart. You’ll need your Immich URL and API key to set it up again. The app and system service stay installed.</p></div><div class="reset-dialog-actions"><button type="submit" value="cancel" class="secondary" autofocus>Keep current settings</button><button type="button" class="danger-button" onclick="confirmPhotoframeReset(this)">Reset to defaults</button></div></form>
+{% import "components/actions.html" as actions %}
+<dialog class="modal reset-dialog" data-reset-dialog aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-description">
+  <div class="modal-box max-w-xl">
+    <p class="text-xs font-semibold uppercase tracking-widest text-error-content">Reset &amp; recovery</p>
+    <h2 id="reset-dialog-title" class="mt-2 text-2xl font-semibold">Reset Photoframe?</h2>
+    <p id="reset-dialog-description" class="mt-3 text-sm leading-relaxed text-base-content/80">This clears your saved Immich key, album choice, frame settings and local photo cache. Photoframe returns to HTTP at 127.0.0.1:8000 and may restart. You’ll need your Immich URL and API key to set it up again. The app and system service stay installed.</p>
+    <form method="dialog" class="modal-action flex-wrap">{{ actions.button('Keep current settings', 'secondary', type='submit', attrs={'value': 'cancel', 'autofocus': true}) }}{{ actions.button('Reset to defaults', 'danger', attrs={'onclick': 'confirmPhotoframeReset(this)'}) }}</form>
     <form data-reset-form method="post" action="/reset" hx-post="/reset" hx-target="#workspace" hx-swap="outerHTML" hx-sync="this:drop"></form>
-  </dialog>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button aria-label="Close reset dialog">close</button></form>
+</dialog>

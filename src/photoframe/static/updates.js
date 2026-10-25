@@ -63,7 +63,7 @@
     } catch (_) {
       failures++; connected = false; controls();
       ui.paintBadge(el('update-status-badge'), {phase: 'unavailable'});
-      document.dispatchEvent(new CustomEvent('photoframe:update-status', {detail: {phase: 'unavailable'}}));
+      document.dispatchEvent(new CustomEvent('photoframe:update-status', {detail: {phase: 'unavailable', managed: state.managed, retry_paused: failures >= 9}}));
       el('update-status').textContent = failures < 9 ? 'Waiting for Photoframe to reconnect…' : 'Automatic reconnection paused. Check the device, then choose Reconnect.';
       el('reconnect').hidden = failures < 9;
       if (failures < 9) timer = setTimeout(poll, Math.min(30000, 1000 * 2 ** failures));

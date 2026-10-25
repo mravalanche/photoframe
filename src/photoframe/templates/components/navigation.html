@@ -1,0 +1,4 @@
+{% import "components/icons.html" as icons %}
+{% macro mobile_dock(items, active) -%}
+<nav class="dock border-t border-base-300 bg-base-100 pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Primary navigation">{% for item in items %}<a href="{{ item.href }}" class="{% if item.key == active %}dock-active{% endif %} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" data-nav-key="{{ item.key }}"{% if item.key == active %} aria-current="page"{% endif %}>{{ icons.icon(item.key) }}<span class="dock-label">{{ item.label }}</span></a>{% endfor %}</nav>
+{%- endmacro %}

@@ -1,3 +1,5 @@
+<img src="src/photoframe/static/photoframe.svg" width="96" height="96" alt="Photoframe: a mountain photograph emerging from ink pixels">
+
 # Photoframe
 
 Software updates: see the [managed web updater and one-time migration guide](docs/managed-updates.md).
@@ -16,6 +18,8 @@ makes the complete setup flow usable before hardware is connected.
 
 For architecture, Raspberry Pi operations, security detail, and planned work, see
 [PROJECT.md](PROJECT.md).
+For the interface themes, shared components, and screenshots, see the
+[v2 design system](docs/ui-v2-design-system.md).
 
 ## Prerequisites
 
@@ -57,11 +61,11 @@ firewall reach, trust warnings, and all installer options.
 
 ## First use
 
-1. Open **Settings → Photo provider** using the cog, enter the Immich server root URL and API key, then save and verify.
+1. Open **Settings → Photo provider**, enter the Immich server root URL and API key, then save and verify.
 2. Under **Album**, refresh the available albums and choose one.
 3. Under **Schedule & orientation**, choose orientation, rotation and photo order.
    Configure the physical display separately under **Settings → Display hardware**.
-4. Preview a photo. Choose its framing, then use **Show now** to update the frame or
+4. Open **Photos** and preview a photo. Choose its framing, then use **Show now** to update the frame or
    **Start rotation here** to change where rotation resumes.
 5. If another device on the local network needs access, open **Settings → Advanced & recovery** and
    configure the listener before saving.
@@ -126,6 +130,17 @@ encrypts traffic but does not add authentication. The automatic local certificat
 by browsers automatically, so each client must accept it or be configured to trust it. See
 [Security model and limitations](PROJECT.md#security-model-and-limitations) before enabling LAN
 access.
+
+## Branding and interface
+
+The Photoframe mark shows a photograph being inked into existence, square by square, on an
+e-ink display. Its spruce and warm-paper colours come from the application's light and dark themes.
+The [editable SVG](src/photoframe/static/photoframe.svg) is the source for the app logo,
+browser favicons, and Android/iOS home-screen icons.
+
+See the [design system](docs/ui-v2-design-system.md) for theme tokens, shared components,
+icon generation instructions, and screenshots at app and favicon sizes. Node tooling is needed
+only to rebuild these checked-in assets; the installed app serves them locally.
 
 ## Tests
 

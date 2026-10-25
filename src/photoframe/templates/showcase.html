@@ -1,0 +1,69 @@
+{% import "components/actions.html" as actions %}
+{% import "components/branding.html" as branding %}
+{% import "components/data.html" as data %}
+{% import "components/dialog.html" as dialogs %}
+{% import "components/feedback.html" as feedback %}
+{% import "components/forms.html" as forms %}
+{% import "components/navigation.html" as navigation %}
+{% import "components/surfaces.html" as surfaces %}
+<!doctype html>
+<html lang="en-GB" data-theme="{{ theme|default('photoframe-light') }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="{{ '#1c2721' if theme == 'photoframe-dark' else '#fffefa' }}">
+  <title>Photoframe UI showcase</title>
+  {{ branding.icons() }}
+  <link rel="stylesheet" href="/static/v2.css">
+</head>
+<body class="min-h-screen bg-base-200 text-base-content">
+  <main class="mx-auto max-w-6xl space-y-10 px-4 py-8 pb-28 md:px-8 md:py-12">
+    <header class="space-y-3"><p class="pf-eyebrow text-primary">Photoframe v2</p><h1 class="pf-display-title">Interface showcase</h1><p class="pf-supporting pf-measure">The controls here are rendered from the same Jinja components used by the app.</p></header>
+
+    <section class="space-y-4" aria-labelledby="type-title"><h2 id="type-title" class="pf-section-title">Typography and semantic colour</h2>
+      {% call surfaces.card('Readable at a glance', 'Display headings, body copy, notes and links share one type scale.', 'type-card') %}
+        <div class="space-y-2"><p class="pf-eyebrow text-primary">Eyebrow · 12px Inter</p><h3 class="pf-display-title">Gallery at home</h3><h4 class="pf-section-title">Your photos</h4><p class="pf-measure">Choose photos, adjust their layout, and see the next scheduled change without hunting through the page. Body copy uses Inter at a readable 16px.</p><p class="pf-supporting text-sm">Supporting text stays legible in both themes. {{ actions.link('View your photos', '#sample-table') }}</p><p class="pf-tabular text-sm">Next change 03:00 · 36 photos · 64% complete</p></div>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" aria-label="Semantic colour swatches"><div class="rounded-box border border-base-300 bg-base-100 p-4">Base 100</div><div class="rounded-box border border-base-300 bg-base-200 p-4">Base 200</div><div class="rounded-box border border-base-300 bg-base-300 p-4">Base 300</div><div class="rounded-box bg-base-content p-4 text-base-100">Base content</div><div class="rounded-box bg-primary p-4 text-primary-content">Primary</div><div class="rounded-box bg-secondary p-4 text-secondary-content">Secondary</div><div class="rounded-box bg-accent p-4 text-accent-content">Accent</div><div class="rounded-box bg-neutral p-4 text-neutral-content">Neutral</div><div class="rounded-box bg-info p-4 text-info-content">Info</div><div class="rounded-box bg-success p-4 text-success-content">Success</div><div class="rounded-box bg-warning p-4 text-warning-content">Warning</div><div class="rounded-box bg-error p-4 text-error-content">Error</div></div>
+      {% endcall %}
+    </section>
+
+    <section class="space-y-4" aria-labelledby="actions-title"><h2 id="actions-title" class="text-2xl font-semibold">Actions and navigation</h2>
+      {% call surfaces.card('Buttons', 'One variant for each kind of action.', 'button-card') %}
+        <div class="flex flex-wrap items-center gap-3">{{ actions.button('Show now') }}{{ actions.button('Refresh photos', 'secondary') }}{{ actions.button('Close preview', 'quiet') }}{{ actions.button('Remove', 'danger') }}{{ actions.button('Saved', 'success') }}{{ actions.button('Preparing', loading=true) }}{{ actions.button('Unavailable', disabled=true) }}</div>
+        <div class="flex flex-wrap items-center gap-3">{{ actions.button('Small action', size='sm') }}{{ actions.button('Large action', size='lg') }}{{ actions.link('Settings', '/settings', 'secondary') }}</div>
+      {% endcall %}
+      <p class="text-sm text-base-content/70">On phones, the same navigation component sits at the bottom of the screen.</p>
+    </section>
+
+    <section class="grid gap-4 lg:grid-cols-2" aria-label="Forms and disclosures">
+      {% call surfaces.card('Form controls', 'Explicit labels, help and validation.', 'form-card') %}
+        <form class="space-y-3" action="#" method="get">{{ forms.input_field('sample-album', 'album', 'Album name', 'Family photos', help='This name is shown above the frame.') }}{{ forms.select_field('sample-fit', 'fit', 'Default layout', [('fill', 'Fill frame'), ('soft', 'Whole photo · Soft photo')], 'soft') }}{{ forms.input_field('sample-error', 'server', 'Server URL', invalid=true, help='Enter a valid local photo-library URL.') }}{{ forms.checkbox_field('sample-weekly', 'weekly', 'Check for updates weekly', checked=true) }}{{ actions.button('Save settings', type='submit') }}</form>
+      {% endcall %}
+      <div class="space-y-4">
+        {% call surfaces.disclosure('Default photo layout', 'Whole photo · Soft photo', 'sample-layout', open=true) %}<p class="text-sm">Photos without saved framing follow this choice. Custom photo layouts stay as saved.</p>{% endcall %}
+        {% call surfaces.disclosure('Advanced and recovery', 'Optional settings', 'sample-advanced') %}<p class="text-sm">Network access, certificates and reset actions live here.</p>{% endcall %}
+        {% call surfaces.empty_state('No photos yet', 'Connect a library and choose an album to get started.', '▧') %}{{ actions.link('Photo provider', '/settings/provider', 'secondary') }}{% endcall %}
+      </div>
+    </section>
+
+    <section class="space-y-4" aria-labelledby="feedback-title"><h2 id="feedback-title" class="text-2xl font-semibold">Feedback and progress</h2>
+      <div class="grid gap-3 md:grid-cols-2">{{ feedback.alert('Your default photo layout was saved.', 'success', 'Saved') }}{{ feedback.alert('The image needs framing before it can enter rotation.', 'warning', 'Needs framing') }}{{ feedback.alert('The photo source could not be reached.', 'error', 'Action needed') }}{{ feedback.alert('A new Develop candidate is available.', 'info', 'Update available') }}</div>
+      <div class="flex flex-wrap gap-2">{{ feedback.badge('Default') }}{{ feedback.badge('Custom', 'primary') }}{{ feedback.badge('Ready', 'success') }}{{ feedback.badge('Needs framing', 'warning') }}{{ feedback.badge('Unavailable', 'error') }}</div>
+      {% call surfaces.card('Updating the frame', 'Progress and the next action stay visible on mobile.', 'progress-card', 'soft') %}{{ feedback.steps([{'label': 'Prepare', 'state': 'done'}, {'label': 'Send', 'state': 'current'}, {'label': 'Refresh', 'state': 'pending'}]) }}{{ feedback.progress_bar('sample-progress', 'Sending photo to frame', 54) }}{{ feedback.loading('Finishing the current step…') }}{% endcall %}
+    </section>
+
+    <section id="sample-table" class="space-y-4" aria-labelledby="table-title"><h2 id="table-title" class="text-2xl font-semibold">Data and dialogs</h2>
+      {% call data.table('Photo layouts', ['Photo', 'Layout', 'Status', 'Action'], 'showcase-photo-table') %}<tr><th scope="row">coast.jpg</th><td>Whole photo · Soft photo</td><td>{{ feedback.badge('Default') }}</td><td>{{ actions.button('Preview', 'secondary', 'sm') }}</td></tr><tr><th scope="row">portrait.jpg</th><td>Whole photo · Black</td><td>{{ feedback.badge('Custom', 'primary') }}</td><td>{{ actions.button('Preview', 'secondary', 'sm') }}</td></tr><tr><th scope="row">old-scan.heic</th><td>Not set</td><td>{{ feedback.badge('Unavailable', 'error') }}</td><td>—</td></tr>{% endcall %}
+      <div class="flex flex-wrap items-center gap-3">{{ actions.button('Open dialog', 'secondary', id='showcase-dialog-trigger', attrs={'data-dialog-open': 'showcase-dialog'}) }}<span class="text-sm text-base-content/70">The dialog example opens with the shared dialog controller.</span></div>
+      {% call dialogs.dialog('showcase-dialog', 'Reset Photoframe?', 'Your saved configuration and local cache would be cleared.') %}<p>Confirm destructive actions with a clear description and a distinct action.</p><div class="mt-4">{{ actions.button('Reset', 'danger') }}</div>{% endcall %}
+    </section>
+  </main>
+  {{ navigation.mobile_dock([{'key': 'frame', 'label': 'Frame', 'href': '/'}, {'key': 'photos', 'label': 'Photos', 'href': '/photos'}, {'key': 'updates', 'label': 'Updates', 'href': '/settings/updates'}, {'key': 'settings', 'label': 'Settings', 'href': '/settings'}], 'frame') }}
+  <script>
+    document.addEventListener('click', (event) => {
+      const trigger = event.target.closest('[data-dialog-open]');
+      if (trigger) document.getElementById(trigger.dataset.dialogOpen)?.showModal();
+    });
+  </script>
+</body>
+</html>
