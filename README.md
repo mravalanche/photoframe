@@ -1,3 +1,5 @@
+<img src="src/photoframe/static/photoframe.svg" width="96" height="96" alt="Photoframe: a mountain photograph emerging from ink pixels">
+
 # Photoframe
 
 Software updates: see the [managed web updater and one-time migration guide](docs/managed-updates.md).
@@ -128,6 +130,17 @@ encrypts traffic but does not add authentication. The automatic local certificat
 by browsers automatically, so each client must accept it or be configured to trust it. See
 [Security model and limitations](PROJECT.md#security-model-and-limitations) before enabling LAN
 access.
+
+## Branding and interface
+
+The Photoframe mark shows a photograph being inked into existence, square by square, on an
+e-ink display. Its spruce and warm-paper colours come from the application's light and dark themes.
+The [editable SVG](src/photoframe/static/photoframe.svg) is the source for the app logo,
+browser favicons, and Android/iOS home-screen icons.
+
+See the [design system](docs/ui-v2-design-system.md) for theme tokens, shared components,
+icon generation instructions, and screenshots at app and favicon sizes. Node tooling is needed
+only to rebuild these checked-in assets; the installed app serves them locally.
 
 ## Tests
 
