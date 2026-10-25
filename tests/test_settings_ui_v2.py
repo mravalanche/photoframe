@@ -41,6 +41,14 @@ def test_settings_sections_render_shared_controls_with_existing_form_contracts()
     hardware = render("_settings_hardware.html")
     advanced = render("_settings_advanced.html")
     reset = render("_reset_dialog.html")
+    for section, heading in (
+        (provider, "provider-title"),
+        (hardware, "hardware-title"),
+        (advanced, "advanced-title"),
+    ):
+        assert 'class="card border border-base-300 bg-base-100' in section
+        assert f'aria-labelledby="{heading}"' in section
+        assert f'tabindex="-1" id="{heading}"' in section
     assert 'data-settings-panel="provider"' in provider
     assert 'name="api_key"' in provider
     assert 'action="/connection"' in provider

@@ -1,17 +1,13 @@
 {% import "components/actions.html" as actions %}
 {% import "components/feedback.html" as feedback %}
 {% import "components/forms.html" as fields %}
-<section class="setting-card card border border-base-300 bg-base-100" data-settings-panel="provider" aria-labelledby="provider-title">
-  <div class="settings-intro card-body flex flex-wrap items-start justify-between gap-3 pb-0">
-      <div><h2 id="provider-title" tabindex="-1" class="card-title text-2xl">Photo provider</h2><p class="text-sm text-base-content/70">Connect to the library that supplies your frame.</p></div>
-      {{ feedback.badge('Connected' if settings.verification.ok else 'Needs attention', 'success' if settings.verification.ok else 'warning') }}
-  </div>
-  <div class="card-body pt-0">
+{% import "components/surfaces.html" as surfaces %}
+{% call surfaces.card('Photo provider', 'Connect to the library that supplies your frame.', 'provider-title', extra_classes='setting-card', attrs={'data-settings-panel': 'provider'}) %}
+    <div>{{ feedback.badge('Connected' if settings.verification.ok else 'Needs attention', 'success' if settings.verification.ok else 'warning') }}</div>
     <form method="post" action="/connection" hx-post="/connection" hx-target="#workspace" hx-swap="outerHTML" class="grid gap-4 md:grid-cols-2">
       {{ fields.select_field('provider-kind', 'provider_kind', 'Provider', [('immich', 'Immich')], 'immich') }}
       {{ fields.input_field('server-url', 'server_url', 'Server URL', settings.provider.server_url or '', type='url', required=true, placeholder='https://photos.example.com', help='Changing the server requires a new API key.') }}
       <div class="md:col-span-2">{{ fields.input_field('api-key', 'api_key', 'API key', type='password', required=not credential_saved and not demo_mode, autocomplete='new-password', placeholder='Saved — leave blank to keep it' if credential_saved else 'Paste an Immich API key', help='The key is never shown again. Changing the server or key clears the album choice, hidden photos, and local cache.') }}</div>
       <div class="flex flex-wrap items-center gap-3 md:col-span-2">{{ actions.button('Save & verify', type='submit') }}<span class="text-sm text-base-content/70" role="status">{{ settings.verification.message }}</span></div>
     </form>
-  </div>
-</section>
+{% endcall %}

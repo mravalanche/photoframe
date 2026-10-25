@@ -1,9 +1,10 @@
 {% import "components/actions.html" as actions %}
 {% import "components/forms.html" as fields %}
 {% import "components/feedback.html" as feedback %}
-<section class="setting-card advanced-card card border border-base-300 bg-base-100" data-settings-panel="advanced" aria-labelledby="advanced-title">
-  <div class="settings-intro card-body flex flex-wrap items-start justify-between gap-3 pb-0"><div><h2 id="advanced-title" tabindex="-1" class="card-title text-2xl">Advanced &amp; recovery</h2><p class="text-sm text-base-content/70">{{ network_summary }}</p></div>{{ feedback.badge('Local network' if settings.network.access.value == 'local_network' else 'This device only') }}</div>
-  <div class="card-body gap-6 advanced-card-content advanced-card-body pt-0">
+{% import "components/surfaces.html" as surfaces %}
+{% call surfaces.card('Advanced & recovery', network_summary, 'advanced-title', extra_classes='setting-card advanced-card', attrs={'data-settings-panel': 'advanced'}) %}
+  <div>{{ feedback.badge('Local network' if settings.network.access.value == 'local_network' else 'This device only') }}</div>
+  <div class="advanced-card-content advanced-card-body space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 pt-5"><div><h3 class="text-lg font-semibold">Network &amp; web security</h3><p class="text-sm text-base-content/70">Choose which devices can open Photoframe.</p></div><span class="badge badge-outline">Current: {{ network_address }}</span></div>
     <form method="post" action="/network" hx-post="/network" hx-target="#workspace" hx-swap="outerHTML" class="network-form space-y-6" data-network-form data-original-signature="{{ settings.network.access.value }}|{{ settings.network.port }}|{{ settings.network.protocol.value }}|{{ settings.network.certificate_mode.value }}|{{ settings.network.certificate_path or '' }}|{{ settings.network.private_key_path or '' }}" onsubmit="return confirmNetworkChange(this)">
       <input type="hidden" name="confirm_endpoint_change" value="no">
@@ -28,4 +29,4 @@
     </form>
     <div class="flex flex-wrap items-center justify-between gap-4 border-t border-base-300 pt-6"><div><h3 class="text-lg font-semibold">Reset &amp; recovery</h3><p class="text-sm text-base-content/70">Remove this Photoframe’s configuration and local photo data. The app stays installed.</p></div>{{ actions.button('Reset Photoframe', 'danger', attrs={'onclick': 'openResetDialog()'}) }}</div>
   </div>
-</section>
+{% endcall %}
