@@ -4,6 +4,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -745,7 +746,7 @@ def create_app(
         return HTMLResponse("")
 
     @app.get("/thumbnail/{photo_id}")
-    def thumbnail(photo_id: str) -> Response:
+    def thumbnail(photo_id: str, size: Literal["thumbnail", "preview"] = "thumbnail") -> Response:
         try:
             settings, albums, photos = runtime.workspace_snapshot()
             available_ids = {photo.id for photo in photos}
@@ -757,7 +758,12 @@ def create_app(
                 available_ids.add(preserved.id)
             if not settings.verification.ok or photo_id not in available_ids:
                 return Response(status_code=404)
-            content, media_type = runtime.provider().thumbnail(photo_id)
+            provider = runtime.provider()
+            content, media_type = (
+                provider.render_preview(photo_id)
+                if size == "preview"
+                else provider.thumbnail(photo_id)
+            )
             return Response(
                 content, media_type=media_type, headers={"Cache-Control": "private, max-age=300"}
             )

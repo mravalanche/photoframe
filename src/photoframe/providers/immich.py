@@ -154,6 +154,12 @@ class ImmichProvider:
         )
 
     def thumbnail(self, photo_id: str) -> tuple[bytes, str]:
+        response = self._request(
+            "GET", f"/assets/{photo_id}/thumbnail", params={"size": "thumbnail"}
+        )
+        return response.content, response.headers.get("content-type", "image/jpeg")
+
+    def render_preview(self, photo_id: str) -> tuple[bytes, str]:
         response = self._request("GET", f"/assets/{photo_id}/thumbnail", params={"size": "preview"})
         return response.content, response.headers.get("content-type", "image/jpeg")
 

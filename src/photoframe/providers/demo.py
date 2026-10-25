@@ -97,6 +97,9 @@ class DemoProvider:
 <text x="52" y="690" fill="#f2efe6" opacity=".75" font-family="system-ui" font-size="26">{label}</text></svg>'''
         return svg.encode(), "image/svg+xml"
 
+    def render_preview(self, photo_id: str) -> tuple[bytes, str]:
+        return self.thumbnail(photo_id)
+
     def original(self, photo_id: str) -> tuple[bytes, str]:
         """Create a raster stand-in so the local demo exercises processing too."""
         sky, sun, land = self.colours.get(photo_id, self.colours["coast"])

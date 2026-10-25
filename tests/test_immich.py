@@ -79,6 +79,27 @@ def test_compressed_responses_are_decoded_once():
         assert provider.list_albums()[0].name == "Trip"
 
 
+def test_ui_thumbnail_uses_small_immich_rendition_without_changing_render_fallback():
+    sizes: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sizes.append(request.url.params.get("size"))
+        return httpx.Response(
+            200,
+            headers={"content-type": "image/webp"},
+            content=request.url.params["size"].encode(),
+        )
+
+    with httpx.Client(
+        base_url="https://immich.test/api/", transport=httpx.MockTransport(handler)
+    ) as client:
+        provider = ImmichProvider("https://immich.test", "key", client)
+        assert provider.thumbnail("photo") == (b"thumbnail", "image/webp")
+        assert provider.render_preview("photo") == (b"preview", "image/webp")
+
+    assert sizes == ["thumbnail", "preview"]
+
+
 def test_download_bound_applies_without_content_length(monkeypatch):
     class Chunks(httpx.SyncByteStream):
         def __iter__(self):

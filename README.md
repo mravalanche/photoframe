@@ -84,6 +84,8 @@ To limit memory use on the frame, Immich responses are capped at 32 MiB and albu
 assets. Large JPEGs are downsampled before decoding; images that still exceed the decoding limit
 use the provider preview when available. Unsupported images are excluded from the frame's photo
 list.
+Photo and album rails request Immich's smaller thumbnail rendition. The displayed-photo fallback
+and HEIC render fallback continue to use the larger preview rendition.
 
 ## Basic configuration
 
