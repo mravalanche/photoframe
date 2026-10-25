@@ -46,6 +46,24 @@
     </div>
     <p class="interaction-note">Preview a photo, then choose <strong>Show now</strong> to put it on the frame.</p>
     {% else %}<p class="empty-candidates" role="status">No photos to preview. Restore a hidden photo or choose another album.</p>{% endif %}
+    {% if layout_rows %}<details class="photo-layouts setting-card"><summary><span class="setting-summary-main"><strong>Photo layouts</strong></span><span class="setting-summary-end"><span class="setting-status">{{ layout_rows|length }} {{ 'photo' if layout_rows|length == 1 else 'photos' }}</span><span class="disclosure-icon" aria-hidden="true"></span></span></summary>
+      <div class="photo-layouts-content">
+        <p class="interaction-note">The default follows your frame setting. Custom layouts stay as saved.</p>
+        <p class="photo-layout-scroll-hint">Scroll sideways to see all columns.</p>
+        <div class="photo-layout-table-scroll" role="region" aria-label="Photo layouts table" tabindex="0">
+          <table class="photo-layout-table">
+            <thead><tr><th scope="col">Photo</th><th scope="col">Layout</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead>
+            <tbody>{% for row in layout_rows %}<tr>
+              <th scope="row" class="photo-layout-name">{{ row.photo.filename }}</th>
+              <td>{{ 'Not set' if row.needs_framing else photo_layout_label(row.framing) }}</td>
+              <td class="photo-layout-source">{{ 'Needs framing' if row.needs_framing else 'Custom' if row.custom else 'Default' }}{% if row.framing.hidden %} · Hidden{% elif row.unavailable %} · Unavailable{% endif %}</td>
+              <td class="photo-layout-action">{% if row.framing.hidden %}<form method="post" action="/photo/unhide" hx-post="/photo/unhide" hx-target="#workspace" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ row.photo.id }}"><button class="secondary" aria-label="Restore {{ row.photo.filename }}">Restore</button></form>
+              {% elif not row.unavailable %}<form method="post" action="/photo/preview" hx-post="/photo/preview" hx-target="#workspace" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ row.photo.id }}"><button class="secondary" aria-label="Preview {{ row.photo.filename }}">Preview</button></form>{% else %}<span aria-hidden="true">—</span><span class="visually-hidden">No action available</span>{% endif %}</td>
+            </tr>{% endfor %}</tbody>
+          </table>
+        </div>
+      </div>
+    </details>{% endif %}
   </section>
   {% endif %}
 
@@ -82,6 +100,14 @@
         <p class="album-announcement" data-album-announcement role="status" aria-live="polite" aria-atomic="true"></p>
         {% if albums %}<fieldset class="album-list" data-album-picker data-current-album-id="{{ settings.frame.album_id or '' }}"><legend class="visually-hidden">Choose an album to review</legend>{% for album in albums %}<label class="album-choice {{ 'chosen' if album.id == settings.frame.album_id }}" data-album-choice data-album-id="{{ album.id }}" data-album-name="{{ album.name }}"><input type="radio" name="pending_album" value="{{ album.id }}" {{ 'checked' if album.id == settings.frame.album_id }}><span class="album-choice-content">{% if album.thumbnail_asset_id %}<img class="album-thumbnail" src="/thumbnail/{{ album.thumbnail_asset_id }}{% if thumbnail_revision %}?refresh={{ thumbnail_revision }}{% endif %}" loading="lazy" alt="">{% else %}<span class="album-thumbnail album-placeholder" aria-hidden="true">PF</span>{% endif %}<span class="album-copy">{{ album.name }}<small>{{ album.asset_count }} assets</small></span></span><b data-album-state>{{ 'Current' if album.id == settings.frame.album_id else 'Choose' }}</b></label>{% endfor %}</fieldset>
         <div class="album-confirmation" data-album-confirmation hidden><div class="album-confirmation-actions"><form method="post" action="/album/select" data-album-confirm-form><input type="hidden" name="album_id" value=""><button class="primary" data-album-confirm-button>Use album</button></form><button type="button" class="quiet" data-album-cancel>Cancel</button></div></div>{% endif %}
+      </details>
+      <details class="setting-card" name="frame-settings" data-settings-panel="default-layout" data-default-open="false"><summary><span class="setting-summary-main"><strong>Default photo layout</strong></span><span class="setting-summary-end"><span class="setting-status">{{ photo_layout_label(settings.frame.default_framing) }}</span><span class="disclosure-icon" aria-hidden="true"></span></span></summary>
+        <form method="post" action="/photo/default-layout" hx-post="/photo/default-layout" hx-target="#workspace" hx-swap="outerHTML" class="form-grid">
+          <p class="interaction-note span-2">Used for photos without saved framing. Custom photo layouts stay as saved.</p>
+          <label>Fit<select name="fit_mode"><option value="fill" {{ 'selected' if settings.frame.default_framing.fit_mode == 'fill' }}>Fill frame</option><option value="fit" {{ 'selected' if settings.frame.default_framing.fit_mode == 'fit' }}>Show whole photo</option></select></label>
+          <label>Background<select name="matte"><option value="blur" {{ 'selected' if settings.frame.default_framing.matte == 'blur' }}>Soft photo</option><option value="colour" {{ 'selected' if settings.frame.default_framing.matte == 'colour' }}>Colour wash</option><option value="white" {{ 'selected' if settings.frame.default_framing.matte == 'white' }}>White</option><option value="black" {{ 'selected' if settings.frame.default_framing.matte == 'black' }}>Black</option></select><small>Used when showing the whole photo.</small></label>
+          <div class="form-actions span-2"><button class="primary">Save default layout</button></div>
+        </form>
       </details>
       <details class="setting-card" name="frame-settings" data-settings-panel="display" data-default-open="false"><summary><span class="setting-summary-main"><strong>Schedule & orientation</strong></span><span class="setting-summary-end"><span class="setting-status">{{ display_summary }}</span><span class="disclosure-icon" aria-hidden="true"></span></span></summary>
         <form method="post" action="/workflow" hx-post="/workflow" hx-target="#workspace" hx-swap="outerHTML" class="form-grid four" data-schedule-form>

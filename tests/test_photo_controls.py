@@ -132,6 +132,60 @@ def test_preferences_persist_and_are_scoped_to_source(tmp_path):
     assert AppSettings().frame.photo_preferences == {}
 
 
+def test_default_layout_applies_to_unsaved_photos_and_preserves_custom_choices(tmp_path):
+    _app, client, runtime = frame(tmp_path)
+    client.post("/photo/framing", data={"photo_id": "tall", "fit_mode": "fit", "matte": "black"})
+    before = runtime.repository.load().frame.schedule_anchor
+    response = client.post("/photo/default-layout", data={"fit_mode": "fit", "matte": "blur"})
+    assert "Default photo layout saved" in response.text
+    saved = runtime.repository.load().frame
+    assert saved.schedule_anchor == before
+    assert (saved.preference("wide").fit_mode, saved.preference("wide").matte) == ("fit", "blur")
+    assert (saved.preference("tall").fit_mode, saved.preference("tall").matte) == ("fit", "black")
+    assert not saved.has_custom_framing("wide")
+    assert saved.has_custom_framing("tall")
+    with (
+        Image.open(BytesIO(client.get("/photos/wide/prepared").content)) as preview,
+        runtime.prepare_photo("wide") as hardware,
+    ):
+        assert preview.tobytes() == hardware.tobytes()
+    page = client.get("/partials/workspace").text
+    assert "Photo layouts" in page and "2 photos" in page
+    assert "Whole photo · Soft photo" in page
+    assert "Whole photo · Black" in page
+
+
+def test_hidden_unsaved_photo_follows_changed_default_after_restore(tmp_path):
+    _app, client, runtime = frame(tmp_path)
+    client.post("/photo/hide", data={"photo_id": "wide"})
+    client.post("/photo/default-layout", data={"fit_mode": "fit", "matte": "colour"})
+    hidden = runtime.repository.load().frame.preference("wide")
+    assert hidden.hidden and not hidden.included
+    assert (hidden.fit_mode, hidden.matte) == ("fit", "colour")
+    page = client.get("/partials/workspace").text
+    assert "Default · Hidden" in page
+    client.post("/photo/unhide", data={"photo_id": "wide"})
+    restored = runtime.repository.load().frame.preference("wide")
+    assert not restored.hidden and (restored.fit_mode, restored.matte) == ("fit", "colour")
+    assert [p.id for p in runtime.photo_eligibility(runtime.repository.load().frame).eligible] == [
+        "wide"
+    ]
+
+
+def test_default_layout_does_not_include_opposite_orientation_without_saved_framing(tmp_path):
+    _app, client, runtime = frame(tmp_path)
+    client.post("/photo/default-layout", data={"fit_mode": "fit", "matte": "blur"})
+    assert not runtime.repository.load().frame.preference("tall").included
+    assert [p.id for p in runtime.photo_eligibility(runtime.repository.load().frame).eligible] == [
+        "wide"
+    ]
+    client.post("/photo/preview", data={"photo_id": "tall"})
+    page = client.get("/partials/workspace").text
+    assert 'name="matte"' in page
+    assert "Save framing to include this photo" in page
+    assert "Not set" in page and "Needs framing" in page
+
+
 def test_fit_applies_exif_before_layout_and_preserves_white_matte():
     output = BytesIO()
     with Image.new("RGB", (120, 80), "red") as image:

@@ -72,6 +72,14 @@ def test_portrait_controls_and_last_hidden_photo_remain_recoverable(tmp_path: Pa
         assert "The original stays in your library" in page
         for photo in photos:
             page = client.post("/photo/hide", data={"photo_id": photo.id}).text
+        assert '<details class="photo-layouts setting-card">' in page
+        assert '<table class="photo-layout-table">' in page
+        assert '<th scope="col">Photo</th>' in page
+        assert '<th scope="col">Layout</th>' in page
+        assert '<th scope="col">Status</th>' in page
+        assert '<th scope="col">Action</th>' in page
+        assert page.count('scope="row" class="photo-layout-name"') == len(photos)
+        assert f'aria-label="Restore {portrait.filename}"' in page
         assert "Undo" in page
         assert "Restore" in page
         assert "No photos to preview" in page
