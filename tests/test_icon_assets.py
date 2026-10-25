@@ -33,7 +33,7 @@ def test_raster_icons_and_manifest_match_the_svg_family() -> None:
             assert icon.size == (size, size)
     with Image.open(STATIC / "favicon.ico") as icon:
         assert icon.format == "ICO"
-        assert {(16, 16), (32, 32), (48, 48)} <= icon.ico.sizes()
+        assert {(16, 16), (32, 32), (48, 48)} <= icon.info["sizes"]
 
     manifest = json.loads((STATIC / "manifest.webmanifest").read_text())
     assert manifest["start_url"] == "/"
