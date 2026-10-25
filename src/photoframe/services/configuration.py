@@ -465,6 +465,13 @@ class ConfigurationService:
             self.runtime.reconcile_shuffle()
         return "Framing saved; photo added to rotation"
 
+    def save_default_framing(self, framing: PhotoFraming) -> str:
+        with self.runtime.photo_edit():
+            self.repository.update(
+                lambda settings: setattr(settings.frame, "default_framing", framing)
+            )
+        return "Default photo layout saved"
+
     def set_hidden(self, photo_id: str, hidden: bool) -> str:
         with self.runtime.photo_edit():
             if self.runtime.photo(photo_id) is None:

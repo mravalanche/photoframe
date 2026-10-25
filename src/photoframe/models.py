@@ -79,9 +79,21 @@ class FrameSettings(BaseModel):
 
     photo_scope: str = Field(default="", exclude=True)
     photo_preferences: dict[str, dict[str, PhotoPreference]] = Field(default_factory=dict)
+    default_framing: PhotoFraming = Field(default_factory=PhotoFraming)
 
     def preference(self, photo_id: str) -> PhotoPreference:
-        return self.photo_preferences.get(self.photo_scope, {}).get(photo_id, PhotoPreference())
+        saved = self.photo_preferences.get(self.photo_scope, {}).get(photo_id)
+        if saved and saved.included:
+            return saved
+        return PhotoPreference(
+            fit_mode=self.default_framing.fit_mode,
+            matte=self.default_framing.matte,
+            hidden=saved.hidden if saved else False,
+        )
+
+    def has_custom_framing(self, photo_id: str) -> bool:
+        saved = self.photo_preferences.get(self.photo_scope, {}).get(photo_id)
+        return bool(saved and saved.included)
 
     def allows(self, photo: "Photo") -> bool:
         preference = self.preference(photo.id)

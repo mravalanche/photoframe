@@ -259,7 +259,9 @@ def test_unsupported_assets_are_filtered_once_and_reported_by_category(tmp_path:
     assert "1 unavailable" in response.text
     assert 'aria-label="Preview wide.jpg"' in response.text
     assert 'aria-label="Preview phone.heic"' not in response.text
-    assert "phone.heic" not in refreshed.text
+    assert "phone.heic" in refreshed.text
+    assert "Unavailable" in refreshed.text
+    assert 'aria-label="Preview phone.heic"' not in refreshed.text
     assert provider.original_calls == calls_after_scan
     assert sorted(calls_after_scan) == ["heic", "wide"]
     assert "not eligible or cannot be decoded" in rejected.text
@@ -333,8 +335,9 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert '<details class="setting-card"' not in provider_settings.text
     assert 'data-settings-panel="provider"' not in workspace.text
     assert 'name="frame-settings" data-settings-panel="album"' in workspace.text
+    assert 'name="frame-settings" data-settings-panel="default-layout"' in workspace.text
     assert 'name="frame-settings" data-settings-panel="display"' in workspace.text
-    assert workspace.text.count('class="disclosure-icon"') == 2
+    assert workspace.text.count('class="disclosure-icon"') == 3
     assert "setupSettingsAccordion" in page.text
     assert "activeSettingsPanel" in page.text
     assert "/static/tab-identity.js" in page.text

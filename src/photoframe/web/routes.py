@@ -63,6 +63,18 @@ def schedule_label(target: datetime | None, timezone: str, now: datetime | None 
     return f"{prefix} · {relative}"
 
 
+def photo_layout_label(framing: PhotoFraming) -> str:
+    if framing.fit_mode == "fill":
+        return "Fill frame"
+    background = {
+        "blur": "Soft photo",
+        "colour": "Colour wash",
+        "white": "White",
+        "black": "Black",
+    }[framing.matte]
+    return f"Whole photo · {background}"
+
+
 def rotation_interval_label(seconds: int) -> str:
     """Return a compact, human-readable saved rotation interval."""
     for unit_seconds, unit_name in ((86_400, "day"), (3600, "hour"), (60, "minute")):
@@ -263,6 +275,18 @@ def create_app(
             "albums": albums,
             "current_album_available": current_album_available,
             "photos": photos,
+            "photo_layout_label": photo_layout_label,
+            "layout_rows": [
+                {
+                    "photo": photo,
+                    "framing": settings.frame.preference(photo.id),
+                    "custom": settings.frame.has_custom_framing(photo.id),
+                    "needs_framing": not photo.matches(settings.frame.orientation)
+                    and not settings.frame.preference(photo.id).included,
+                    "unavailable": runtime.known_unsupported(photo.id),
+                }
+                for photo in photos
+            ],
             "eligible": eligible,
             "browse_photos": [
                 photo
@@ -274,7 +298,9 @@ def create_app(
                 photo for photo in photos if settings.frame.preference(photo.id).hidden
             ],
             "selected_framing": (
-                PhotoFraming(fit_mode="fit")
+                PhotoFraming(
+                    fit_mode="fit", matte=settings.frame.preference(selected_photo.id).matte
+                )
                 if selected_photo
                 and not selected_photo.matches(settings.frame.orientation)
                 and not settings.frame.preference(selected_photo.id).included
@@ -545,6 +571,16 @@ def create_app(
             notice = await run_in_threadpool(configuration.save_workflow, form)
             return await run_in_threadpool(workspace, request, notice=notice)
         except Exception as exc:
+            return await run_in_threadpool(workspace, request, error=str(exc))
+
+    @app.post("/photo/default-layout", response_class=HTMLResponse)
+    async def save_default_layout(request: Request) -> HTMLResponse:
+        try:
+            form = await request.form()
+            framing = PhotoFraming.model_validate(dict(form))
+            notice = await run_in_threadpool(configuration.save_default_framing, framing)
+            return await run_in_threadpool(workspace, request, notice=notice)
+        except (ValueError, RuntimeError) as exc:
             return await run_in_threadpool(workspace, request, error=str(exc))
 
     @app.post("/network", response_class=HTMLResponse)
