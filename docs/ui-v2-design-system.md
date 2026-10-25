@@ -24,9 +24,22 @@ Each semantic background has its own `*-content` colour in both themes. Never co
 
 ## App icon
 
-![Photoframe pixel landscape icon](../src/photoframe/static/photoframe.svg)
+<img src="../src/photoframe/static/photoframe.svg" alt="A photograph inked into existence from square pixels" width="192" height="192">
 
-The icon is a pixel landscape inside a spruce frame, using the dark theme's mint and green palette. It draws on the compact block motif used in the owner's other projects while remaining recognizable as a photo frame. The [SVG](../src/photoframe/static/photoframe.svg) is the canonical artwork. The page also links PNG and ICO favicons, a 180px Apple touch icon, and a web manifest with 192px, 512px and maskable PNGs for mobile install surfaces. Run `python scripts/build_app_icons.py` after changing the SVG to regenerate those formats. The browser's theme colour follows the chosen light or dark theme.
+The approved mark is a photograph being inked into existence: a mountain landscape and sun inside a frame whose left edge dissolves into square pixels. The supplied [editable SVG](../src/photoframe/static/photoframe.svg) is the canonical artwork; its composition is preserved. `--icon-bg` uses the dark theme's base-100 spruce, `--icon-ink` uses the light theme's base-100 warm paper, and `--icon-mid` is a 55% paper / 45% spruce mix. The same high-contrast tile appears in both themes, while the browser's theme colour follows the selected theme.
+
+After `npm ci`, run `uv run python scripts/build_app_icons.py` to read the theme tokens and regenerate the icon family directly from the SVG. The pinned resvg renderer is development tooling only; the installed app serves static assets. Do not redraw the mark in the generator. Only the tiny favicons simplify subpixel fragments and thicken the frame. The Apple touch icon has an opaque background; the maskable Android icon keeps the complete mark inside the safe circle.
+
+| Surface | Asset |
+| --- | --- |
+| Primary app logo | `photoframe.svg` |
+| Browser tab | `favicon.svg`, 16/32/48px PNGs, and multi-size `favicon.ico` |
+| iOS home screen | Opaque 180px `apple-touch-icon.png` |
+| Android / installable web app | `icon-192.png`, `icon-512.png`, and `icon-maskable-512.png` |
+
+Both app and showcase use `components/branding.html` for their metadata. The `inked` asset revision refreshes previously cached icons. The [branding size sheet](images/ui-v2-branding.png) shows the generated mark at app, header, and actual favicon sizes on both theme backgrounds.
+
+![Approved branding at app and favicon sizes](images/ui-v2-branding.png)
 
 ## Visual reference
 

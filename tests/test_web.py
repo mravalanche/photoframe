@@ -391,11 +391,11 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert "setupNotifications" in page.text
     assert "setupAlbumSelection" in page.text
     assert ".notification-stack" in responsive_css.text
-    assert 'rel="icon" href="http://testserver/static/photoframe.svg"' in page.text
-    assert 'href="http://testserver/static/favicon-32.png"' in page.text
-    assert 'href="http://testserver/static/favicon.ico"' in page.text
-    assert 'href="http://testserver/static/apple-touch-icon.png"' in page.text
-    assert 'href="http://testserver/static/manifest.webmanifest"' in page.text
+    assert 'rel="icon" href="/static/favicon.svg?v=inked"' in page.text
+    assert 'href="/static/favicon-32.png?v=inked"' in page.text
+    assert 'href="/static/favicon.ico?v=inked"' in page.text
+    assert 'href="/static/apple-touch-icon.png?v=inked"' in page.text
+    assert 'href="/static/manifest.webmanifest?v=inked"' in page.text
     assert 'name="theme-color" content="#fffefa"' in page.text
     assert 'alt=""' in page.text
     assert 'class="device-status online badge' in workspace.text
@@ -413,7 +413,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert "htmx:configRequest" in page.text
     assert ".setting-card[open]" in responsive_css.text
     assert icon.status_code == 200
-    assert 'id="photoframe-pixel-mark"' in icon.text
+    assert 'id="photoframe-inked-mark"' in icon.text
     assert png_icon.status_code == 200
     assert touch_icon.status_code == 200
     assert manifest.status_code == 200

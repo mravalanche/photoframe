@@ -23,6 +23,24 @@ def main(directory: Path) -> None:
     missing = required_fonts - packaged
     if missing:
         raise SystemExit(f"The packaged UI is missing fonts or licenses: {sorted(missing)}")
+    required_icons = {
+        f"photoframe/static/{name}"
+        for name in (
+            "photoframe.svg",
+            "favicon.svg",
+            "favicon.ico",
+            "favicon-16.png",
+            "favicon-32.png",
+            "favicon-48.png",
+            "apple-touch-icon.png",
+            "icon-192.png",
+            "icon-512.png",
+            "icon-maskable-512.png",
+            "manifest.webmanifest",
+        )
+    }
+    if missing_icons := required_icons - packaged:
+        raise SystemExit(f"The packaged UI is missing branding assets: {sorted(missing_icons)}")
     print(f"Packaged v2 stylesheet: {len(stylesheet):,} bytes")
 
 

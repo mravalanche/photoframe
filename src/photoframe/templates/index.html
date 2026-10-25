@@ -1,4 +1,5 @@
 {% import "components/actions.html" as actions %}
+{% import "components/branding.html" as branding %}
 {% import "components/icons.html" as icons %}
 {% import "components/navigation.html" as navigation %}
 {% set active_nav = 'updates' if settings_section == 'updates' else 'settings' if settings_section else view|default('frame') %}
@@ -19,11 +20,7 @@
     })();
   </script>
   <title>{{ 'Settings · ' if settings_section else 'Photos · ' if view|default('frame') == 'photos' else '' }}Photoframe</title>
-  <link rel="icon" href="{{ url_for('static', path='/favicon.ico') }}" sizes="any">
-  <link rel="icon" href="{{ url_for('static', path='/favicon-32.png') }}" type="image/png" sizes="32x32">
-  <link rel="icon" href="{{ url_for('static', path='/photoframe.svg') }}" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="{{ url_for('static', path='/apple-touch-icon.png') }}" sizes="180x180">
-  <link rel="manifest" href="{{ url_for('static', path='/manifest.webmanifest') }}">
+  {{ branding.icons() }}
   <link rel="stylesheet" href="{{ url_for('static', path='/v2.css') }}?v={{ version }}">
   <script src="/static/update-status.js?v={{ version }}" defer></script>
   {% if settings_section == 'updates' %}<script src="/static/updates.js?v={{ version }}" defer></script>{% endif %}

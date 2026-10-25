@@ -51,6 +51,11 @@ jobs:
       - name: Install locked development dependencies
         run: uv sync --frozen --all-groups
 
+      - name: Verify generated browser and mobile icons
+        run: |
+          uv run python scripts/build_app_icons.py
+          git diff --exit-code -- src/photoframe/static/*.svg src/photoframe/static/*.png src/photoframe/static/*.ico
+
       - name: Check that the Python wheel includes the compiled UI
         run: |
           uv build --wheel --out-dir /tmp/photoframe-ui-wheel
