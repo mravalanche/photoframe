@@ -1,7 +1,10 @@
 from html.parser import HTMLParser
 from pathlib import Path
 
+from fastapi.testclient import TestClient
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+from photoframe.web import create_app
 
 TEMPLATES = Path(__file__).parents[1] / "src" / "photoframe" / "templates"
 
@@ -64,3 +67,15 @@ def test_component_attribute_values_are_escaped() -> None:
     )
     assert 'aria-label="&lt;unsafe&gt;"' in html
     assert "<unsafe>" not in html
+
+
+def test_showcase_route_uses_only_the_two_supported_themes(tmp_path: Path) -> None:
+    app = create_app(tmp_path, demo_mode=True)
+    client = TestClient(app)
+    assert 'data-theme="photoframe-dark"' in client.get(
+        "/ui/showcase?theme=photoframe-dark"
+    ).text
+    response = client.get("/ui/showcase?theme=unknown")
+    assert response.status_code == 200
+    assert 'data-theme="photoframe-light"' in response.text
+    assert client.get("/static/v2.css").status_code == 200

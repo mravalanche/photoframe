@@ -432,6 +432,11 @@ def create_app(
             },
         )
 
+    @app.get("/ui/showcase", response_class=HTMLResponse)
+    def ui_showcase(request: Request, theme: str = "photoframe-light") -> HTMLResponse:
+        chosen = theme if theme in {"photoframe-light", "photoframe-dark"} else "photoframe-light"
+        return templates.TemplateResponse(request, "showcase.html", {"theme": chosen})
+
     @app.get("/settings", response_class=HTMLResponse)
     @app.get("/settings/{section}", response_class=HTMLResponse)
     def settings_page(request: Request, section: str = "updates") -> HTMLResponse:
