@@ -92,8 +92,13 @@ full image, with a soft photo, colour, white or black background. **Fill frame**
 Save framing to include a photo in rotation; **Show now** updates the physical frame immediately.
 These choices do not change the original in Immich.
 
+Under **Default photo layout**, choose how photos without saved framing should appear. The
+default applies to existing and newly added photos without changing individual saved choices.
+Open **Photo layouts** below the photo browser to see each photo's layout and whether it follows
+the default, has a custom choice, or still needs framing.
+
 **Hide from this frame** removes a photo from rotation without deleting it from Immich. Use
-**Undo** or restore it from **Hidden photos**. A hidden photo already on the frame stays visible
+**Undo** or restore it from **Hidden from this frame**. A hidden photo already on the frame stays visible
 until the next update.
 
 For interval schedules, choose a common duration with the slider or an exact duration from
