@@ -8,7 +8,6 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoes
 from photoframe.models import AppSettings, Photo
 from photoframe.renderer import RenderPhase, RenderState
 
-
 TEMPLATES = Path(__file__).resolve().parents[1] / "src/photoframe/templates"
 
 

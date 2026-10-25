@@ -16,6 +16,8 @@ makes the complete setup flow usable before hardware is connected.
 
 For architecture, Raspberry Pi operations, security detail, and planned work, see
 [PROJECT.md](PROJECT.md).
+For the interface themes, shared components, and screenshots, see the
+[v2 design system](docs/ui-v2-design-system.md).
 
 ## Prerequisites
 
@@ -57,11 +59,11 @@ firewall reach, trust warnings, and all installer options.
 
 ## First use
 
-1. Open **Settings → Photo provider** using the cog, enter the Immich server root URL and API key, then save and verify.
+1. Open **Settings → Photo provider**, enter the Immich server root URL and API key, then save and verify.
 2. Under **Album**, refresh the available albums and choose one.
 3. Under **Schedule & orientation**, choose orientation, rotation and photo order.
    Configure the physical display separately under **Settings → Display hardware**.
-4. Preview a photo. Choose its framing, then use **Show now** to update the frame or
+4. Open **Photos** and preview a photo. Choose its framing, then use **Show now** to update the frame or
    **Start rotation here** to change where rotation resumes.
 5. If another device on the local network needs access, open **Settings → Advanced & recovery** and
    configure the listener before saving.

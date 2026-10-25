@@ -56,15 +56,15 @@ def test_settings_sections_render_shared_controls_with_existing_form_contracts()
     assert 'name="render_timeout_seconds"' in hardware
     assert 'action="/hardware"' in hardware
     for hook in (
-        'data-network-form',
-        'data-certificate-controls',
-        'data-supplied-certificate-controls',
-        'data-address-preview',
+        "data-network-form",
+        "data-certificate-controls",
+        "data-supplied-certificate-controls",
+        "data-address-preview",
     ):
         assert hook in advanced
     assert 'name="confirm_endpoint_change"' in advanced
-    assert 'data-reset-dialog' in reset
-    assert 'data-reset-form' in reset
+    assert "data-reset-dialog" in reset
+    assert "data-reset-form" in reset
     for html in (provider, hardware, advanced, reset):
         assert 'class="btn ' in html
         parser = FormNesting()
@@ -77,8 +77,8 @@ def test_updates_keep_every_script_hook_and_actions_together() -> None:
     for hook in (
         'id="installed-version"',
         'id="update-status-badge"',
-        'data-update-icon',
-        'data-update-label',
+        "data-update-icon",
+        "data-update-label",
         'id="update-status"',
         'id="update-progress"',
         'id="update-error"',

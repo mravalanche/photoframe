@@ -76,7 +76,7 @@ def test_surface_components_accept_outer_interaction_hooks() -> None:
             '{% import "components/surfaces.html" as surfaces %}'
             '{% call surfaces.card("Frame", attrs={"data-frame": "ready"}) %}Photo{% endcall %}'
             '{% call surfaces.disclosure("Album", attrs={"data-settings-panel": "album"}) %}'
-            'Choices{% endcall %}'
+            "Choices{% endcall %}"
         )
         .render()
     )
@@ -87,9 +87,7 @@ def test_surface_components_accept_outer_interaction_hooks() -> None:
 def test_showcase_route_uses_only_the_two_supported_themes(tmp_path: Path) -> None:
     app = create_app(tmp_path, demo_mode=True)
     client = TestClient(app)
-    assert 'data-theme="photoframe-dark"' in client.get(
-        "/ui/showcase?theme=photoframe-dark"
-    ).text
+    assert 'data-theme="photoframe-dark"' in client.get("/ui/showcase?theme=photoframe-dark").text
     response = client.get("/ui/showcase?theme=unknown")
     assert response.status_code == 200
     assert 'data-theme="photoframe-light"' in response.text

@@ -55,7 +55,7 @@
       {% call dialogs.dialog('showcase-dialog', 'Reset Photoframe?', 'Your saved configuration and local cache would be cleared.') %}<p>Confirm destructive actions with a clear description and a distinct action.</p><div class="mt-4">{{ actions.button('Reset', 'danger') }}</div>{% endcall %}
     </section>
   </main>
-  {{ navigation.mobile_dock([{'key': 'frame', 'label': 'Frame', 'href': '/', 'icon': '▣'}, {'key': 'photos', 'label': 'Photos', 'href': '/#library-title', 'icon': '▦'}, {'key': 'updates', 'label': 'Updates', 'href': '/settings/updates', 'icon': '↻'}, {'key': 'settings', 'label': 'Settings', 'href': '/settings', 'icon': '⚙'}], 'frame') }}
+  {{ navigation.mobile_dock([{'key': 'frame', 'label': 'Frame', 'href': '/'}, {'key': 'photos', 'label': 'Photos', 'href': '/photos'}, {'key': 'updates', 'label': 'Updates', 'href': '/settings/updates'}, {'key': 'settings', 'label': 'Settings', 'href': '/settings'}], 'frame') }}
   <script>
     document.addEventListener('click', (event) => {
       const trigger = event.target.closest('[data-dialog-open]');

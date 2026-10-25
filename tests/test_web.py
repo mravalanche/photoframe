@@ -311,7 +311,9 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
         advanced_settings = client.get("/partials/workspace?section=advanced")
         hardware_settings = client.get("/partials/workspace?section=hardware")
         frame_status = client.get("/partials/frame-status")
-        selected_workspace = client.post("/photo/preview", data={"photo_id": "coast"}, headers=PHOTOS_HEADERS)
+        selected_workspace = client.post(
+            "/photo/preview", data={"photo_id": "coast"}, headers=PHOTOS_HEADERS
+        )
         htmx = client.get("/static/vendor/htmx-2.0.4.min.js")
         tab_identity = client.get("/static/tab-identity.js")
         responsive_css = client.get("/static/responsive-fixes.css")
@@ -368,9 +370,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'action="/photo/next"' in workspace.text
     assert 'action="/photo/next"' not in frame_status.text
     assert "without changing your schedule" in workspace.text
-    assert workspace.text.index('id="frame-status"') < workspace.text.index(
-        'action="/photo/next"'
-    )
+    assert workspace.text.index('id="frame-status"') < workspace.text.index('action="/photo/next"')
     assert "Advanced &amp; recovery" in advanced_settings.text
     assert "Daily at 03:00" in workspace.text
     assert "Album order" in workspace.text
@@ -394,7 +394,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert "Address after restart" in advanced_settings.text
     assert "setupNetworkSettings" in page.text
     assert "confirmNetworkChange" in page.text
-    assert 'advanced-card-body' in advanced_settings.text
+    assert "advanced-card-body" in advanced_settings.text
     assert 'id="network-port"' in advanced_settings.text
     assert 'aria-describedby="network-port-help"' in advanced_settings.text
     assert 'aria-describedby="certificate-path-help"' in advanced_settings.text
@@ -415,7 +415,7 @@ def test_album_picker_is_local_until_confirm_and_exposes_accessible_states(tmp_p
         before = app.state.runtime.repository.load()
 
     assert app.state.runtime.repository.load() == before
-    assert 'data-album-picker' in workspace.text
+    assert "data-album-picker" in workspace.text
     assert '<legend class="sr-only">Choose an album to review</legend>' in workspace.text
     assert 'type="radio" name="pending_album" value="album"' in workspace.text
     assert "data-album-confirmation hidden" in workspace.text
@@ -868,7 +868,7 @@ def test_photos_route_has_its_own_shell_and_navigation(tmp_path: Path):
         workspace = client.get("/partials/workspace?view=photos")
 
     assert page.status_code == 200
-    assert 'data-workspace-loading' in page.text
+    assert "data-workspace-loading" in page.text
     assert 'id="photo-workspace"' in workspace.text
     assert 'aria-current="page"' in page.text
     assert 'href="/photos"' in page.text
@@ -884,9 +884,7 @@ def test_hide_and_restore_keep_photos_view_and_feedback_region(tmp_path: Path):
             "/photo/preview", data={"photo_id": "coast"}, headers=PHOTOS_HEADERS
         )
         hidden = client.post("/photo/hide", data={"photo_id": "coast"}, headers=PHOTOS_HEADERS)
-        restored = client.post(
-            "/photo/unhide", data={"photo_id": "coast"}, headers=PHOTOS_HEADERS
-        )
+        restored = client.post("/photo/unhide", data={"photo_id": "coast"}, headers=PHOTOS_HEADERS)
 
     for response in (previewed, hidden, restored):
         assert response.status_code == 200
