@@ -15,9 +15,9 @@ def test_settings_navigation_and_legacy_update_link(tmp_path):
     for section in ("updates", "provider", "hardware", "advanced"):
         page = client.get(f"/settings/{section}")
         assert page.status_code == 200
-        assert f'href="/settings/{section}" aria-current="page"' in page.text
-        assert 'href="/">← Back to frame' in page.text
-        assert "/static/settings.css" in page.text
+        assert re.search(rf'<a href="/settings/{section}"[^>]*aria-current="page"', page.text)
+        assert 'href="/"' in page.text and "Back to frame" in page.text
+        assert "/static/v2.css" in page.text
         assert "photoframe-theme" in page.text
     assert client.get("/settings").status_code == 200
     assert client.get("/settings/missing").status_code == 404
@@ -124,7 +124,7 @@ def test_initial_shell_and_settings_do_not_wait_for_photo_provider(tmp_path, mon
     initial = client.get("/")
     assert initial.status_code == 200
     assert "Quiet places" in initial.text
-    assert "SAVED SCHEDULE" in initial.text
+    assert "data-workspace-loading" in initial.text
     assert "Try loading again" in initial.text
     for section in ("provider", "hardware", "advanced"):
         assert client.get(f"/partials/workspace?section={section}").status_code == 200

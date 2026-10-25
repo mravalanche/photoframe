@@ -8,6 +8,8 @@ from photoframe.image_processing import prepare_for_display
 from photoframe.models import Album, AppSettings, Photo
 from photoframe.web import create_app
 
+PHOTOS_VIEW = {"X-Photoframe-View": "photos"}
+
 
 class PhotoProvider:
     def validate_connection(self):
@@ -51,7 +53,7 @@ def test_portrait_is_browsable_but_rotation_requires_explicit_framing(tmp_path, 
     assert [p.id for p in runtime.photo_eligibility(runtime.repository.load().frame).eligible] == [
         "wide"
     ]
-    initial_workspace = client.get("/partials/workspace").text
+    initial_workspace = client.get("/partials/workspace?view=photos").text
     assert "tall.jpg" in initial_workspace
     assert "Hidden from this frame (0)" in initial_workspace
     client.post("/photo/preview", data={"photo_id": "tall"})
@@ -98,7 +100,7 @@ def test_hide_last_photo_is_local_restorable_and_blocks_stale_actions(tmp_path):
         lambda saved: setattr(saved.refresh_status, "last_rendered_photo_id", "wide")
     )
     client.post("/photo/preview", data={"photo_id": "wide"})
-    response = client.post("/photo/hide", data={"photo_id": "wide"})
+    response = client.post("/photo/hide", headers=PHOTOS_VIEW, data={"photo_id": "wide"})
     assert "Hidden from this frame (1)" in response.text
     assert "No photos remain in rotation" in response.text
     assert runtime.repository.load().refresh_status.last_rendered_photo_id == "wide"
@@ -107,7 +109,10 @@ def test_hide_last_photo_is_local_restorable_and_blocks_stale_actions(tmp_path):
     assert "hidden" in client.post("/photo/preview", data={"photo_id": "wide"}).text
     assert "not eligible" in client.post("/photo/start", data={"photo_id": "wide"}).text
     assert client.get("/photos/wide/prepared").status_code == 422
-    assert "Photo restored" in client.post("/photo/unhide", data={"photo_id": "wide"}).text
+    assert (
+        "Photo restored"
+        in client.post("/photo/unhide", headers=PHOTOS_VIEW, data={"photo_id": "wide"}).text
+    )
     assert [p.id for p in runtime.photo_eligibility(runtime.repository.load().frame).eligible] == [
         "wide"
     ]
@@ -149,7 +154,7 @@ def test_default_layout_applies_to_unsaved_photos_and_preserves_custom_choices(t
         runtime.prepare_photo("wide") as hardware,
     ):
         assert preview.tobytes() == hardware.tobytes()
-    page = client.get("/partials/workspace").text
+    page = client.get("/partials/workspace?view=photos").text
     assert "Photo layouts" in page and "2 photos" in page
     assert "Whole photo · Soft photo" in page
     assert "Whole photo · Black" in page
@@ -162,8 +167,8 @@ def test_hidden_unsaved_photo_follows_changed_default_after_restore(tmp_path):
     hidden = runtime.repository.load().frame.preference("wide")
     assert hidden.hidden and not hidden.included
     assert (hidden.fit_mode, hidden.matte) == ("fit", "colour")
-    page = client.get("/partials/workspace").text
-    assert "Default · Hidden" in page
+    page = client.get("/partials/workspace?view=photos").text
+    assert "Default" in page and "Hidden" in page
     client.post("/photo/unhide", data={"photo_id": "wide"})
     restored = runtime.repository.load().frame.preference("wide")
     assert not restored.hidden and (restored.fit_mode, restored.matte) == ("fit", "colour")
@@ -180,7 +185,7 @@ def test_default_layout_does_not_include_opposite_orientation_without_saved_fram
         "wide"
     ]
     client.post("/photo/preview", data={"photo_id": "tall"})
-    page = client.get("/partials/workspace").text
+    page = client.get("/partials/workspace?view=photos").text
     assert 'name="matte"' in page
     assert "Save framing to include this photo" in page
     assert "Not set" in page and "Needs framing" in page
