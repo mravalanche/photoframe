@@ -96,7 +96,7 @@ const panel = {{
   addEventListener(name, callback) {{ this[name] = callback; }},
 }};
 const documentMock = {{
-  documentElement: {{ dataset: {{ theme: 'dark' }} }},
+  documentElement: {{ dataset: {{ theme: 'photoframe-dark' }} }},
   addEventListener(name, callback) {{ documentListeners[name] = callback; }},
   querySelector() {{ return null; }},
   querySelectorAll(selector) {{
