@@ -1,0 +1,42 @@
+{% import "components/actions.html" as actions %}
+{% import "components/forms.html" as forms %}
+{% import "components/surfaces.html" as surfaces %}
+<section id="frame-settings" class="settings-section space-y-4" aria-labelledby="frame-settings-title">
+  <div class="section-heading"><p class="pf-eyebrow text-primary">Settings</p><h2 id="frame-settings-title" class="pf-section-title">Frame settings</h2></div>
+  <div class="settings-grid grid gap-3 lg:grid-cols-2" data-settings-accordion>
+    {% set album_summary = settings.frame.album_name or 'Not selected' %}
+    {% if settings.frame.album_id and not current_album_available %}{% set album_summary = album_summary ~ ' · Unavailable' %}{% endif %}
+    {% call surfaces.disclosure('Album', album_summary, 'album-settings', 'frame-settings', settings.verification.ok and not settings.frame.album_id, 'setting-card lg:col-span-2', {'data-settings-panel': 'album', 'data-default-open': 'true' if settings.verification.ok and not settings.frame.album_id else 'false'}) %}
+      <div class="space-y-4">
+        <form method="post" action="/albums/refresh" hx-post="/albums/refresh" hx-target="#workspace" hx-swap="outerHTML">{{ actions.button('Refresh albums', 'secondary', type='submit', disabled=not settings.verification.ok) }}</form>
+        {% if settings.frame.album_id and not current_album_available %}<p class="album-unavailable alert alert-warning text-sm" role="status">Current album “{{ settings.frame.album_name or 'Unknown album' }}” is unavailable. It will remain selected until you confirm another album.</p>{% endif %}
+        <p class="album-announcement text-sm text-base-content/70" data-album-announcement role="status" aria-live="polite" aria-atomic="true"></p>
+        {% if albums %}<fieldset class="album-list grid gap-2" data-album-picker data-current-album-id="{{ settings.frame.album_id or '' }}"><legend class="sr-only">Choose an album to review</legend>
+          {% for album in albums %}<label class="album-choice {{ 'chosen border-primary' if album.id == settings.frame.album_id else 'border-base-300' }} flex cursor-pointer items-center gap-3 rounded-box border bg-base-100 p-3 hover:border-primary" data-album-choice data-album-id="{{ album.id }}" data-album-name="{{ album.name }}"><input class="radio radio-primary radio-sm" type="radio" name="pending_album" value="{{ album.id }}" {{ 'checked' if album.id == settings.frame.album_id }}><span class="album-choice-content flex min-w-0 flex-1 items-center gap-3">{% if album.thumbnail_asset_id %}<img class="album-thumbnail h-12 w-12 rounded-field object-cover" src="/thumbnail/{{ album.thumbnail_asset_id }}{% if thumbnail_revision %}?refresh={{ thumbnail_revision }}{% endif %}" loading="lazy" alt="">{% else %}<span class="album-thumbnail album-placeholder grid h-12 w-12 place-items-center rounded-field bg-base-200 text-sm" aria-hidden="true">PF</span>{% endif %}<span class="album-copy min-w-0 truncate font-medium">{{ album.name }}<small class="block text-xs font-normal text-base-content/60">{{ album.asset_count }} assets</small></span></span><b class="text-xs text-primary" data-album-state>{{ 'Current' if album.id == settings.frame.album_id else 'Choose' }}</b></label>{% endfor %}
+        </fieldset>
+        <div class="album-confirmation" data-album-confirmation hidden><div class="album-confirmation-actions flex flex-wrap items-center gap-2"><form method="post" action="/album/select" data-album-confirm-form><input type="hidden" name="album_id" value="">{{ actions.button('Use album', type='submit', attrs={'data-album-confirm-button': ''}) }}</form>{{ actions.button('Cancel', 'quiet', attrs={'data-album-cancel': ''}) }}</div></div>{% endif %}
+      </div>
+    {% endcall %}
+    {% call surfaces.disclosure('Default photo layout', photo_layout_label(settings.frame.default_framing), 'default-layout-settings', 'frame-settings', false, 'setting-card', {'data-settings-panel': 'default-layout', 'data-default-open': 'false'}) %}
+      <form method="post" action="/photo/default-layout" hx-post="/photo/default-layout" hx-target="#workspace" hx-swap="outerHTML" class="form-grid grid gap-3 sm:grid-cols-2">
+        <p class="interaction-note text-sm text-base-content/70 sm:col-span-2">Used for photos without saved framing. Custom photo layouts stay as saved.</p>
+        {{ forms.select_field('default-fit', 'fit_mode', 'Fit', [('fill', 'Fill frame'), ('fit', 'Show whole photo')], settings.frame.default_framing.fit_mode) }}
+        {{ forms.select_field('default-matte', 'matte', 'Background', [('blur', 'Soft photo'), ('colour', 'Colour wash'), ('white', 'White'), ('black', 'Black')], settings.frame.default_framing.matte, help='Used when showing the whole photo.') }}
+        <div class="form-actions sm:col-span-2">{{ actions.button('Save default layout', type='submit') }}</div>
+      </form>
+    {% endcall %}
+    {% call surfaces.disclosure('Schedule & orientation', display_summary, 'schedule-settings', 'frame-settings', false, 'setting-card', {'data-settings-panel': 'display', 'data-default-open': 'false'}) %}
+      <form method="post" action="/workflow" hx-post="/workflow" hx-target="#workspace" hx-swap="outerHTML" class="form-grid four grid gap-3 sm:grid-cols-2" data-schedule-form>
+        {{ forms.select_field('frame-orientation', 'orientation', 'Orientation', [('landscape', 'Landscape'), ('portrait', 'Portrait')], settings.frame.orientation.value) }}
+        {{ forms.select_field('frame-schedule-mode', 'schedule_mode', 'Schedule', [('interval', 'Interval'), ('daily', 'Daily'), ('weekly', 'Weekly')], settings.frame.schedule_mode.value, attrs={'data-schedule-mode': ''}) }}
+        {% include "_interval_controls.html" %}
+        <div data-schedule-fields="daily" class="fieldset w-full"><label class="fieldset-legend" for="daily-time">Daily time</label><input class="input w-full" id="daily-time" name="daily_time" type="time" value="{{ settings.frame.daily_time }}"></div>
+        <div data-schedule-fields="weekly" class="fieldset w-full"><label class="fieldset-legend" for="weekly-day">Weekday</label><select class="select w-full" id="weekly-day" name="weekly_day">{% for name in weekday_names %}<option value="{{ loop.index0 }}" {{ 'selected' if settings.frame.weekly_day == loop.index0 }}>{{ name }}</option>{% endfor %}</select></div>
+        <div data-schedule-fields="weekly" class="fieldset w-full"><label class="fieldset-legend" for="weekly-time">Weekly time</label><input class="input w-full" id="weekly-time" name="weekly_time" type="time" value="{{ settings.frame.weekly_time }}"></div>
+        <div class="schedule-preview rounded-box bg-base-200 p-3 text-sm sm:col-span-2" role="status"><strong>Next update if saved:</strong> <span data-schedule-preview>{{ next_change }}</span><small class="mt-1 block text-base-content/65">{{ settings.device.timezone }} time. Saving won't change the photo currently on the frame.</small></div>
+        <div class="sm:col-span-2">{{ forms.select_field('frame-photo-order', 'photo_order', 'Photo order', [('album', 'In album order'), ('shuffle', 'Shuffle')], settings.frame.photo_order.value) }}</div>
+        <div class="form-actions sm:col-span-2">{{ actions.button('Save settings', type='submit', disabled=not settings.frame.album_id) }}</div>
+      </form>
+    {% endcall %}
+  </div>
+</section>
