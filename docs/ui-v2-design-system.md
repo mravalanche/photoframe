@@ -31,6 +31,12 @@ These full-page captures show the live `/ui/showcase` route at desktop (1365px) 
 | [<img src="images/ui-v2-showcase-light-desktop.png" alt="Light theme component showcase at desktop width" width="560">](images/ui-v2-showcase-light-desktop.png) | [<img src="images/ui-v2-showcase-dark-desktop.png" alt="Dark theme component showcase at desktop width" width="560">](images/ui-v2-showcase-dark-desktop.png) |
 | [<img src="images/ui-v2-showcase-light-mobile.png" alt="Light theme component showcase at phone width" width="240">](images/ui-v2-showcase-light-mobile.png) | [<img src="images/ui-v2-showcase-dark-mobile.png" alt="Dark theme component showcase at phone width" width="240">](images/ui-v2-showcase-dark-mobile.png) |
 
+The integrated mobile screens below use demo data at 390px. The Frame capture shows the contextual Next photo action above the fixed navigation. The Photos capture shows the compact library and its photo-layout table disclosure. The Updates capture shows the current installation state.
+
+| Frame | Photos | Updates |
+| --- | --- | --- |
+| [<img src="images/ui-v2-frame-mobile.png" alt="Frame screen on a phone with status and Next photo action" width="240">](images/ui-v2-frame-mobile.png) | [<img src="images/ui-v2-photos-mobile.png" alt="Photos screen on a phone with a photo rail and layout table disclosure" width="240">](images/ui-v2-photos-mobile.png) | [<img src="images/ui-v2-updates-mobile.png" alt="Updates screen on a phone showing installation status" width="240">](images/ui-v2-updates-mobile.png) |
+
 ## Typography and rhythm
 
 Inter Variable is the body and control face. Newsreader Variable is the display face for the page title, section headings and editorial photo captions. Use `.pf-display-title` for the main title and `.pf-section-title` for section titles. Use `.pf-eyebrow` sparingly for short uppercase labels; `.pf-supporting` for secondary copy; `.pf-tabular` for numbers that update in place. Keep body copy at 16px, controls at 14–16px, and reserve 12px for short metadata. Text columns use `.pf-measure` (70ch maximum).
