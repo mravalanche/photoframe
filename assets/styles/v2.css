@@ -1,0 +1,7 @@
+/* The Python app serves the compiled stylesheet; Node is only needed to rebuild it. */
+@import "tailwindcss" source(none);
+@source "../../src/photoframe/templates";
+@source "../../src/photoframe/static";
+@source not "../../src/photoframe/static/v2.css";
+@source not "../../src/photoframe/static/vendor";
+@plugin "daisyui";
