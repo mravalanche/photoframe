@@ -33,6 +33,9 @@ class ServiceProvider:
         del photo_id
         return b"image", "image/jpeg"
 
+    def render_preview(self, photo_id: str) -> tuple[bytes, str]:
+        return self.thumbnail(photo_id)
+
     def original(self, photo_id: str) -> tuple[bytes, str]:
         del photo_id
         return b"image", "image/jpeg"
