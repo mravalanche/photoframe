@@ -1,6 +1,6 @@
 {# Call blocks put varied content into one consistent surface. #}
-{% macro card(title='', subtitle='', heading_id='', variant='default') -%}
-<section class="card border border-base-300{% if variant == 'soft' %} bg-base-200{% elif variant == 'emphasis' %} bg-primary text-primary-content{% else %} bg-base-100{% endif %}"{% if heading_id %} aria-labelledby="{{ heading_id }}"{% endif %}>
+{% macro card(title='', subtitle='', heading_id='', variant='default', extra_classes='', attrs={}) -%}
+<section class="card border border-base-300{% if variant == 'soft' %} bg-base-200{% elif variant == 'emphasis' %} bg-primary text-primary-content{% else %} bg-base-100{% endif %}{% if extra_classes %} {{ extra_classes }}{% endif %}"{% if heading_id %} aria-labelledby="{{ heading_id }}"{% endif %}{% if attrs %} {{ attrs|xmlattr }}{% endif %}>
   <div class="card-body gap-4">
     {% if title %}<div><h2 class="card-title"{% if heading_id %} id="{{ heading_id }}"{% endif %}>{{ title }}</h2>{% if subtitle %}<p class="text-sm opacity-75">{{ subtitle }}</p>{% endif %}</div>{% endif %}
     {{ caller() }}
@@ -8,8 +8,8 @@
 </section>
 {%- endmacro %}
 
-{% macro disclosure(title, summary='', id='', name='', open=false) -%}
-<details class="collapse collapse-arrow border border-base-300 bg-base-100"{% if id %} id="{{ id }}"{% endif %}{% if name %} name="{{ name }}"{% endif %}{% if open %} open{% endif %}>
+{% macro disclosure(title, summary='', id='', name='', open=false, extra_classes='', attrs={}) -%}
+<details class="collapse collapse-arrow border border-base-300 bg-base-100{% if extra_classes %} {{ extra_classes }}{% endif %}"{% if id %} id="{{ id }}"{% endif %}{% if name %} name="{{ name }}"{% endif %}{% if open %} open{% endif %}{% if attrs %} {{ attrs|xmlattr }}{% endif %}>
   <summary class="collapse-title flex min-h-12 items-center justify-between gap-3 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"><span>{{ title }}</span>{% if summary %}<span class="text-sm font-normal text-base-content/70">{{ summary }}</span>{% endif %}</summary>
   <div class="collapse-content">{{ caller() }}</div>
 </details>

@@ -69,6 +69,21 @@ def test_component_attribute_values_are_escaped() -> None:
     assert "<unsafe>" not in html
 
 
+def test_surface_components_accept_outer_interaction_hooks() -> None:
+    html = (
+        environment()
+        .from_string(
+            '{% import "components/surfaces.html" as surfaces %}'
+            '{% call surfaces.card("Frame", attrs={"data-frame": "ready"}) %}Photo{% endcall %}'
+            '{% call surfaces.disclosure("Album", attrs={"data-settings-panel": "album"}) %}'
+            'Choices{% endcall %}'
+        )
+        .render()
+    )
+    assert 'data-frame="ready"' in html
+    assert 'data-settings-panel="album"' in html
+
+
 def test_showcase_route_uses_only_the_two_supported_themes(tmp_path: Path) -> None:
     app = create_app(tmp_path, demo_mode=True)
     client = TestClient(app)
