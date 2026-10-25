@@ -1,5 +1,17 @@
-      <section class="setting-card" data-settings-panel="provider" aria-labelledby="provider-title"><div class="settings-intro"><h2 id="provider-title" tabindex="-1">Photo provider</h2><p>{{ 'Connected' if settings.verification.ok else 'Needs attention' }}</p></div>
-        <form method="post" action="/connection" hx-post="/connection" hx-target="#workspace" hx-swap="outerHTML" class="form-grid">
-          <label>Provider<select name="provider_kind"><option value="immich">Immich</option></select></label><label>Server URL<input name="server_url" type="url" required placeholder="https://photos.example.com" value="{{ settings.provider.server_url or '' }}"><small>A new server needs a new API key.</small></label><label class="span-2">API key<input name="api_key" type="password" {% if not credential_saved and not demo_mode %}required{% endif %} autocomplete="new-password" placeholder="{{ 'Saved — leave blank to keep it' if credential_saved else 'Paste an Immich API key' }}"><small>The key is never shown again. Changing the server or key clears the album choice, hidden photos and local cache.</small></label><div class="form-actions span-2"><button class="primary">Save & verify</button><span>{{ settings.verification.message }}</span></div>
-        </form>
-      </section>
+{% import "components/actions.html" as actions %}
+{% import "components/feedback.html" as feedback %}
+{% import "components/forms.html" as fields %}
+<section class="setting-card card border border-base-300 bg-base-100" data-settings-panel="provider" aria-labelledby="provider-title">
+  <div class="settings-intro card-body flex flex-wrap items-start justify-between gap-3 pb-0">
+      <div><h2 id="provider-title" tabindex="-1" class="card-title text-2xl">Photo provider</h2><p class="text-sm text-base-content/70">Connect to the library that supplies your frame.</p></div>
+      {{ feedback.badge('Connected' if settings.verification.ok else 'Needs attention', 'success' if settings.verification.ok else 'warning') }}
+  </div>
+  <div class="card-body pt-0">
+    <form method="post" action="/connection" hx-post="/connection" hx-target="#workspace" hx-swap="outerHTML" class="grid gap-4 md:grid-cols-2">
+      {{ fields.select_field('provider-kind', 'provider_kind', 'Provider', [('immich', 'Immich')], 'immich') }}
+      {{ fields.input_field('server-url', 'server_url', 'Server URL', settings.provider.server_url or '', type='url', required=true, placeholder='https://photos.example.com', help='Changing the server requires a new API key.') }}
+      <div class="md:col-span-2">{{ fields.input_field('api-key', 'api_key', 'API key', type='password', required=not credential_saved and not demo_mode, autocomplete='new-password', placeholder='Saved — leave blank to keep it' if credential_saved else 'Paste an Immich API key', help='The key is never shown again. Changing the server or key clears the album choice, hidden photos, and local cache.') }}</div>
+      <div class="flex flex-wrap items-center gap-3 md:col-span-2">{{ actions.button('Save & verify', type='submit') }}<span class="text-sm text-base-content/70" role="status">{{ settings.verification.message }}</span></div>
+    </form>
+  </div>
+</section>
