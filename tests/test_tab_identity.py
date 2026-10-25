@@ -88,7 +88,7 @@ const vm = require('node:vm');
 const identity = require({json.dumps(str(identity_script))});
 const documentListeners = {{}};
 const windowListeners = {{}};
-const themeButton = {{ dataset: {{ themeChoice: 'dark' }}, setAttribute(name, value) {{ this[name] = value; }} }};
+const themeButton = {{ dataset: {{ themeChoice: 'light' }}, setAttribute(name, value) {{ this[name] = value; }} }};
 const notice = {{ dataset: {{ autoDismiss: '6000' }} }};
 const panel = {{
   open: false,
