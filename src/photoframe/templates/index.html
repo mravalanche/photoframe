@@ -9,15 +9,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#fffefa">
   <script>
     (() => {
       let saved = null;
       try { saved = window.localStorage.getItem('photoframe-theme'); } catch (_error) { /* unavailable */ }
       document.documentElement.dataset.theme = saved === 'dark' ? 'photoframe-dark' : 'photoframe-light';
+      document.querySelector('meta[name="theme-color"]').content = saved === 'dark' ? '#1c2721' : '#fffefa';
     })();
   </script>
   <title>{{ 'Settings · ' if settings_section else 'Photos · ' if view|default('frame') == 'photos' else '' }}Photoframe</title>
+  <link rel="icon" href="{{ url_for('static', path='/favicon.ico') }}" sizes="any">
+  <link rel="icon" href="{{ url_for('static', path='/favicon-32.png') }}" type="image/png" sizes="32x32">
   <link rel="icon" href="{{ url_for('static', path='/photoframe.svg') }}" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="{{ url_for('static', path='/apple-touch-icon.png') }}" sizes="180x180">
+  <link rel="manifest" href="{{ url_for('static', path='/manifest.webmanifest') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='/v2.css') }}?v={{ version }}">
   <script src="/static/update-status.js?v={{ version }}" defer></script>
   {% if settings_section == 'updates' %}<script src="/static/updates.js?v={{ version }}" defer></script>{% endif %}
@@ -28,7 +34,7 @@
 <body data-page="{{ 'settings' if settings_section else view|default('frame') }}" class="min-h-screen bg-base-200 text-base-content">
   <header class="sticky top-0 z-50 border-b border-base-300 bg-base-100/95 backdrop-blur">
     <div class="navbar mx-auto max-w-7xl gap-3 px-4 md:px-6">
-      <a href="/" class="inline-flex min-h-11 items-center gap-2 text-xl font-semibold tracking-tight text-base-content no-underline" aria-label="Photoframe home"><span class="grid size-9 place-items-center rounded-full border border-primary text-primary"><img class="size-6" src="{{ url_for('static', path='/photoframe.svg') }}" alt=""></span><span class="pf-section-title">photoframe</span></a>
+      <a href="/" class="inline-flex min-h-11 items-center gap-2 text-xl font-semibold tracking-tight text-base-content no-underline" aria-label="Photoframe home"><img class="size-9" src="{{ url_for('static', path='/photoframe.svg') }}" alt=""><span class="pf-section-title">photoframe</span></a>
       <div class="ml-auto flex items-center gap-2">
         <a class="badge badge-outline hidden gap-1 sm:inline-flex" href="/settings/updates" title="Software updates" data-update-badge><span data-update-icon aria-hidden="true">○</span><span data-update-label>Update status</span></a>
         <div class="join hidden sm:inline-flex" role="group" aria-label="Colour theme">
@@ -63,6 +69,7 @@
   <script>
     function setTheme(theme) {
       document.documentElement.dataset.theme = theme === 'dark' ? 'photoframe-dark' : 'photoframe-light';
+      document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#1c2721' : '#fffefa';
       try { window.localStorage.setItem('photoframe-theme', theme); } catch (_error) { /* unavailable */ }
       document.querySelectorAll('[data-theme-choice]').forEach(button => {
         button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme));

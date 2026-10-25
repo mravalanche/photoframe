@@ -318,6 +318,9 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
         tab_identity = client.get("/static/tab-identity.js")
         responsive_css = client.get("/static/responsive-fixes.css")
         icon = client.get("/static/photoframe.svg")
+        png_icon = client.get("/static/favicon-32.png")
+        touch_icon = client.get("/static/apple-touch-icon.png")
+        manifest = client.get("/static/manifest.webmanifest")
 
     assert "/static/vendor/htmx-2.0.4.min.js" in page.text
     assert "unpkg.com" not in page.text
@@ -333,6 +336,11 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert "setupAlbumSelection" in page.text
     assert ".notification-stack" in responsive_css.text
     assert 'rel="icon" href="http://testserver/static/photoframe.svg"' in page.text
+    assert 'href="http://testserver/static/favicon-32.png"' in page.text
+    assert 'href="http://testserver/static/favicon.ico"' in page.text
+    assert 'href="http://testserver/static/apple-touch-icon.png"' in page.text
+    assert 'href="http://testserver/static/manifest.webmanifest"' in page.text
+    assert 'name="theme-color" content="#fffefa"' in page.text
     assert 'alt=""' in page.text
     assert 'class="device-status online badge' in workspace.text
     assert "data-settings-accordion" in workspace.text
@@ -349,7 +357,11 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert "htmx:configRequest" in page.text
     assert ".setting-card[open]" in responsive_css.text
     assert icon.status_code == 200
-    assert 'id="mdi-image-frame"' in icon.text
+    assert 'id="photoframe-pixel-mark"' in icon.text
+    assert png_icon.status_code == 200
+    assert touch_icon.status_code == 200
+    assert manifest.status_code == 200
+    assert '"purpose": "maskable"' in manifest.text
     assert 'action="/photo/start"' in selected_workspace.text
     assert "Start rotation here" in selected_workspace.text
     assert "Display hardware" in hardware_settings.text

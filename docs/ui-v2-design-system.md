@@ -22,6 +22,12 @@ Use `data-theme="photoframe-light"` or `data-theme="photoframe-dark"` on the roo
 
 Each semantic background has its own `*-content` colour in both themes. Never convey a status by colour alone: pair the colour with a label or message.
 
+## App icon
+
+![Photoframe pixel landscape icon](../src/photoframe/static/photoframe.svg)
+
+The icon is a pixel landscape inside a spruce frame, using the dark theme's mint and green palette. It draws on the compact block motif used in the owner's other projects while remaining recognizable as a photo frame. The [SVG](../src/photoframe/static/photoframe.svg) is the canonical artwork. The page also links PNG and ICO favicons, a 180px Apple touch icon, and a web manifest with 192px, 512px and maskable PNGs for mobile install surfaces. Run `python scripts/build_app_icons.py` after changing the SVG to regenerate those formats. The browser's theme colour follows the chosen light or dark theme.
+
 ## Visual reference
 
 These full-page captures show the live `/ui/showcase` route at desktop (1365px) and mobile (390px). The page renders the same shared Jinja components used throughout the app. Open an image for full resolution.

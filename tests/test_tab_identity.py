@@ -98,7 +98,7 @@ const panel = {{
 const documentMock = {{
   documentElement: {{ dataset: {{ theme: 'photoframe-dark' }} }},
   addEventListener(name, callback) {{ documentListeners[name] = callback; }},
-  querySelector() {{ return null; }},
+  querySelector(selector) {{ return selector === 'meta[name="theme-color"]' ? {{content: ''}} : null; }},
   querySelectorAll(selector) {{
     if (selector === '[data-theme-choice]') return [themeButton];
     if (selector === '[data-notice][data-auto-dismiss]') return [notice];
