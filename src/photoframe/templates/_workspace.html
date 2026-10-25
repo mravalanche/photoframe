@@ -46,16 +46,22 @@
     </div>
     <p class="interaction-note">Preview a photo, then choose <strong>Show now</strong> to put it on the frame.</p>
     {% else %}<p class="empty-candidates" role="status">No photos to preview. Restore a hidden photo or choose another album.</p>{% endif %}
-    {% if layout_rows %}<details class="photo-layouts"><summary>Photo layouts ({{ layout_rows|length }})</summary>
-      <p class="interaction-note">The default follows your frame setting. Custom layouts stay as saved.</p>
-      <div class="photo-layout-list">
-        {% for row in layout_rows %}<div class="photo-layout-row">
-          <span class="photo-layout-name" title="{{ row.photo.filename }}">{{ row.photo.filename }}</span>
-          <span class="photo-layout-value">{{ 'Not set' if row.needs_framing else photo_layout_label(row.framing) }}</span>
-          <span class="photo-layout-source">{{ 'Needs framing' if row.needs_framing else 'Custom' if row.custom else 'Default' }}{% if row.framing.hidden %} · Hidden{% elif row.unavailable %} · Unavailable{% endif %}</span>
-          {% if row.framing.hidden %}<form method="post" action="/photo/unhide" hx-post="/photo/unhide" hx-target="#workspace" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ row.photo.id }}"><button class="secondary">Restore</button></form>
-          {% elif not row.unavailable %}<form method="post" action="/photo/preview" hx-post="/photo/preview" hx-target="#workspace" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ row.photo.id }}"><button class="secondary">Preview</button></form>{% endif %}
-        </div>{% endfor %}
+    {% if layout_rows %}<details class="photo-layouts setting-card"><summary><span class="setting-summary-main"><strong>Photo layouts</strong></span><span class="setting-summary-end"><span class="setting-status">{{ layout_rows|length }} {{ 'photo' if layout_rows|length == 1 else 'photos' }}</span><span class="disclosure-icon" aria-hidden="true"></span></span></summary>
+      <div class="photo-layouts-content">
+        <p class="interaction-note">The default follows your frame setting. Custom layouts stay as saved.</p>
+        <p class="photo-layout-scroll-hint">Scroll sideways to see all columns.</p>
+        <div class="photo-layout-table-scroll" role="region" aria-label="Photo layouts table" tabindex="0">
+          <table class="photo-layout-table">
+            <thead><tr><th scope="col">Photo</th><th scope="col">Layout</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead>
+            <tbody>{% for row in layout_rows %}<tr>
+              <th scope="row" class="photo-layout-name">{{ row.photo.filename }}</th>
+              <td>{{ 'Not set' if row.needs_framing else photo_layout_label(row.framing) }}</td>
+              <td class="photo-layout-source">{{ 'Needs framing' if row.needs_framing else 'Custom' if row.custom else 'Default' }}{% if row.framing.hidden %} · Hidden{% elif row.unavailable %} · Unavailable{% endif %}</td>
+              <td class="photo-layout-action">{% if row.framing.hidden %}<form method="post" action="/photo/unhide" hx-post="/photo/unhide" hx-target="#workspace" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ row.photo.id }}"><button class="secondary" aria-label="Restore {{ row.photo.filename }}">Restore</button></form>
+              {% elif not row.unavailable %}<form method="post" action="/photo/preview" hx-post="/photo/preview" hx-target="#workspace" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ row.photo.id }}"><button class="secondary" aria-label="Preview {{ row.photo.filename }}">Preview</button></form>{% else %}<span aria-hidden="true">—</span><span class="visually-hidden">No action available</span>{% endif %}</td>
+            </tr>{% endfor %}</tbody>
+          </table>
+        </div>
       </div>
     </details>{% endif %}
   </section>
