@@ -1,0 +1,8 @@
+{# Shared action variants. Layout belongs to the caller; tones and sizes belong here. #}
+{% macro button(label, variant='primary', size='md', type='button', id='', disabled=false, loading=false, attrs={}) -%}
+<button type="{{ type }}"{% if id %} id="{{ id }}"{% endif %} class="btn focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary{% if variant == 'primary' %} btn-primary{% elif variant == 'secondary' %} btn-outline{% elif variant == 'quiet' %} btn-ghost{% elif variant == 'danger' %} btn-error{% elif variant == 'success' %} btn-success{% endif %}{% if size == 'sm' %} btn-sm{% elif size == 'lg' %} btn-lg{% endif %}"{% if disabled or loading %} disabled{% endif %}{% if loading %} aria-busy="true"{% endif %}{% if attrs %} {{ attrs|xmlattr }}{% endif %}>{% if loading %}<span class="loading loading-spinner loading-sm" aria-hidden="true"></span>{% endif %}{{ label }}</button>
+{%- endmacro %}
+
+{% macro link(label, href, variant='text', size='md', active=false, attrs={}) -%}
+<a href="{{ href }}" class="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary{% if variant == 'primary' %} btn btn-primary{% elif variant == 'secondary' %} btn btn-outline{% elif variant == 'quiet' %} btn btn-ghost{% else %} link link-primary{% endif %}{% if size == 'sm' and variant != 'text' %} btn-sm{% elif size == 'lg' and variant != 'text' %} btn-lg{% endif %}"{% if active %} aria-current="page"{% endif %}{% if attrs %} {{ attrs|xmlattr }}{% endif %}>{{ label }}</a>
+{%- endmacro %}
