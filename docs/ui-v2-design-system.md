@@ -22,6 +22,15 @@ Use `data-theme="photoframe-light"` or `data-theme="photoframe-dark"` on the roo
 
 Each semantic background has its own `*-content` colour in both themes. Never convey a status by colour alone: pair the colour with a label or message.
 
+## Visual reference
+
+These full-page captures show the live `/ui/showcase` route at desktop (1365px) and mobile (390px). The page renders the same shared Jinja components used throughout the app. Open an image for full resolution.
+
+| Light | Dark |
+| --- | --- |
+| [<img src="images/ui-v2-showcase-light-desktop.png" alt="Light theme component showcase at desktop width" width="560">](images/ui-v2-showcase-light-desktop.png) | [<img src="images/ui-v2-showcase-dark-desktop.png" alt="Dark theme component showcase at desktop width" width="560">](images/ui-v2-showcase-dark-desktop.png) |
+| [<img src="images/ui-v2-showcase-light-mobile.png" alt="Light theme component showcase at phone width" width="240">](images/ui-v2-showcase-light-mobile.png) | [<img src="images/ui-v2-showcase-dark-mobile.png" alt="Dark theme component showcase at phone width" width="240">](images/ui-v2-showcase-dark-mobile.png) |
+
 ## Typography and rhythm
 
 Inter Variable is the body and control face. Newsreader Variable is the display face for the page title, section headings and editorial photo captions. Use `.pf-display-title` for the main title and `.pf-section-title` for section titles. Use `.pf-eyebrow` sparingly for short uppercase labels; `.pf-supporting` for secondary copy; `.pf-tabular` for numbers that update in place. Keep body copy at 16px, controls at 14–16px, and reserve 12px for short metadata. Text columns use `.pf-measure` (70ch maximum).
