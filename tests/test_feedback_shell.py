@@ -123,7 +123,7 @@ const rail = {{scrollLeft: 0}};
 const dialog = {{
   dataset: {{editorOpen: 'true'}}, open: false,
   addEventListener(name, callback) {{ listeners[name] = callback; }},
-  querySelector: () => ({{addEventListener(name, callback) {{ closeClick = callback; }}}}),
+  querySelectorAll: () => [{{addEventListener(name, callback) {{ closeClick = callback; }}}}],
   showModal() {{ this.open = true; opened++; }},
   close() {{ this.open = false; listeners.close(); }},
 }};

@@ -497,7 +497,9 @@
       if (!dialog.dataset.editorReady) {
         dialog.dataset.editorReady = 'true';
         dialog.addEventListener('close', restorePhotoEditorFocus);
-        dialog.querySelector('[data-photo-editor-close]')?.addEventListener('click', () => dialog.close());
+        dialog.querySelectorAll('[data-photo-editor-close]').forEach(control => {
+          control.addEventListener('click', () => dialog.close());
+        });
       }
       if (dialog.dataset.editorOpen !== 'true' || dialog.open) return;
       dialog.dataset.editorOpen = 'false';
