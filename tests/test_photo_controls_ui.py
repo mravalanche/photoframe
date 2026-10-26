@@ -71,7 +71,9 @@ def test_portrait_controls_and_last_hidden_photo_remain_recoverable(tmp_path: Pa
         ).text
         assert "Show whole photo" in page
         assert "Fill frame" in page
-        assert "Save framing to include this photo" in page
+        assert "Ready to show using the current layout" in page
+        assert "data-photo-editor-dialog" in page
+        assert 'data-editor-open="true"' in page
         assert f"/photos/{portrait.id}/prepared?" in page
         assert "The original stays in your library" in page
         for photo in photos:
@@ -90,4 +92,4 @@ def test_portrait_controls_and_last_hidden_photo_remain_recoverable(tmp_path: Pa
         restored = client.post(
             "/photo/unhide", headers=PHOTOS_VIEW, data={"photo_id": portrait.id}
         ).text
-        assert f'aria-label="Preview {portrait.filename}"' in restored
+        assert f'aria-label="Frame photo {portrait.filename}"' in restored

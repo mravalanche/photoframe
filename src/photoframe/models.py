@@ -96,8 +96,9 @@ class FrameSettings(BaseModel):
         return bool(saved and saved.included)
 
     def allows(self, photo: "Photo") -> bool:
-        preference = self.preference(photo.id)
-        return not preference.hidden and (preference.included or photo.matches(self.orientation))
+        # Orientation changes how a photo is framed, not whether it can rotate.
+        # Unsaved photos already resolve through the frame's default layout.
+        return not self.preference(photo.id).hidden
 
     orientation: Orientation = Orientation.LANDSCAPE
     rotation_seconds: Annotated[int, Field(ge=30, le=2_592_000)] = 3600

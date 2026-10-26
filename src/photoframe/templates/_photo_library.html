@@ -1,9 +1,10 @@
 {% import "components/actions.html" as actions %}
 {% import "components/data.html" as data %}
 {% import "components/feedback.html" as feedback %}
+{% import "components/forms.html" as forms %}
 {% import "components/surfaces.html" as surfaces %}
 <section class="library-section space-y-5" aria-label="Photo library">
-  <p class="eligibility-summary flex flex-wrap gap-2 text-sm">{{ feedback.badge(eligible|length ~ ' in rotation', 'success') }}{{ feedback.badge(hidden_photos|length ~ ' hidden') }}{{ feedback.badge(wrong_orientation_count ~ ' need framing', 'warning') }}{{ feedback.badge(unsupported_count ~ ' unavailable') }}</p>
+  <p class="eligibility-summary flex flex-wrap gap-2 text-sm">{{ feedback.badge(eligible|length ~ ' in rotation', 'success') }}{{ feedback.badge(hidden_photos|length ~ ' hidden') }}{% if unsupported_count %}{{ feedback.badge(unsupported_count ~ ' unavailable', 'error') }}{% endif %}</p>
   <form method="post" action="/album/refresh" data-album-refresh-form hx-post="/album/refresh" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML" hx-disabled-elt="find button" hx-indicator="#album-refresh-progress" class="album-recovery flex flex-wrap items-center gap-3" hx-sync="this:drop">
     {{ actions.button('Refresh photos & thumbnails', 'secondary', 'sm', type='submit', disabled=render_state.active) }}
     <span id="album-refresh-progress" class="htmx-indicator text-sm" role="status">Refreshing photos…</span>
@@ -21,16 +22,22 @@
   {% endif %}
 
   {% if layout_rows %}
-    {% call surfaces.disclosure('Photo layouts', layout_rows|length ~ (' photo' if layout_rows|length == 1 else ' photos'), 'photo-layouts', extra_classes='photo-layouts setting-card', attrs={'data-photo-layouts': ''}) %}
-      <p class="mb-3 text-sm text-base-content/65">The default follows your frame setting. Custom layouts stay as saved.</p>
+    {% call surfaces.disclosure('Photo layouts', layout_rows|length ~ (' photo' if layout_rows|length == 1 else ' photos'), 'photo-layouts', open=photo_layouts_open|default(false), extra_classes='photo-layouts setting-card', attrs={'data-photo-layouts': ''}) %}
+      <form class="mb-5 grid gap-3 rounded-box bg-base-200 p-3 sm:grid-cols-2" method="post" action="/photo/layouts/all" hx-post="/photo/layouts/all" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML">
+        <div class="sm:col-span-2"><h3 class="font-semibold">Set all photo layouts</h3><p class="text-sm text-base-content/70">Sets the frame default and resets custom layouts in this album. Hidden photos stay hidden; originals are unchanged.</p></div>
+        {{ forms.select_field('all-photo-fit', 'fit_mode', 'Fit', [('fill', 'Fill frame'), ('fit', 'Show whole photo')], settings.frame.default_framing.fit_mode) }}
+        {{ forms.select_field('all-photo-matte', 'matte', 'Background', [('blur', 'Soft photo'), ('colour', 'Colour wash'), ('white', 'White'), ('black', 'Black')], settings.frame.default_framing.matte) }}
+        <div class="sm:col-span-2">{{ actions.button('Apply to all photos', 'secondary', type='submit', disabled=render_state.active) }}</div>
+      </form>
+      <p class="mb-3 text-sm text-base-content/65">Every usable photo follows the default automatically. Native orientation matches the display; default framing adapts another orientation. Custom framing is a saved per-photo choice.</p>
       <p class="mb-2 text-xs text-base-content/65 sm:hidden">Scroll sideways to see all columns.</p>
       {% call data.table('Photo layouts', ['Photo', 'Layout', 'Status', 'Action'], 'photo-layout-table') %}
         {% for row in layout_rows %}<tr>
           <th scope="row" class="photo-layout-name max-w-44 break-words font-medium">{{ row.photo.filename }}</th>
-          <td class="min-w-44">{{ 'Not set' if row.needs_framing else photo_layout_label(row.framing) }}</td>
-          <td class="min-w-40">{{ feedback.badge('Needs framing', 'warning') if row.needs_framing else feedback.badge('Custom', 'primary') if row.custom else feedback.badge('Default') }}{% if row.framing.hidden %} {{ feedback.badge('Hidden') }}{% elif row.unavailable %} {{ feedback.badge('Unavailable', 'error') }}{% endif %}</td>
+          <td class="min-w-44">{{ photo_layout_label(row.framing) }}</td>
+          <td class="min-w-40">{% if row.unavailable %}{{ feedback.badge('Unavailable', 'error') }}<p class="mt-1 max-w-52 text-xs">The image could not be decoded. Refresh photos to retry.</p>{% else %}{{ feedback.badge('Custom framing', 'primary') if row.custom else feedback.badge('Native orientation') if row.native else feedback.badge('Default framing') }}{% endif %}{% if row.framing.hidden %} {{ feedback.badge('Hidden') }}{% endif %}</td>
           <td class="min-w-24">{% if row.framing.hidden %}<form method="post" action="/photo/unhide" hx-post="/photo/unhide" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ row.photo.id }}">{{ actions.button('Restore', 'secondary', 'sm', type='submit', attrs={'aria-label': 'Restore ' ~ row.photo.filename}) }}</form>
-          {% elif not row.unavailable %}<form method="post" action="/photo/preview" hx-post="/photo/preview" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ row.photo.id }}">{{ actions.button('Preview', 'secondary', 'sm', type='submit', attrs={'aria-label': 'Preview ' ~ row.photo.filename}) }}</form>{% else %}<span class="text-base-content/50" aria-hidden="true">—</span><span class="sr-only">No action available</span>{% endif %}</td>
+          {% elif not row.unavailable %}<form method="post" action="/photo/preview" hx-post="/photo/preview?source=layouts" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ row.photo.id }}">{{ actions.button('Edit framing' if row.custom else 'Preview' if row.native else 'Frame photo', 'secondary', 'sm', type='submit', attrs={'aria-label': ('Edit framing for ' if row.custom else 'Preview ' if row.native else 'Frame photo ' ) ~ row.photo.filename}) }}</form>{% else %}<span class="text-base-content/50" aria-hidden="true">—</span><span class="sr-only">No action available</span>{% endif %}</td>
         </tr>{% endfor %}
       {% endcall %}
     {% endcall %}

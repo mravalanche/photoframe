@@ -21,16 +21,18 @@ def test_selection_is_deterministic_and_rotates_from_chosen_start():
     second = active_selection(photos, frame, anchor + timedelta(seconds=60))
     assert first.photo is not None
     assert second.photo is not None
-    assert (first.photo.id, first.eligible_count, first.position) == ("b", 2, 1)
-    assert (second.photo.id, second.position) == ("a", 2)
+    assert (first.photo.id, first.eligible_count, first.position) == ("b", 3, 1)
+    assert (second.photo.id, second.position) == ("portrait", 2)
 
 
-def test_square_and_unknown_dimensions_are_not_eligible():
+def test_square_and_unknown_dimensions_use_default_layout():
     photos = [
         Photo(id="square", filename="s", width=10, height=10),
         Photo(id="unknown", filename="u"),
     ]
-    assert active_selection(photos, FrameSettings()).photo is None
+    selection = active_selection(photos, FrameSettings())
+    assert selection.photo is not None
+    assert selection.eligible_count == 2
 
 
 def test_eligibility_reports_orientation_and_decode_failures_separately():
@@ -42,7 +44,7 @@ def test_eligibility_reports_orientation_and_decode_failures_separately():
 
     summary = classify_photos(photos, FrameSettings(), lambda photo: photo.id != "heic")
 
-    assert [photo.id for photo in summary.eligible] == ["ready"]
+    assert [photo.id for photo in summary.eligible] == ["portrait", "ready"]
     assert summary.wrong_orientation == 1
     assert summary.unsupported == 1
 

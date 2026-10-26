@@ -472,6 +472,34 @@ class ConfigurationService:
             )
         return "Default photo layout saved"
 
+    def apply_layout_to_all(self, framing: PhotoFraming) -> str:
+        """Set the default and reset only this album's custom layouts atomically."""
+        with self.runtime.photo_edit():
+            _albums, photos = self.runtime.catalog_snapshot()
+            current = self.repository.load()
+            if not current.verification.ok or not current.frame.album_id or not photos:
+                raise ValueError("Choose a loaded album before setting all photo layouts")
+            photo_ids = {photo.id for photo in photos}
+
+            def save(settings: AppSettings) -> None:
+                settings.frame.default_framing = framing
+                preferences = settings.frame.photo_preferences.setdefault(
+                    settings.frame.photo_scope, {}
+                )
+                for photo_id in photo_ids:
+                    previous = preferences.get(photo_id)
+                    if previous is not None:
+                        preferences[photo_id] = PhotoPreference(
+                            fit_mode=framing.fit_mode,
+                            matte=framing.matte,
+                            hidden=previous.hidden,
+                            included=False,
+                        )
+
+            self.repository.update(save)
+            self.runtime.reconcile_shuffle()
+        return "Default layout applied to all photos in this album; custom layouts reset"
+
     def set_hidden(self, photo_id: str, hidden: bool) -> str:
         with self.runtime.photo_edit():
             if self.runtime.photo(photo_id) is None:
@@ -541,6 +569,20 @@ class ConfigurationService:
         finally:
             self._reset_lock.release()
 
+    def _manual_render_completed(self, photo_id: str) -> None:
+        self.runtime.record_display_snapshot(photo_id)
+
+        def save(settings: AppSettings) -> None:
+            settings.refresh_status.last_rendered_photo_id = photo_id
+            settings.refresh_status.last_render_error = None
+
+        self.repository.update(save)
+
+    def _manual_render_failed(self, message: str) -> None:
+        self.repository.update(
+            lambda saved: setattr(saved.refresh_status, "last_render_error", message[:500])
+        )
+
     def start_render(self, operation_id: str | None = None) -> None:
         if self.runtime.maintenance_gate.maintenance:
             raise ValueError("Photoframe is preparing to restart for an update")
@@ -552,25 +594,21 @@ class ConfigurationService:
 
         self._require_eligible(photo.id)
 
-        def completed(photo_id: str) -> None:
-            self.runtime.record_display_snapshot(photo_id)
-            self.repository.update(
-                lambda saved: setattr(saved.refresh_status, "last_rendered_photo_id", photo_id)
-            )
-
         try:
             if self.runtime.has_display():
                 self.runtime.render_service.start(
                     photo.id,
                     operation_id=operation_id,
-                    on_complete=completed,
+                    on_complete=self._manual_render_completed,
+                    on_failure=self._manual_render_failed,
                 )
             else:
                 self.runtime.prepare_photo(photo.id)
                 self.runtime.renderer.start(
                     photo.id,
                     operation_id=operation_id,
-                    on_complete=completed,
+                    on_complete=self._manual_render_completed,
+                    on_failure=self._manual_render_failed,
                 )
         except ImageProcessingError:
             self.runtime.set_preview(None)
@@ -610,24 +648,20 @@ class ConfigurationService:
             cleared_preview = self.runtime.preview_id() is not None
             self.runtime.set_preview(None)
 
-            def completed(photo_id: str) -> None:
-                self.runtime.record_display_snapshot(photo_id)
-                self.repository.update(
-                    lambda saved: setattr(saved.refresh_status, "last_rendered_photo_id", photo_id)
-                )
-
             if self.runtime.has_display():
                 started = self.runtime.render_service.start(
                     candidate.id,
                     operation_id=operation_id,
-                    on_complete=completed,
+                    on_complete=self._manual_render_completed,
+                    on_failure=self._manual_render_failed,
                 )
             else:
                 self.runtime.prepare_photo(candidate.id)
                 started = self.runtime.renderer.start(
                     candidate.id,
                     operation_id=operation_id,
-                    on_complete=completed,
+                    on_complete=self._manual_render_completed,
+                    on_failure=self._manual_render_failed,
                 )
             if started.photo_id != candidate.id:
                 raise ValueError(

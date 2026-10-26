@@ -124,10 +124,10 @@ def test_complete_local_web_flow(tmp_path: Path):
         assert "Connected for test" in response.text
         assert "secret" not in response.text
         response = client.post("/album/select", data={"album_id": "album"})
-        assert "1 in rotation" in response.text
+        assert "2 in rotation" in response.text
         photos = client.get("/partials/workspace?view=photos")
-        assert "1 need framing" in photos.text
-        assert "0 unavailable" in photos.text
+        assert "Default framing" in photos.text
+        assert "Needs framing" not in photos.text
         assert "wide.jpg" in photos.text
         response = client.post(
             "/workflow",
@@ -314,8 +314,8 @@ def test_unsupported_assets_are_filtered_once_and_reported_by_category(tmp_path:
         refreshed = client.get("/partials/workspace?view=photos")
         rejected = client.post("/photo/preview", data={"photo_id": "heic"}, headers=PHOTOS_HEADERS)
 
-    assert "1 in rotation" in response.text
-    assert "1 need framing" in refreshed.text
+    assert "2 in rotation" in response.text
+    assert "Default framing" in refreshed.text
     assert "1 unavailable" in refreshed.text
     assert 'aria-label="Preview wide.jpg"' in refreshed.text
     assert 'aria-label="Preview phone.heic"' not in refreshed.text
@@ -323,7 +323,7 @@ def test_unsupported_assets_are_filtered_once_and_reported_by_category(tmp_path:
     assert "Unavailable" in refreshed.text
     assert 'aria-label="Preview phone.heic"' not in refreshed.text
     assert provider.original_calls == calls_after_scan
-    assert sorted(calls_after_scan) == ["heic", "wide"]
+    assert sorted(calls_after_scan) == ["heic", "tall", "wide"]
     assert "not eligible or cannot be decoded" in rejected.text
 
 
@@ -346,9 +346,9 @@ def test_decodable_provider_preview_keeps_heic_original_eligible(tmp_path: Path)
         )
         rendered = client.post("/render/start")
 
-    assert "2 in rotation" in response.text
-    assert "1 need framing" in refreshed.text
-    assert "0 unavailable" in refreshed.text
+    assert "3 in rotation" in response.text
+    assert "Default framing" in refreshed.text
+    assert "Unavailable" not in refreshed.text
     assert 'aria-label="Preview phone.heic"' in refreshed.text
     assert "phone.heic" in refreshed.text
     assert "Photo preview" in previewed.text
@@ -386,8 +386,8 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert "PhotoframeTabIdentity" in tab_identity.text
     assert "createBrowserSession" in page.text
     assert "randomUUID: () => self.crypto.randomUUID()" not in page.text
-    assert 'data-theme-choice="light" aria-pressed="true"' in page.text
-    assert 'data-theme-choice="dark" aria-pressed="false"' in page.text
+    assert 'data-theme-toggle aria-label="Dark mode" aria-pressed="false"' in page.text
+    assert "data-theme-choice=" not in page.text
     assert "setupNotifications" in page.text
     assert "setupAlbumSelection" in page.text
     assert ".notification-stack" in responsive_css.text
@@ -702,14 +702,14 @@ def test_shuffle_setting_persists_and_start_here_anchors_new_round(tmp_path: Pat
         saved = runtime.repository.load()
         first_deck = saved.frame.shuffle_photo_ids
         assert saved.frame.photo_order == PhotoOrder.SHUFFLE
-        assert len(first_deck) == 5
+        assert len(first_deck) == 6
 
         client.post("/photo/preview", data={"photo_id": "coast"})
         response = client.post("/photo/start", data={"photo_id": "coast"})
         saved = runtime.repository.load()
         assert "new shuffled round" in response.text
         assert saved.frame.shuffle_photo_ids[0] == "coast"
-        assert len(set(saved.frame.shuffle_photo_ids)) == 5
+        assert len(set(saved.frame.shuffle_photo_ids)) == 6
 
 
 def test_reset_clears_configuration_secret_cache_and_runtime(tmp_path: Path):
@@ -719,7 +719,7 @@ def test_reset_clears_configuration_secret_cache_and_runtime(tmp_path: Path):
         client.post("/album/select", data={"album_id": "album"})
         runtime = app.state.runtime
         runtime.cache.put(runtime._cache_key("wide"), b"cached-photo")
-        assert runtime.cache.stats().files == 1
+        assert runtime.cache.stats().files == 2
 
         response = client.post("/reset")
 
