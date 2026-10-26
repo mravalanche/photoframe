@@ -486,7 +486,10 @@
       if (rail) rail.scrollLeft = saved.railX;
       const forms = Array.from(document.querySelectorAll('form[action="/photo/preview"], form[action="/photo/unhide"]'))
         .filter(candidate => candidate.elements.photo_id?.value === saved.photoId);
-      const form = forms.find(candidate => Boolean(candidate.closest('.thumbnail')) === saved.fromRail)
+      const localRow = !saved.fromRail && forms.find(candidate =>
+        candidate.closest('#photo-layout-table') && candidate.closest('details')?.open,
+      );
+      const form = localRow || forms.find(candidate => Boolean(candidate.closest('.thumbnail')) === saved.fromRail)
         || forms[0];
       form?.querySelector('button[type="submit"]')?.focus({ preventScroll: true });
       window.scrollTo(0, saved.pageY);

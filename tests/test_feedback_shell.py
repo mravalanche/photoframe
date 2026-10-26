@@ -150,5 +150,15 @@ focused = false;
 photoEditorViewState.fromRail = true;
 restorePhotoEditorFocus();
 if (!focused || scrollY !== 900) throw Error('hidden-photo recovery lost the local action');
+// A top-of-page Undo notice must not steal focus from the visible table row.
+availableForms = [
+  {{elements: {{photo_id: {{value: 'portrait'}}}}, closest: () => null,
+    querySelector: () => ({{focus() {{ throw Error('offscreen Undo stole focus'); }}}})}},
+  {{elements: {{photo_id: {{value: 'portrait'}}}},
+    closest: selector => selector === '#photo-layout-table' ? {{}} : selector === 'details' ? {{open:true}} : null,
+    querySelector: () => trigger}},
+];
+photoEditorViewState.fromRail = false;
+restorePhotoEditorFocus();
 """
     subprocess.run([node, "-e", scenario], check=True)
