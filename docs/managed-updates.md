@@ -214,3 +214,33 @@ channel. Any manually provisioned earlier helper needs an explicit administrator
 For future candidates, validate startup, existing settings, album switching, scheduled render,
 and reboot on the physical frame. Exercise download/apply and retained-version rollback.
 Complete the remaining failure-injection checks above before claiming full physical acceptance.
+
+### Advanced release selection
+
+Software updates includes **Advanced: choose a release**. Load the published versions for the
+selected channel, choose a version newer than the running app, and choose **Verify selected
+release**. Publication dates and asset availability in the list are discovery metadata, not
+proof of trust or compatibility. Verification authenticates that one tag's manifest with the
+independently pinned public key and checks its exact version, channel, platform, updater protocol,
+settings compatibility and ability to restore the retained settings schema. A release with no
+complete signed bundle, a bad signature, incompatible settings, or an equal/older version cannot
+be installed through this picker.
+
+**Download & verify selected** then fetches and authenticates that exact published release again
+inside the privileged helper. It does not accept browser-provided URLs or manifests and does not
+depend on a prior browser verification result. **Apply & restart** still requires the normal
+confirmation and applies only the helper's staged version. Regular **Check now**, weekly checks,
+and the main download action continue selecting the latest release as before.
+
+Discovery is bounded to the latest 100 official GitHub release records, at most 2 MiB of metadata,
+and 12 versions shown. It never downloads every listed manifest. Signatures and compatibility are
+checked only for the selected version, with bounded requests to fixed official tag URLs.
+
+This feature requires a privileged helper advertising `selected_releases_v1`. Older helpers retain
+their latest-release-only policy; the picker explains that an administrator must update the helper
+before exact-version installation is enabled. Installing a new web app does **not** update the
+independent root-owned helper. An administrator must explicitly review and provision the helper
+upgrade using the managed installation procedure, preserving the existing public key, protected
+paths, service identity and recovery backup. The web app never replaces the helper or changes its
+trust configuration. A disconnected helper is shown as unavailable rather than mistaken for an
+old helper. Source installations can inspect the bounded release list but cannot install releases.

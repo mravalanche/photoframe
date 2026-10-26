@@ -29,6 +29,18 @@
 
   <details id="release-notes-section" class="release-notes-section collapse collapse-arrow border border-base-300 bg-base-100" hidden><summary id="release-notes-title" class="collapse-title font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Release notes <span class="text-sm font-normal text-base-content/70">What’s changed</span></summary><div id="release-notes" class="release-notes collapse-content break-words text-sm leading-relaxed [overflow-wrap:anywhere] [&_pre]:whitespace-pre-wrap"></div></details>
 
+  {% call surfaces.disclosure('Advanced: choose a release', 'Published versions in this channel', 'release-picker') %}
+    <div class="space-y-3">
+      <p class="text-sm text-base-content/70">Choose a newer release from the current channel. Verify compatibility before downloading; applying it still requires confirmation.</p>
+      <p id="release-picker-reason" class="text-sm text-base-content/70" role="status">Checking release-selection support…</p>
+      {{ actions.button('Load published releases', 'secondary', 'sm', id='load-releases') }}
+      <div class="fieldset min-w-0 w-full"><label class="fieldset-legend whitespace-normal" for="release-choice">Release</label><select id="release-choice" class="select min-w-0 w-full" disabled><option value="">Load releases to choose a version</option></select></div>
+      <p id="selected-release-detail" class="break-words text-sm" role="status" aria-live="polite">Compatibility has not been verified.</p>
+      <div class="flex flex-wrap gap-2">{{ actions.button('Verify selected release', 'secondary', id='inspect-release', disabled=true) }}{{ actions.button('Download & verify selected', 'secondary', id='stage-selected-release', disabled=true) }}</div>
+      <div id="selected-release-notes" class="break-words text-sm leading-relaxed [overflow-wrap:anywhere] [&_pre]:whitespace-pre-wrap"></div>
+    </div>
+  {% endcall %}
+
   {% call surfaces.disclosure('During an update', 'Recovery and diagnostics', 'update-help') %}
     <p class="text-sm text-base-content/70">Your photos and settings are kept. The frame continues showing its current photo, and this page reconnects after the restart. If the update fails to start, the previous version is restored.</p>
     <p id="update-diagnostics" class="mt-4 break-all text-sm text-base-content/70">No update in progress.</p>

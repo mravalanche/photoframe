@@ -17,8 +17,12 @@ import httpx
 from .. import __version__
 from ..persistence import atomic_write
 from .managed import detect_managed_installation
-from .manifest import release_channel, require_channel, semver, validate_channel
-from .protocol import HelperClient
+from .manifest import ReleaseManifest, release_channel, require_channel, semver, validate_channel
+from .protocol import SELECTED_RELEASES_CAPABILITY, HelperClient
+
+RELEASE_LIST_URL = "https://api.github.com/repos/mravalanche/photoframe/releases?per_page=100"
+MAX_LIST_BYTES = 2 * 1024 * 1024
+MAX_PICKER_RELEASES = 12
 
 
 class UpdateController:
@@ -53,6 +57,9 @@ class UpdateController:
         self.activation_job = self.preferences.get("activation_job")
         self.public_release = None
         self.public_checked_at = 0
+        self.catalog_cache = None
+        self.catalog_checked_at = 0
+        self.selected_manifest = None
         if self.installation.enabled:
             self.save()
         if self.activation_job:
@@ -96,6 +103,12 @@ class UpdateController:
         if result.get("staged_version") and release_channel(result["staged_version"]) != channel:
             result["staged_version"] = None
         latest = result.get("latest_manifest")
+        capabilities = result.get("capabilities")
+        selection_supported = (
+            self.installation.enabled
+            and isinstance(capabilities, list)
+            and SELECTED_RELEASES_CAPABILITY in capabilities
+        )
         upgrade_available = False
         if latest:
             try:
@@ -118,7 +131,126 @@ class UpdateController:
             ),
             "check_error": self.last_error,
             "public_release": self.public_release,
+            "release_selection_supported": selection_supported,
+            "release_selection_reason": (
+                ""
+                if selection_supported
+                else "Reconnect to the updater to check release-selection support."
+                if result.get("phase") == "unavailable"
+                else "A managed installation is required to install a selected release."
+                if not self.installation.enabled
+                else "An administrator must update the privileged helper to enable release selection. Latest-release updates remain available."
+            ),
+            "selected_manifest": self.selected_manifest,
         }
+
+    def release_catalog(self):
+        """Bounded metadata discovery; entries do not authorize installation."""
+        with self.lock:
+            channel = self.preferences["channel"]
+            if self.catalog_cache is None or time.time() - self.catalog_checked_at >= 60:
+                with (
+                    httpx.Client(timeout=10, follow_redirects=False) as client,
+                    client.stream(
+                        "GET", RELEASE_LIST_URL, headers={"Accept": "application/vnd.github+json"}
+                    ) as response,
+                ):
+                    response.raise_for_status()
+                    data = bytearray()
+                    for chunk in response.iter_bytes():
+                        data.extend(chunk)
+                        if len(data) > MAX_LIST_BYTES:
+                            raise ValueError("Release listing exceeds the supported limit")
+                raw = json.loads(data)
+                if not isinstance(raw, list):
+                    raise ValueError("Invalid release listing")
+                self.catalog_cache = raw[:100]
+                self.catalog_checked_at = time.time()
+            rows = []
+            for release in self.catalog_cache:
+                if (
+                    not isinstance(release, dict)
+                    or release.get("draft") is not False
+                    or release.get("prerelease") is not (channel == "develop")
+                ):
+                    continue
+                tag = release.get("tag_name")
+                if not isinstance(tag, str) or not tag.startswith("v"):
+                    continue
+                version = tag[1:]
+                try:
+                    require_channel(version, channel)
+                except ValueError:
+                    continue
+                assets = release.get("assets", [])
+                names = (
+                    {
+                        asset.get("name")
+                        for asset in assets
+                        if isinstance(asset, dict) and isinstance(asset.get("name"), str)
+                    }
+                    if isinstance(assets, list)
+                    else set()
+                )
+                complete = {
+                    "photoframe-manifest.json",
+                    f"photoframe-{version}-linux-aarch64.tar.gz",
+                } <= names
+                reason = (
+                    "Not newer than the running version"
+                    if semver(version) <= semver(__version__)
+                    else "Signed bundle is not published"
+                    if not complete
+                    else ""
+                )
+                published = release.get("published_at")
+                rows.append(
+                    {
+                        "version": version,
+                        "published_at": published[:64] if isinstance(published, str) else None,
+                        "available": not reason,
+                        "reason": reason,
+                        "compatibility": reason or "Not verified",
+                    }
+                )
+            rows.sort(key=lambda row: semver(row["version"]), reverse=True)
+            status = self._status()
+            return {
+                "channel": channel,
+                "releases": rows[:MAX_PICKER_RELEASES],
+                "selection_supported": status["release_selection_supported"],
+                "reason": status["release_selection_reason"],
+            }
+
+    def inspect_release(self, release):
+        with self.lock:
+            self.selected_manifest = None
+            self._require_release_selection(release)
+            channel = self.preferences["channel"]
+        result = self.helper.call("inspect", uuid4().hex, release, channel, timeout=40)
+        with self.lock:
+            if channel != self.preferences["channel"]:
+                raise ValueError("The update channel changed; verify the release again")
+            if result.get("ok") is not True or not isinstance(result.get("manifest"), dict):
+                raise ValueError(result.get("message", "Release verification failed"))
+            manifest = ReleaseManifest.parse(result["manifest"])
+            require_channel(manifest.version, self.preferences["channel"])
+            manifest.require_upgrade_from(__version__)
+            manifest.supports_rollback_to(2)
+            if manifest.version != release:
+                raise ValueError("Helper verified a different release")
+            self.selected_manifest = manifest.as_dict()
+            return {"manifest": self.selected_manifest, "channel": self.preferences["channel"]}
+
+    def _require_release_selection(self, release):
+        if not isinstance(release, str):
+            raise ValueError("Choose a release version")
+        require_channel(release, self.preferences["channel"])
+        if semver(release) <= semver(__version__):
+            raise ValueError("Choose a release newer than the running version")
+        status = self._status()
+        if not status["release_selection_supported"]:
+            raise ValueError(status["release_selection_reason"])
 
     def check_public_release(self):
         """Read-only discovery for source installations; never downloads code."""
@@ -160,6 +292,7 @@ class UpdateController:
                     "Wait for the current update operation before changing preferences"
                 )
             if channel != self.preferences["channel"]:
+                self.selected_manifest = None
                 self.public_release = None
                 self.public_checked_at = 0
                 self.last_error = None
@@ -219,13 +352,15 @@ class UpdateController:
             raise ValueError(
                 "Web updates require a managed installation. Follow the migration guide to enable them."
             )
-        if action in {"stage", "activate"}:
+        if action in {"stage", "stage-selected", "activate"}:
             if not isinstance(release, str):
                 raise ValueError("A release version is required")
             require_channel(release, self.preferences["channel"])
         elif release is not None:
-            raise ValueError("A release version is only allowed for stage and activate")
+            raise ValueError("A release version is only allowed for release-specific actions")
         with self.lock:
+            if action == "stage-selected":
+                self._require_release_selection(release)
             request_id = request_id or uuid4().hex
             if self.activation_job and (
                 request_id != self.activation_job
