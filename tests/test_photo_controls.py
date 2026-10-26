@@ -254,6 +254,27 @@ def test_table_preview_opens_local_editor_and_preserves_table_context(tmp_path):
     assert 'data-photo-editor-dialog data-editor-open="false"' in initial.text
 
 
+def test_table_hide_and_undo_keep_the_layout_table_open(tmp_path):
+    _app, client, runtime = frame(tmp_path)
+    client.post("/photo/preview?source=layouts", headers=PHOTOS_VIEW, data={"photo_id": "tall"})
+    hidden = client.post(
+        "/photo/hide?source=layouts", headers=PHOTOS_VIEW, data={"photo_id": "tall"}
+    )
+    assert runtime.repository.load().frame.preference("tall").hidden
+    assert 'id="photo-layouts" open' in hidden.text
+    # Both the immediate notice and the affected table row keep the source.
+    assert hidden.text.count('hx-post="/photo/unhide?source=layouts"') >= 2
+    table = hidden.text.split('id="photo-layout-table"', 1)[1].split("</table>", 1)[0]
+    assert "Undo hide" in table
+    restored = client.post(
+        "/photo/unhide?source=layouts", headers=PHOTOS_VIEW, data={"photo_id": "tall"}
+    )
+    assert not runtime.repository.load().frame.preference("tall").hidden
+    assert 'id="photo-layouts" open' in restored.text
+    assert 'aria-label="Frame photo tall.jpg"' in restored.text
+    assert "Undo hide" not in restored.text
+
+
 def test_fit_applies_exif_before_layout_and_preserves_white_matte():
     output = BytesIO()
     with Image.new("RGB", (120, 80), "red") as image:
