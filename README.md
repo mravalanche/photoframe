@@ -107,6 +107,10 @@ control can apply one layout to the whole album, replacing custom layouts while 
 
 Frame, Photos and Settings are the main navigation destinations. Software updates lives inside
 Settings. Preview and framing controls open in a dialog without returning to the top of the page.
+Software updates also has an Advanced release chooser for published versions in the selected channel.
+Selected versions must pass signature, compatibility and upgrade checks; existing updater helpers
+explain when an administrator upgrade is needed to enable this option. See the
+[managed updater guide](docs/managed-updates.md#advanced-release-selection).
 
 **Hide from this frame** removes a photo from rotation without deleting it from Immich. Use
 **Undo** or restore it from **Hidden from this frame**. A hidden photo already on the frame stays visible

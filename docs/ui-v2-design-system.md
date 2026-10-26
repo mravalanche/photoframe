@@ -87,6 +87,13 @@ The component showcase renders these same macros in both themes. It must be main
 
 ![Photo framing dialog on mobile](images/ui-v2-photo-editor-mobile.png)
 
+Software updates keeps the release history in an Advanced disclosure. Loading the list does not
+download or install software. A chosen release is inspected for compatibility before the separate
+download action, and Apply still requires confirmation. Older updater helpers explain their
+latest-release-only capability; the web app does not silently replace a privileged service.
+
+![Advanced release picker on mobile with simulated releases](images/ui-v2-release-picker-mobile.png)
+
 ## Interaction rules
 
 - Keep the primary destination and current state visible on mobile. The page header and bottom navigation can remain fixed; only the content area scrolls. Respect safe-area insets and leave enough bottom padding for the dock.
