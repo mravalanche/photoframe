@@ -2,8 +2,8 @@
 {% import "components/branding.html" as branding %}
 {% import "components/icons.html" as icons %}
 {% import "components/navigation.html" as navigation %}
-{% set active_nav = 'updates' if settings_section == 'updates' else 'settings' if settings_section else view|default('frame') %}
-{% set primary_nav = [{'key': 'frame', 'label': 'Frame', 'href': '/'}, {'key': 'photos', 'label': 'Photos', 'href': '/photos'}, {'key': 'updates', 'label': 'Updates', 'href': '/settings/updates'}, {'key': 'settings', 'label': 'Settings', 'href': '/settings'}] %}
+{% set active_nav = 'settings' if settings_section else view|default('frame') %}
+{% set primary_nav = [{'key': 'frame', 'label': 'Frame', 'href': '/'}, {'key': 'photos', 'label': 'Photos', 'href': '/photos'}, {'key': 'settings', 'label': 'Settings', 'href': '/settings'}] %}
 <!doctype html>
 <html lang="en-GB" data-theme="photoframe-light">
 <head>
@@ -34,23 +34,19 @@
       <a href="/" class="inline-flex min-h-11 items-center gap-2 text-xl font-semibold tracking-tight text-base-content no-underline" aria-label="Photoframe home"><img class="size-9" src="{{ url_for('static', path='/photoframe.svg') }}" alt=""><span class="pf-section-title">photoframe</span></a>
       <div class="ml-auto flex items-center gap-2">
         <a class="badge badge-outline hidden gap-1 sm:inline-flex" href="/settings/updates" title="Software updates" data-update-badge><span data-update-icon aria-hidden="true">○</span><span data-update-label>Update status</span></a>
-        <div class="join hidden sm:inline-flex" role="group" aria-label="Colour theme">
-          {{ actions.button('Light', 'quiet', 'sm', attrs={'data-theme-choice': 'light', 'aria-pressed': 'true', 'onclick': "setTheme('light')"}) }}
-          {{ actions.button('Dark', 'quiet', 'sm', attrs={'data-theme-choice': 'dark', 'aria-pressed': 'false', 'onclick': "setTheme('dark')"}) }}
-        </div>
-        <button type="button" class="btn btn-ghost btn-square btn-sm sm:hidden" data-cycle-theme aria-label="Switch colour theme" onclick="setTheme(document.documentElement.dataset.theme === 'photoframe-dark' ? 'light' : 'dark')">◐</button>
+        <button type="button" class="btn btn-ghost btn-sm min-h-11 gap-2" data-theme-toggle aria-label="Dark mode" aria-pressed="false" title="Switch to dark theme" onclick="setTheme(document.documentElement.dataset.theme === 'photoframe-dark' ? 'light' : 'dark')">{{ icons.icon('theme') }}<span class="hidden sm:inline">Theme</span></button>
       </div>
     </div>
   </header>
   <div class="mx-auto flex max-w-7xl gap-8 px-4 md:px-6">
     <aside class="hidden w-48 shrink-0 pt-8 lg:block" aria-label="Primary navigation"><nav class="sticky top-24 flex flex-col gap-1">{% for item in primary_nav %}<a href="{{ item.href }}" class="flex min-h-11 items-center gap-3 rounded-box px-3 text-sm font-medium no-underline focus-visible:outline-2 focus-visible:outline-primary{% if item.key == active_nav %} bg-primary/10 text-primary{% else %} text-base-content/70 hover:bg-base-300/60 hover:text-base-content{% endif %}"{% if item.key == active_nav %} aria-current="page"{% endif %}>{{ icons.icon(item.key) }}{{ item.label }}</a>{% endfor %}</nav></aside>
-  <main class="min-w-0 flex-1 pb-36 pt-6 md:pb-16 md:pt-8" id="main-content">
+  <main class="min-w-0 flex-1 pb-36 pt-6 lg:pb-16 md:pt-8" id="main-content">
     {% if settings_section %}
     <div class="mb-6 flex flex-wrap items-end justify-between gap-3"><div><p class="pf-eyebrow">CONFIGURATION</p><h1 class="pf-display-title">Settings</h1></div>{{ actions.link('Back to frame', '/', 'secondary', 'sm') }}</div>
     <div class="grid gap-5 xl:grid-cols-[13rem_minmax(0,1fr)]">
-      <nav class="flex gap-2 overflow-x-auto pb-2 xl:flex-col" aria-label="Settings sections">
-        {% for key, label in [('updates', 'Software updates'), ('provider', 'Photo provider'), ('hardware', 'Display hardware'), ('advanced', 'Advanced & recovery')] %}
-        <a href="/settings/{{ key }}" class="btn btn-sm shrink-0 justify-start{% if settings_section == key %} btn-primary{% else %} btn-ghost{% endif %}"{% if settings_section == key %} aria-current="page"{% endif %}>{{ label }}</a>
+      <nav class="grid grid-cols-2 items-start gap-2 self-start xl:grid-cols-1" aria-label="Settings sections">
+        {% for key, label in [('provider', 'Photo provider'), ('hardware', 'Display hardware'), ('updates', 'Software updates'), ('advanced', 'Advanced & recovery')] %}
+        <a href="/settings/{{ key }}" class="btn btn-sm h-auto min-h-11 w-full justify-start whitespace-normal py-2 text-left{% if settings_section == key %} btn-primary{% else %} btn-ghost{% endif %}"{% if settings_section == key %} aria-current="page"{% endif %}>{{ label }}</a>
         {% endfor %}
       </nav>
       <section class="min-w-0" aria-label="{{ settings_title }}">
@@ -68,11 +64,11 @@
       document.documentElement.dataset.theme = theme === 'dark' ? 'photoframe-dark' : 'photoframe-light';
       document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#1c2721' : '#fffefa';
       try { window.localStorage.setItem('photoframe-theme', theme); } catch (_error) { /* unavailable */ }
-      document.querySelectorAll('[data-theme-choice]').forEach(button => {
-        button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme));
-      });
-      const cycle = document.querySelector('[data-cycle-theme]');
-      if (cycle) cycle.setAttribute('aria-label', `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`);
+      const toggle = document.querySelector('[data-theme-toggle]');
+      if (toggle) {
+        toggle.setAttribute('aria-pressed', String(theme === 'dark'));
+        toggle.setAttribute('title', `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`);
+      }
     }
     function syncThemeToggle() { setTheme(document.documentElement.dataset.theme === 'photoframe-dark' ? 'dark' : 'light'); }
     function dismissNotice(control) {
@@ -481,6 +477,33 @@
       control.textContent = 'Resetting Photoframe…';
       form.requestSubmit();
     }
+    let photoEditorViewState = null;
+    let photoEditorClosePending = false;
+    function restorePhotoEditorFocus() {
+      const saved = photoEditorViewState;
+      if (!saved) return;
+      const rail = document.querySelector('.thumbnail-rail');
+      if (rail) rail.scrollLeft = saved.railX;
+      const form = Array.from(document.querySelectorAll('form[action="/photo/preview"]')).find(candidate =>
+        candidate.elements.photo_id?.value === saved.photoId
+        && Boolean(candidate.closest('.thumbnail')) === saved.fromRail,
+      );
+      form?.querySelector('button[type="submit"]')?.focus({ preventScroll: true });
+      window.scrollTo(0, saved.pageY);
+    }
+    function setupPhotoEditorDialog() {
+      const dialog = document.querySelector('[data-photo-editor-dialog]');
+      if (!dialog) return;
+      if (!dialog.dataset.editorReady) {
+        dialog.dataset.editorReady = 'true';
+        dialog.addEventListener('close', restorePhotoEditorFocus);
+        dialog.querySelector('[data-photo-editor-close]')?.addEventListener('click', () => dialog.close());
+      }
+      if (dialog.dataset.editorOpen !== 'true' || dialog.open) return;
+      dialog.dataset.editorOpen = 'false';
+      dialog.showModal();
+      if (photoEditorViewState) window.scrollTo(0, photoEditorViewState.pageY);
+    }
     function syncInterface() {
       syncThemeToggle();
       setupNotifications();
@@ -488,6 +511,7 @@
       setupNetworkSettings();
       setupAlbumSelection();
       setupFramingPreviews();
+      setupPhotoEditorDialog();
       setupScheduleSettings();
     }
     function workspaceLoadFailed(event) {
@@ -510,7 +534,6 @@
       if (intent) event.detail.headers['X-Photoframe-Render-Intent'] = intent;
     });
 
-    let previewScrollState = null;
     document.addEventListener('htmx:beforeRequest', event => {
       const albumForm = event.detail.elt?.closest?.('[data-album-confirm-form]');
       if (albumForm) {
@@ -527,9 +550,18 @@
         };
       }
       const previewForm = event.detail.elt?.closest?.('form[action="/photo/preview"]');
-      if (!previewForm) return;
-      const rail = previewForm.closest('.thumbnail-rail');
-      previewScrollState = { railX: rail?.scrollLeft || 0 };
+      if (previewForm) {
+        const rail = previewForm.closest('.thumbnail-rail');
+        photoEditorViewState = {
+          photoId: previewForm.elements.photo_id?.value,
+          fromRail: Boolean(previewForm.closest('.thumbnail')),
+          railX: rail?.scrollLeft || 0,
+          pageY: window.scrollY,
+        };
+      }
+      if (event.detail.elt?.closest?.('form[action="/photo/preview/clear"]')) {
+        photoEditorClosePending = true;
+      }
     });
     document.addEventListener('htmx:afterRequest', event => {
       if (event.detail.elt?.closest?.('[data-album-confirm-form]')) setAlbumBusy(false);
@@ -546,20 +578,13 @@
           anchor.focus({ preventScroll: true });
         }
       }
-      if (!previewScrollState) return;
-      const saved = previewScrollState;
-      previewScrollState = null;
-      const rail = document.querySelector('.thumbnail-rail');
-      if (rail) rail.scrollLeft = saved.railX;
-      const previewTitle = document.getElementById('selected-title');
-      if (previewTitle) {
-        previewTitle.setAttribute('tabindex', '-1');
-        previewTitle.focus({ preventScroll: true });
-        previewTitle.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (photoEditorClosePending) {
+        photoEditorClosePending = false;
+        restorePhotoEditorFocus();
       }
     });
   </script>
-  <aside id="activity-dock" class="activity-dock fixed inset-x-3 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-2xl rounded-box border border-base-300 bg-base-100 p-3 shadow-lg md:inset-x-auto md:right-6 md:bottom-6 md:w-[28rem]" aria-label="Current activity and next action" hidden>
+  <aside id="activity-dock" class="activity-dock fixed inset-x-3 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-2xl rounded-box border border-base-300 bg-base-100 p-3 shadow-lg lg:inset-x-auto lg:right-6 lg:bottom-6 lg:w-[28rem]" aria-label="Current activity and next action" hidden>
     <div class="flex items-center gap-3"><div class="min-w-0 flex-1"><strong class="block text-sm" data-activity-title role="status" aria-live="polite" aria-atomic="true"></strong><p class="pf-supporting truncate text-xs" data-activity-detail></p></div>
     <button type="button" class="btn btn-outline btn-sm" data-activity-cancel hidden>Cancel loading</button>
     <button type="button" class="btn btn-primary btn-sm" data-context-action hidden></button>

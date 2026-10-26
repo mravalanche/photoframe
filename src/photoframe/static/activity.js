@@ -59,24 +59,6 @@
           label = 'Reconnect'; handler = () => document.getElementById('reconnect')?.click();
         }
       }
-    } else {
-      const selected = document.querySelector('.photo-editor');
-      const title = selected?.querySelector('#selected-title')?.textContent?.trim();
-      if (title) {
-        const showButton = selected.querySelector('.selected-actions form[action="/render/start"] button');
-        heading = showButton && !showButton.disabled ? 'Photo ready to show' : 'Photo needs framing';
-        message = title;
-        label = showButton && !showButton.disabled ? 'Show now' : 'Adjust layout';
-        handler = showButton && !showButton.disabled
-          ? () => showButton.click()
-          : () => selected.scrollIntoView({behavior: 'smooth', block: 'start'});
-      } else {
-        const nextButton = document.querySelector('.next-photo-form button[type="submit"]');
-        if (nextButton && !nextButton.disabled) {
-          heading = 'Frame ready'; message = 'Show another photo whenever you like.';
-          label = 'Next photo'; handler = () => nextButton.click();
-        }
-      }
     }
     if (!heading) { hide(); return; }
     show(heading, message, active, failed, counts);

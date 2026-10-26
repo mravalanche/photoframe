@@ -1,13 +1,13 @@
 {% import "components/actions.html" as actions %}
 {% import "components/forms.html" as fields %}
 {% import "components/surfaces.html" as surfaces %}
-<section class="update-shell space-y-4" aria-labelledby="software-updates-title">
+<section class="update-shell min-w-0 space-y-4" aria-labelledby="software-updates-title">
   <div><h2 id="software-updates-title" class="text-2xl font-semibold">Software updates</h2><p class="mt-1 text-sm text-base-content/70">Check, download and install a new version when you are ready.</p></div>
   {% call surfaces.card('Update status', 'What the frame is doing now.', 'status-title') %}
-    <div class="flex flex-wrap items-center justify-between gap-3"><p id="update-status-badge" class="update-status-badge inline-flex items-center gap-2 text-lg font-semibold" data-tone="neutral"><span data-update-icon aria-hidden="true">—</span><strong data-update-label>Checking installation</strong></p><p class="text-sm text-base-content/70">Installed <strong id="installed-version" class="font-semibold text-base-content">v{{ version }}</strong></p></div>
-    <p id="update-status" class="text-sm text-base-content/70" role="status" aria-live="polite">Checking installation…</p>
+    <div class="flex flex-wrap items-center justify-between gap-3"><p id="update-status-badge" class="update-status-badge inline-flex min-w-0 max-w-full items-center gap-2 text-base font-semibold sm:text-lg" data-tone="neutral"><span data-update-icon aria-hidden="true">—</span><strong class="min-w-0 break-words" data-update-label>Checking installation</strong></p><p class="text-sm text-base-content/70">Installed <strong id="installed-version" class="font-semibold text-base-content">v{{ version }}</strong></p></div>
+    <p id="update-status" class="break-words text-sm text-base-content/70" role="status" aria-live="polite">Checking installation…</p>
     <progress id="update-progress" class="progress progress-primary w-full" max="100" value="0" hidden aria-label="Update progress"></progress>
-    <p id="update-error" class="empty:hidden text-sm text-error-content" role="alert"></p>
+    <p id="update-error" class="break-words empty:hidden text-sm text-error-content" role="alert"></p>
     {{ actions.button('Reconnect', 'secondary', id='reconnect', attrs={'hidden': true}) }}
     <div id="unmanaged" class="space-y-2 border-t border-base-300 pt-4 text-sm" hidden>{{ actions.button('Check latest stable release', 'secondary', id='public-check') }}<p>This installation cannot update from the browser. Your files and configuration are preserved.</p><p>Ask your administrator to follow the <a class="link link-primary" href="https://github.com/mravalanche/photoframe/blob/develop/docs/managed-updates.md">managed installation migration guide</a>.</p></div>
 
@@ -24,10 +24,10 @@
         <div>{{ fields.checkbox_field('weekly-checks', 'weekly_checks', 'Check this channel weekly', help="Weekly checks won't download or install updates.") }}</div>
       </div>
     </section>
-    <div class="flex flex-wrap justify-between gap-2 border-t border-base-300 pt-4 text-sm"><p id="update-release" class="empty:hidden"></p><p class="update-last-check text-base-content/70"><span>Last checked </span><time id="update-last-check">Never checked</time></p></div>
+    <div class="flex flex-wrap justify-between gap-2 border-t border-base-300 pt-4 text-sm"><p id="update-release" class="min-w-0 break-words empty:hidden"></p><p class="update-last-check text-base-content/70"><span>Last checked </span><time id="update-last-check">Never checked</time></p></div>
   {% endcall %}
 
-  <details id="release-notes-section" class="release-notes-section collapse collapse-arrow border border-base-300 bg-base-100" hidden><summary id="release-notes-title" class="collapse-title font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Release notes <span class="text-sm font-normal text-base-content/70">What’s changed</span></summary><div id="release-notes" class="release-notes collapse-content text-sm leading-relaxed"></div></details>
+  <details id="release-notes-section" class="release-notes-section collapse collapse-arrow border border-base-300 bg-base-100" hidden><summary id="release-notes-title" class="collapse-title font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Release notes <span class="text-sm font-normal text-base-content/70">What’s changed</span></summary><div id="release-notes" class="release-notes collapse-content break-words text-sm leading-relaxed [overflow-wrap:anywhere] [&_pre]:whitespace-pre-wrap"></div></details>
 
   {% call surfaces.disclosure('During an update', 'Recovery and diagnostics', 'update-help') %}
     <p class="text-sm text-base-content/70">Your photos and settings are kept. The frame continues showing its current photo, and this page reconnects after the restart. If the update fails to start, the previous version is restored.</p>
