@@ -20,7 +20,7 @@
       <div class="selected-actions flex flex-wrap items-center gap-2">
         <form method="post" action="/render/start" hx-post="/render/start" hx-target="#workspace" hx-swap="outerHTML"><button class="primary btn btn-primary" type="submit" {% if not selected_rotation_eligible %}disabled{% endif %}>Show now</button></form>
         <form class="rotation-action" method="post" action="/photo/start" hx-post="/photo/start{% if photo_editor_source == 'layouts' %}?source=layouts{% endif %}" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ selected_photo.id }}">{{ actions.button('Start rotation here', 'secondary', type='submit', disabled=not selected_rotation_eligible) }}</form>
-        <form class="cancel-action" method="post" action="/photo/preview/clear" hx-post="/photo/preview/clear" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML">{{ actions.button('Close preview', 'quiet', type='submit') }}</form>
+        {{ actions.button('Close preview', 'quiet', attrs={'data-photo-editor-close': ''}) }}
       </div>
       <form class="hide-photo-form border-t border-base-300 pt-3" method="post" action="/photo/hide" hx-post="/photo/hide{% if photo_editor_source == 'layouts' %}?source=layouts{% endif %}" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ selected_photo.id }}">{{ actions.button('Hide from this frame', 'quiet', 'sm', type='submit') }}<small class="ml-2 text-xs text-base-content/60">The original stays in your library.</small></form>
     </div>
