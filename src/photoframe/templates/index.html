@@ -21,11 +21,11 @@
   </script>
   <title>{{ 'Settings · ' if settings_section else 'Photos · ' if view|default('frame') == 'photos' else '' }}Photoframe</title>
   {{ branding.icons() }}
-  <link rel="stylesheet" href="{{ url_for('static', path='/v2.css') }}?v={{ version }}">
-  <script src="/static/update-status.js?v={{ version }}" defer></script>
-  {% if settings_section == 'updates' %}<script src="/static/updates.js?v={{ version }}" defer></script>{% endif %}
-  <script src="/static/thumbnails.js?v={{ version }}" defer></script>
-  <script src="{{ url_for('static', path='/tab-identity.js') }}?v={{ version }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', path='/v2.css') }}?v={{ version }}&amp;rev={{ ui_revision }}">
+  <script src="/static/update-status.js?v={{ version }}&amp;rev={{ ui_revision }}" defer></script>
+  {% if settings_section == 'updates' %}<script src="/static/updates.js?v={{ version }}&amp;rev={{ ui_revision }}" defer></script>{% endif %}
+  <script src="/static/thumbnails.js?v={{ version }}&amp;rev={{ ui_revision }}" defer></script>
+  <script src="{{ url_for('static', path='/tab-identity.js') }}?v={{ version }}&amp;rev={{ ui_revision }}"></script>
   <script src="{{ url_for('static', path='/vendor/htmx-2.0.4.min.js') }}" defer></script>
 </head>
 <body data-page="{{ 'settings' if settings_section else view|default('frame') }}" class="min-h-screen bg-base-200 text-base-content">
@@ -609,6 +609,6 @@
     <progress class="progress progress-primary mt-2 w-full" aria-label="Current operation progress" hidden></progress>
   </aside>
   {{ navigation.mobile_dock(primary_nav, active_nav) }}
-  <script src="{{ url_for('static', path='/activity.js') }}?v={{ version }}" defer></script>
+  <script src="{{ url_for('static', path='/activity.js') }}?v={{ version }}&amp;rev={{ ui_revision }}" defer></script>
 </body>
 </html>

@@ -14,7 +14,7 @@
   <meta name="theme-color" content="{{ '#1c2721' if theme == 'photoframe-dark' else '#fffefa' }}">
   <title>Photoframe UI showcase</title>
   {{ branding.icons() }}
-  <link rel="stylesheet" href="/static/v2.css">
+  <link rel="stylesheet" href="/static/v2.css?rev={{ ui_revision|default('showcase') }}">
 </head>
 <body class="min-h-screen bg-base-200 text-base-content">
   <main class="mx-auto max-w-6xl space-y-10 px-4 py-8 pb-28 md:px-8 md:py-12">

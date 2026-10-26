@@ -29,6 +29,7 @@ from ..services.runtime import Runtime
 from ..settings import SecretStore, SettingsRepository
 from ..updater.auth import AuthenticationError, require_same_origin
 from ..updater.maintenance import MaintenanceError
+from .assets import ui_asset_revision
 from .forms import (
     AlbumForm,
     ConnectionForm,
@@ -102,6 +103,7 @@ def create_app(
     if not is_demo:
         runtime.initialise_display()
     templates = Jinja2Templates(directory=package / "templates")
+    templates.env.globals["ui_revision"] = ui_asset_revision(package / "static")
 
     if is_demo:
 
