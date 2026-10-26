@@ -29,6 +29,7 @@ from ..services.runtime import Runtime
 from ..settings import SecretStore, SettingsRepository
 from ..updater.auth import AuthenticationError, require_same_origin
 from ..updater.maintenance import MaintenanceError
+from .assets import ui_asset_revision
 from .forms import (
     AlbumForm,
     ConnectionForm,
@@ -102,6 +103,7 @@ def create_app(
     if not is_demo:
         runtime.initialise_display()
     templates = Jinja2Templates(directory=package / "templates")
+    templates.env.globals["ui_revision"] = ui_asset_revision(package / "static")
 
     if is_demo:
 
@@ -282,8 +284,7 @@ def create_app(
                     "photo": photo,
                     "framing": settings.frame.preference(photo.id),
                     "custom": settings.frame.has_custom_framing(photo.id),
-                    "needs_framing": not photo.matches(settings.frame.orientation)
-                    and not settings.frame.preference(photo.id).included,
+                    "native": photo.matches(settings.frame.orientation),
                     "unavailable": runtime.known_unsupported(photo.id),
                 }
                 for photo in photos
@@ -298,17 +299,14 @@ def create_app(
             "hidden_photos": [
                 photo for photo in photos if settings.frame.preference(photo.id).hidden
             ],
-            "selected_framing": (
-                PhotoFraming(
-                    fit_mode="fit", matte=settings.frame.preference(selected_photo.id).matte
-                )
-                if selected_photo
-                and not selected_photo.matches(settings.frame.orientation)
-                and not settings.frame.preference(selected_photo.id).included
-                else settings.frame.preference(selected_photo.id)
-                if selected_photo
-                else PhotoFraming()
-            ),
+            "selected_framing": settings.frame.preference(selected_photo.id)
+            if selected_photo
+            else PhotoFraming(),
+            "photo_editor_open": request.url.path
+            in {"/photo/preview", "/photo/framing", "/photo/start"},
+            "photo_editor_source": request.query_params.get("source", ""),
+            "photo_layouts_open": request.query_params.get("source") == "layouts"
+            or request.url.path == "/photo/layouts/all",
             "selected_rotation_eligible": bool(
                 selected_photo and selected_photo.id in {photo.id for photo in eligible}
             ),
@@ -450,7 +448,7 @@ def create_app(
 
     @app.get("/settings", response_class=HTMLResponse)
     @app.get("/settings/{section}", response_class=HTMLResponse)
-    def settings_page(request: Request, section: str = "updates") -> HTMLResponse:
+    def settings_page(request: Request, section: str = "provider") -> HTMLResponse:
         titles = {
             "updates": "Software updates",
             "provider": "Photo provider",
@@ -595,6 +593,15 @@ def create_app(
             form = await request.form()
             framing = PhotoFraming.model_validate(dict(form))
             notice = await run_in_threadpool(configuration.save_default_framing, framing)
+            return await run_in_threadpool(workspace, request, notice=notice)
+        except (ValueError, RuntimeError) as exc:
+            return await run_in_threadpool(workspace, request, error=str(exc))
+
+    @app.post("/photo/layouts/all", response_class=HTMLResponse)
+    async def apply_all_layouts(request: Request) -> HTMLResponse:
+        try:
+            framing = PhotoFraming.model_validate(dict(await request.form()))
+            notice = await run_in_threadpool(configuration.apply_layout_to_all, framing)
             return await run_in_threadpool(workspace, request, notice=notice)
         except (ValueError, RuntimeError) as exc:
             return await run_in_threadpool(workspace, request, error=str(exc))
@@ -787,13 +794,26 @@ def create_app(
         except ProviderError as exc:
             return Response(str(exc), status_code=502, media_type="text/plain")
 
+    @app.get("/health/live")
+    @app.head("/health/live")
+    def liveness() -> JSONResponse:
+        return JSONResponse(
+            {"status": "alive", "version": __version__},
+            headers={"Cache-Control": "no-store"},
+        )
+
     @app.get("/health")
+    @app.head("/health")
     def health() -> JSONResponse:
         # Uptime Kuma can use the HTTP code, while the JSON body gives an
         # operator the retry, cache, and stale-health context.
         settings = repository.load()
         body, healthy = health_payload(settings, version=__version__)
-        return JSONResponse(jsonable_encoder(body), status_code=200 if healthy else 503)
+        return JSONResponse(
+            jsonable_encoder(body),
+            status_code=200 if healthy else 503,
+            headers={"Cache-Control": "no-store"},
+        )
 
     return app
 

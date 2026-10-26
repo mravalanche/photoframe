@@ -36,6 +36,9 @@ def _render_workspace(view: str) -> str:
         "render_completion_visible": False,
         "render_ack_delay_ms": 0,
         "selected_photo": photo,
+        "photo_editor_open": True,
+        "photo_editor_source": "",
+        "photo_layouts_open": False,
         "selected_framing": framing,
         "selected_rotation_eligible": True,
         "just_hidden_photo": None,
@@ -56,7 +59,7 @@ def _render_workspace(view: str) -> str:
                 "photo": photo,
                 "framing": framing,
                 "custom": False,
-                "needs_framing": False,
+                "native": True,
                 "unavailable": False,
             }
         ],

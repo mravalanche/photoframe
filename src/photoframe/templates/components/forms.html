@@ -1,20 +1,24 @@
 {# Each field has a real label, stable help association and consistent validation state. #}
 {% macro input_field(id, name, label, value='', type='text', help='', required=false, disabled=false, invalid=false, placeholder='', autocomplete='', attrs={}) -%}
-<div class="fieldset w-full"><label class="fieldset-legend" for="{{ id }}">{{ label }}</label>
-  <input id="{{ id }}" name="{{ name }}" type="{{ type }}" value="{{ value }}" class="input w-full{% if invalid %} input-error{% endif %}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}{% if help %} aria-describedby="{{ id }}-help"{% endif %}{% if invalid %} aria-invalid="true"{% endif %}{% if required %} required{% endif %}{% if disabled %} disabled{% endif %}{% if attrs %} {{ attrs|xmlattr }}{% endif %}>
-  {% if help %}<p id="{{ id }}-help" class="label text-base-content/70">{{ help }}</p>{% endif %}
+<div class="fieldset min-w-0 w-full"><label class="fieldset-legend whitespace-normal" for="{{ id }}">{{ label }}</label>
+  <input id="{{ id }}" name="{{ name }}" type="{{ type }}" value="{{ value }}" class="input min-w-0 w-full{% if invalid %} input-error{% endif %}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}{% if help %} aria-describedby="{{ id }}-help"{% endif %}{% if invalid %} aria-invalid="true"{% endif %}{% if required %} required{% endif %}{% if disabled %} disabled{% endif %}{% if attrs %} {{ attrs|xmlattr }}{% endif %}>
+  {% if help %}<p id="{{ id }}-help" class="label block break-words whitespace-normal text-base-content/70">{{ help }}</p>{% endif %}
 </div>
 {%- endmacro %}
 
 {% macro select_field(id, name, label, options, selected='', help='', required=false, disabled=false, invalid=false, attrs={}) -%}
-<div class="fieldset w-full"><label class="fieldset-legend" for="{{ id }}">{{ label }}</label>
-  <select id="{{ id }}" name="{{ name }}" class="select w-full{% if invalid %} select-error{% endif %}"{% if help %} aria-describedby="{{ id }}-help"{% endif %}{% if invalid %} aria-invalid="true"{% endif %}{% if required %} required{% endif %}{% if disabled %} disabled{% endif %}{% if attrs %} {{ attrs|xmlattr }}{% endif %}>
+<div class="fieldset min-w-0 w-full"><label class="fieldset-legend whitespace-normal" for="{{ id }}">{{ label }}</label>
+  <select id="{{ id }}" name="{{ name }}" class="select min-w-0 w-full{% if invalid %} select-error{% endif %}"{% if help %} aria-describedby="{{ id }}-help"{% endif %}{% if invalid %} aria-invalid="true"{% endif %}{% if required %} required{% endif %}{% if disabled %} disabled{% endif %}{% if attrs %} {{ attrs|xmlattr }}{% endif %}>
     {% for value, text in options %}<option value="{{ value }}"{% if value == selected %} selected{% endif %}>{{ text }}</option>{% endfor %}
   </select>
-  {% if help %}<p id="{{ id }}-help" class="label text-base-content/70">{{ help }}</p>{% endif %}
+  {% if help %}<p id="{{ id }}-help" class="label block break-words whitespace-normal text-base-content/70">{{ help }}</p>{% endif %}
 </div>
 {%- endmacro %}
 
 {% macro checkbox_field(id, name, label, checked=false, help='', disabled=false, attrs={}) -%}
-<div class="fieldset w-full"><label class="label cursor-pointer justify-start gap-3" for="{{ id }}"><input id="{{ id }}" name="{{ name }}" type="checkbox" class="checkbox checkbox-primary"{% if checked %} checked{% endif %}{% if disabled %} disabled{% endif %}{% if help %} aria-describedby="{{ id }}-help"{% endif %}{% if attrs %} {{ attrs|xmlattr }}{% endif %}><span>{{ label }}</span></label>{% if help %}<p id="{{ id }}-help" class="label text-base-content/70">{{ help }}</p>{% endif %}</div>
+<div class="fieldset min-w-0 w-full"><label class="label cursor-pointer items-start justify-start gap-3 whitespace-normal" for="{{ id }}"><input id="{{ id }}" name="{{ name }}" type="checkbox" class="checkbox checkbox-primary shrink-0"{% if checked %} checked{% endif %}{% if disabled %} disabled{% endif %}{% if help %} aria-describedby="{{ id }}-help"{% endif %}{% if attrs %} {{ attrs|xmlattr }}{% endif %}><span class="min-w-0 break-words">{{ label }}</span></label>{% if help %}<p id="{{ id }}-help" class="label block break-words whitespace-normal text-base-content/70">{{ help }}</p>{% endif %}</div>
+{%- endmacro %}
+
+{% macro radio_card(id, name, value, label, help='', checked=false) -%}
+<label class="flex min-w-0 cursor-pointer items-start gap-3 rounded-box border border-base-300 bg-base-200 p-4 whitespace-normal" for="{{ id }}"><input id="{{ id }}" class="radio radio-primary shrink-0" type="radio" name="{{ name }}" value="{{ value }}"{% if checked %} checked{% endif %}><span class="min-w-0 break-words"><strong class="block text-base-content">{{ label }}</strong>{% if help %}<small class="block text-base-content/70">{{ help }}</small>{% endif %}</span></label>
 {%- endmacro %}

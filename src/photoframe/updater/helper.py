@@ -38,7 +38,7 @@ from .manifest import (
     semver,
     validate_channel,
 )
-from .protocol import MAX_MESSAGE_BYTES, ProtocolError, Request
+from .protocol import MAX_MESSAGE_BYTES, SELECTED_RELEASES_CAPABILITY, ProtocolError, Request
 from .state import StateStore, UpdaterState
 
 MANIFEST_URL = (
@@ -288,6 +288,52 @@ class ReleaseSource:
             raise UpdateError("discovered version differs from signed manifest")
         return signed
 
+    def release(self, version: str, channel: str) -> SignedManifest:
+        """Authenticate one published release using only fixed official URLs."""
+        require_channel(version, channel)
+        try:
+            with self.opener(
+                f"https://api.github.com/repos/mravalanche/photoframe/releases/tags/v{version}",
+                timeout=15,
+            ) as response:
+                payload = response.read(256 * 1024 + 1)
+            if len(payload) > 256 * 1024:
+                raise ValueError("release metadata exceeds the supported limit")
+            metadata = json.loads(payload)
+            if (
+                not isinstance(metadata, dict)
+                or metadata.get("draft") is not False
+                or metadata.get("prerelease") is not (channel == "develop")
+                or metadata.get("tag_name") != f"v{version}"
+            ):
+                raise ValueError("release is not published in the selected channel")
+            assets = metadata.get("assets")
+            names = (
+                {
+                    asset.get("name")
+                    for asset in assets
+                    if isinstance(asset, dict) and isinstance(asset.get("name"), str)
+                }
+                if isinstance(assets, list)
+                else set()
+            )
+            if (
+                not {"photoframe-manifest.json", f"photoframe-{version}-linux-aarch64.tar.gz"}
+                <= names
+            ):
+                raise ValueError("release has no complete signed ARM64 bundle")
+            with self.opener(
+                BUNDLE_URL.format(version=version, bundle="photoframe-manifest.json"), timeout=15
+            ) as response:
+                payload = response.read(256 * 1024 + 1)
+        except (OSError, ValueError, urllib.error.URLError) as exc:
+            raise UpdateError(f"could not read the published release: {exc}") from exc
+        signed = SignedManifest.verify(payload, self.public_key)
+        require_channel(signed.manifest.version, channel)
+        if signed.manifest.version != version:
+            raise UpdateError("selected tag differs from signed manifest")
+        return signed
+
     def download(self, manifest: ReleaseManifest, target: Path) -> None:
         url = BUNDLE_URL.format(version=manifest.version, bundle=manifest.bundle)
         written = 0
@@ -363,7 +409,20 @@ class Updater:
         payload = state.as_dict()
         payload.pop("completed_requests", None)
         payload.pop("request_fingerprints", None)
-        return {"ok": True, **payload}
+        return {"ok": True, **payload, "capabilities": [SELECTED_RELEASES_CAPABILITY]}
+
+    def inspect(self, release: str, channel: str) -> SignedManifest:
+        """Read-only verification; staging repeats these checks independently."""
+        require_channel(release, channel)
+        if not self.state_store.load().current_version:
+            raise UpdateError("running release is unknown; exact-version selection is unavailable")
+        signed = self.source.release(release, channel)
+        state = self.state_store.load()
+        if not state.current_version:
+            raise UpdateError("running release is unknown; exact-version selection is unavailable")
+        signed.manifest.require_upgrade_from(state.current_version)
+        signed.manifest.supports_rollback_to(2)
+        return signed
 
     def check(self, request_id: str, channel: str = "stable") -> dict[str, Any]:
         state = self.state_store.load()
@@ -407,14 +466,22 @@ class Updater:
         self.state_store.remember(state, request_id, result)
         return result
 
-    def stage(self, request_id: str, release: str, channel: str = "stable") -> dict[str, Any]:
+    def stage(
+        self, request_id: str, release: str, channel: str = "stable", *, selected: bool = False
+    ) -> dict[str, Any]:
         state = self.state_store.load()
         if cached := state.completed_requests.get(request_id):
             return cached
         if state.phase in {"staging", "activating", "rolling_back"}:
             raise UpdateError("another update operation is already active")
         require_channel(release, channel)
-        signed = self.source.latest() if channel == "stable" else self.source.latest(channel)
+        signed = (
+            self.inspect(release, channel)
+            if selected
+            else self.source.latest()
+            if channel == "stable"
+            else self.source.latest(channel)
+        )
         manifest = signed.manifest
         require_channel(manifest.version, channel)
         if manifest.version != release:
@@ -714,6 +781,10 @@ class Updater:
                     self.check(request.request_id, request.channel)
             elif request.action == "stage":
                 self.stage(request.request_id, request.release or "", request.channel)
+            elif request.action == "stage-selected":
+                self.stage(
+                    request.request_id, request.release or "", request.channel, selected=True
+                )
             elif request.action == "activate":
                 self.activate(request.request_id, request.release or "")
             else:
@@ -730,6 +801,9 @@ class Updater:
     def dispatch(self, request: Request) -> dict[str, Any]:
         if request.action == "status":
             return self.status()
+        if request.action == "inspect":
+            signed = self.inspect(request.release or "", request.channel)
+            return {"ok": True, "manifest": signed.manifest.as_dict()}
         validate_channel(request.channel)
         if request.release is not None:
             require_channel(request.release, request.channel)

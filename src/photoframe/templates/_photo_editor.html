@@ -1,26 +1,30 @@
 {% import "components/actions.html" as actions %}
 {% import "components/forms.html" as forms %}
+<dialog id="photo-editor-dialog" class="modal" aria-labelledby="selected-title" data-photo-editor-dialog data-editor-open="{{ 'true' if photo_editor_open else 'false' }}">
+<div class="modal-box max-h-[calc(100dvh-2rem)] w-[calc(100%-1rem)] max-w-5xl p-0">
+  <div class="flex justify-end px-4 pt-3"><button type="button" class="btn btn-ghost btn-sm" data-photo-editor-close autofocus aria-label="Close photo editor">Close</button></div>
 <section class="selected-preview photo-editor card border border-primary/40 bg-base-100 shadow-sm" aria-labelledby="selected-title">
   <div class="card-body grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(12rem,1fr)_minmax(0,1.5fr)]">
-    <div class="selected-image relative grid aspect-[3/2] place-items-center overflow-hidden rounded-box bg-base-200" aria-busy="true">
-      <img class="max-h-full max-w-full object-contain" src="/photos/{{ selected_photo.id }}/prepared?fit_mode={{ selected_framing.fit_mode }}&amp;matte={{ selected_framing.matte }}" alt="Frame preview of {{ selected_photo.filename }}">
+    <div class="selected-image relative grid max-h-[35dvh] aspect-[3/2] place-items-center overflow-hidden rounded-box bg-base-200" aria-busy="true">
+      <img class="max-h-[35dvh] max-w-full object-contain" src="/photos/{{ selected_photo.id }}/prepared?fit_mode={{ selected_framing.fit_mode }}&amp;matte={{ selected_framing.matte }}" alt="Frame preview of {{ selected_photo.filename }}">
       <div class="preview-feedback is-loading absolute inset-x-2 bottom-2 flex items-center justify-center gap-2 rounded-box bg-base-100/95 px-3 py-2 text-sm shadow-sm" data-preview-feedback role="status" aria-live="polite"><span data-preview-message>Preparing preview…</span><button type="button" class="btn btn-outline btn-sm" data-preview-retry hidden>Retry</button></div>
     </div>
     <div class="selected-copy min-w-0 space-y-4">
-      <div><p class="pf-eyebrow text-primary">Photo preview</p><h2 id="selected-title" class="pf-section-title scroll-mt-24 break-words">{{ selected_photo.filename }}</h2><p class="mt-1 text-sm text-base-content/70">Adjust this photo before adding it to the frame.</p></div>
-      <form data-saved-fit="{{ selected_framing.fit_mode }}" data-saved-matte="{{ selected_framing.matte }}" class="framing-form grid gap-3 sm:grid-cols-2" method="post" action="/photo/framing" hx-post="/photo/framing" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML">
+      <div><p class="pf-eyebrow text-primary">Photo preview</p><h2 id="selected-title" class="pf-section-title scroll-mt-24 break-words">{{ selected_photo.filename }}</h2><p class="mt-1 text-sm text-base-content/70">Preview the current layout, or save a custom framing choice.</p></div>
+      <form data-saved-fit="{{ selected_framing.fit_mode }}" data-saved-matte="{{ selected_framing.matte }}" class="framing-form grid gap-3 sm:grid-cols-2" method="post" action="/photo/framing" hx-post="/photo/framing{% if photo_editor_source == 'layouts' %}?source=layouts{% endif %}" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML">
         <input type="hidden" name="photo_id" value="{{ selected_photo.id }}">
         {{ forms.select_field('selected-fit', 'fit_mode', 'Fit', [('fit', 'Show whole photo'), ('fill', 'Fill frame')], selected_framing.fit_mode) }}
         {{ forms.select_field('selected-matte', 'matte', 'Background', [('blur', 'Soft photo'), ('colour', 'Colour wash'), ('white', 'White'), ('black', 'Black')], selected_framing.matte, help='Shown when using the whole photo.') }}
-        <div class="form-actions flex flex-wrap items-center gap-3 sm:col-span-2">{{ actions.button('Save framing', 'secondary', type='submit') }}<span class="text-sm text-base-content/70" data-framing-hint role="status">{{ 'Ready to show' if selected_rotation_eligible else 'Save framing to include this photo' }}</span><span class="framing-saving htmx-indicator text-sm" role="status">Saving…</span></div>
+        <div class="form-actions flex flex-wrap items-center gap-3 sm:col-span-2">{{ actions.button('Save framing', 'secondary', type='submit') }}<span class="text-sm text-base-content/70" data-framing-hint role="status">Ready to show using the current layout</span><span class="framing-saving htmx-indicator text-sm" role="status">Saving…</span></div>
       </form>
-      {% if not selected_rotation_eligible %}<p class="framing-required text-sm font-medium text-warning-content" role="status">Save framing before showing this photo.</p>{% endif %}
       <div class="selected-actions flex flex-wrap items-center gap-2">
         <form method="post" action="/render/start" hx-post="/render/start" hx-target="#workspace" hx-swap="outerHTML"><button class="primary btn btn-primary" type="submit" {% if not selected_rotation_eligible %}disabled{% endif %}>Show now</button></form>
-        <form class="rotation-action" method="post" action="/photo/start" hx-post="/photo/start" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ selected_photo.id }}">{{ actions.button('Start rotation here', 'secondary', type='submit', disabled=not selected_rotation_eligible) }}</form>
-        <form class="cancel-action" method="post" action="/photo/preview/clear" hx-post="/photo/preview/clear" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML">{{ actions.button('Close preview', 'quiet', type='submit') }}</form>
+        <form class="rotation-action" method="post" action="/photo/start" hx-post="/photo/start{% if photo_editor_source == 'layouts' %}?source=layouts{% endif %}" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ selected_photo.id }}">{{ actions.button('Start rotation here', 'secondary', type='submit', disabled=not selected_rotation_eligible) }}</form>
+        {{ actions.button('Close preview', 'quiet', attrs={'data-photo-editor-close': ''}) }}
       </div>
-      <form class="hide-photo-form border-t border-base-300 pt-3" method="post" action="/photo/hide" hx-post="/photo/hide" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML">{{ actions.button('Hide from this frame', 'quiet', 'sm', type='submit') }}<small class="ml-2 text-xs text-base-content/60">The original stays in your library.</small></form>
+      <form class="hide-photo-form border-t border-base-300 pt-3" method="post" action="/photo/hide" hx-post="/photo/hide{% if photo_editor_source == 'layouts' %}?source=layouts{% endif %}" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ selected_photo.id }}">{{ actions.button('Hide from this frame', 'quiet', 'sm', type='submit') }}<small class="ml-2 text-xs text-base-content/60">The original stays in your library.</small></form>
     </div>
   </div>
 </section>
+</div>
+</dialog>

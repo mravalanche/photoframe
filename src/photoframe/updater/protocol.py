@@ -15,7 +15,8 @@ from .manifest import _SEMVER, require_channel, validate_channel
 MAX_MESSAGE_BYTES = 64 * 1024
 _JOB_ID = re.compile(r"^[0-9a-f]{32}$")
 _VERSION = _SEMVER
-Action = Literal["status", "check", "stage", "activate", "rollback"]
+Action = Literal["status", "check", "stage", "inspect", "stage-selected", "activate", "rollback"]
+SELECTED_RELEASES_CAPABILITY = "selected_releases_v1"
 
 
 class ProtocolError(ValueError):
@@ -64,6 +65,8 @@ class Request:
             "status",
             "check",
             "stage",
+            "inspect",
+            "stage-selected",
             "activate",
             "rollback",
         }:
@@ -75,9 +78,9 @@ class Request:
         if not isinstance(request.channel, str):
             raise ProtocolError("channel must be a string")
         validate_channel(request.channel)
-        needs_release = request.action in {"stage", "activate"}
+        needs_release = request.action in {"stage", "inspect", "stage-selected", "activate"}
         if needs_release != (request.release is not None):
-            raise ProtocolError("release ID is required only for stage and activate")
+            raise ProtocolError("release ID is required only for release-specific actions")
         if request.release is not None and not _VERSION.fullmatch(request.release):
             raise ProtocolError("release ID is invalid")
         if request.release is not None:
@@ -92,7 +95,13 @@ class HelperClient:
         self.timeout = timeout
 
     def call(
-        self, action: Action, request_id: str, release: str | None = None, channel: str = "stable"
+        self,
+        action: Action,
+        request_id: str,
+        release: str | None = None,
+        channel: str = "stable",
+        *,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
         token = self.token_path.read_text().strip()
         request = Request(1, action, token, request_id, release, channel)
@@ -103,7 +112,7 @@ class HelperClient:
         if len(payload) > MAX_MESSAGE_BYTES:
             raise ProtocolError("request is too large")
         with socket.socket(getattr(socket, "AF_UNIX"), socket.SOCK_STREAM) as connection:  # noqa: B009
-            connection.settimeout(self.timeout)
+            connection.settimeout(self.timeout if timeout is None else timeout)
             connection.connect(str(self.socket_path))
             connection.sendall(payload)
             response = bytearray()

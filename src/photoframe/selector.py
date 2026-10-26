@@ -16,14 +16,15 @@ class EligibilitySummary:
 def classify_photos(
     photos: list[Photo], frame: FrameSettings, is_decodable: Callable[[Photo], bool]
 ) -> EligibilitySummary:
-    """Separate candidates using metadata orientation and verified decode support."""
+    """Check visible photos for decode support; report orientation as metadata."""
     orientation_matches = [photo for photo in photos if frame.allows(photo)]
     eligible = [photo for photo in orientation_matches if is_decodable(photo)]
     eligible = eligible_photos(eligible, frame)
     return EligibilitySummary(
         eligible=eligible,
         wrong_orientation=sum(
-            not frame.preference(photo.id).hidden and not frame.allows(photo) for photo in photos
+            not frame.preference(photo.id).hidden and not photo.matches(frame.orientation)
+            for photo in photos
         ),
         unsupported=len(orientation_matches) - len(eligible),
     )

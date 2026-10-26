@@ -2,6 +2,7 @@
   const el = id => document.getElementById(id);
   const ui = globalThis.PhotoframeUpdates;
   let csrf = null, state = {}, timer, failures = 0, busy = false, connected = false, pendingAction = 'activate';
+  let catalog = [], catalogChannel = null, verifiedSelection = null;
   const active = new Set(['queued', 'checking', 'downloading', 'staging', 'verifying', 'activating', 'restarting', 'health_check', 'rolling_back']);
   function controls() {
     const blocked = busy || !connected || active.has(state.phase);
@@ -13,6 +14,14 @@
     el('apply-update').disabled = blocked || !state.staged_version;
     el('rollback-update').hidden = !state.previous_version;
     el('rollback-update').disabled = blocked;
+    el('load-releases').disabled = busy || !connected;
+    el('release-choice').disabled = blocked || !catalog.length;
+    const choice = catalog.find(release => release.version === el('release-choice').value);
+    el('inspect-release').disabled = blocked || !state.release_selection_supported || !choice?.available;
+    el('stage-selected-release').disabled = blocked || !state.release_selection_supported
+      || verifiedSelection?.version !== choice?.version || verifiedSelection?.channel !== state.channel;
+    el('release-picker-reason').textContent = state.release_selection_reason
+      || 'Only published releases newer than this installation can be selected. Metadata alone does not establish compatibility.';
   }
   async function send(action, body = {}) {
     if (action !== 'session') csrf = (await send('session')).csrf;
@@ -33,6 +42,7 @@
       const response = await fetch('/api/updates/status', {cache:'no-store', signal:AbortSignal.timeout(10000)});
       if (!response.ok) throw new Error('Unavailable');
       state = await response.json(); failures = 0; connected = true;
+      if (catalogChannel && catalogChannel !== state.channel) clearReleaseSelection();
       if (state.running_version) el('installed-version').textContent = `v${state.running_version}`;
       el('managed-controls').hidden = !state.managed;
       el('unmanaged').hidden = state.managed;
@@ -72,9 +82,63 @@
   el('public-check').onclick = async () => { busy = true; controls(); try { const response = await fetch('/api/updates/releases', {signal:AbortSignal.timeout(15000)}); if (!response.ok) throw new Error('Unavailable'); await poll(); } catch (_) { el('update-error').textContent = 'Release check unavailable. Try again later.'; } finally { busy = false; controls(); } };
   el('check-update').onclick = () => action('check');
   el('stage-update').onclick = () => action('stage', {release:state.latest_manifest.version});
+  function clearReleaseSelection() {
+    catalog = []; catalogChannel = null; verifiedSelection = null;
+    el('release-choice').replaceChildren(new Option('Load releases to choose a version', ''));
+    el('selected-release-detail').textContent = 'Compatibility has not been verified.';
+    el('selected-release-notes').replaceChildren();
+  }
+  el('load-releases').onclick = async () => {
+    busy = true; controls(); el('update-error').textContent = '';
+    try {
+      const response = await fetch('/api/updates/catalog', {cache:'no-store', signal:AbortSignal.timeout(15000)});
+      const result = await response.json();
+      if (!response.ok) throw Error(result.message || 'Release list unavailable.');
+      if (result.channel !== state.channel) throw Error('The update channel changed. Load releases again.');
+      clearReleaseSelection(); catalog = result.releases; catalogChannel = result.channel;
+      const choices = [new Option('Choose a published release', '')];
+      for (const release of catalog) {
+        const date = release.published_at ? new Date(release.published_at) : null;
+        const published = date && !Number.isNaN(date.valueOf()) ? date.toLocaleDateString() : 'Date unavailable';
+        const option = new Option(`v${release.version} · ${published} · ${release.compatibility}`, release.version);
+        option.disabled = !release.available; choices.push(option);
+      }
+      el('release-choice').replaceChildren(...choices);
+      el('selected-release-detail').textContent = catalog.length
+        ? 'Choose a version, then verify its signature and compatibility.' : 'No canonical releases were found in this channel.';
+    } catch (error) { el('update-error').textContent = error.message; }
+    finally { busy = false; controls(); }
+  };
+  el('release-choice').onchange = () => {
+    verifiedSelection = null; el('selected-release-notes').replaceChildren();
+    el('selected-release-detail').textContent = el('release-choice').value
+      ? `v${el('release-choice').value}: compatibility has not been verified.` : 'Choose a release.';
+    controls();
+  };
+  el('inspect-release').onclick = async () => {
+    const release = el('release-choice').value, channel = state.channel;
+    verifiedSelection = null; busy = true; controls(); el('update-error').textContent = '';
+    el('selected-release-detail').textContent = `Verifying v${release}…`;
+    try {
+      const result = await send('inspect', {release});
+      if (state.channel !== channel || result.channel !== channel || result.manifest.version !== release) {
+        throw Error('The selected release changed. Verify it again.');
+      }
+      verifiedSelection = {...result.manifest, channel};
+      el('selected-release-detail').textContent = `v${release} verified for Linux ARM64, updater protocol ${result.manifest.updater_protocol}, settings schema ${result.manifest.settings_schema_min}–${result.manifest.settings_schema_max}, and rollback schema ${result.manifest.rollback_schema_min}–${result.manifest.rollback_schema_max}.`;
+      ui.releaseNotes(el('selected-release-notes'), result.manifest.release_notes);
+    } catch (error) {
+      el('update-error').textContent = error.message;
+      el('selected-release-detail').textContent = 'Release verification failed. Nothing was downloaded or installed.';
+    } finally { busy = false; controls(); }
+  };
+  el('stage-selected-release').onclick = () => {
+    if (!verifiedSelection || verifiedSelection.channel !== state.channel) return;
+    action('stage-selected', {release:verifiedSelection.version});
+  };
   const savePreferences = () => action('preferences', {weekly:el('weekly-checks').checked, channel:el('update-channel').value});
   el('weekly-checks').onchange = savePreferences;
-  el('update-channel').onchange = savePreferences;
+  el('update-channel').onchange = () => { clearReleaseSelection(); savePreferences(); };
   el('apply-update').onclick = () => { pendingAction = 'activate'; el('confirm-title').textContent = 'Apply update and restart?'; el('confirm-detail').textContent = 'Your frame will pause briefly. Your saved settings and photos will be kept.'; el('confirm-action').textContent = 'Apply & restart'; el('apply-dialog').returnValue = ''; el('apply-dialog').showModal(); };
   el('rollback-update').onclick = () => { pendingAction = 'rollback'; el('confirm-title').textContent = 'Restore previous version and restart?'; el('confirm-detail').textContent = 'This also restores the settings saved before the update. Settings changes made since that update will be lost.'; el('confirm-action').textContent = 'Restore & restart'; el('apply-dialog').returnValue = ''; el('apply-dialog').showModal(); };
   el('apply-dialog').addEventListener('close', () => { if (el('apply-dialog').returnValue === 'confirm') action(pendingAction, {confirmed:true, ...(pendingAction === 'activate' ? {release:state.staged_version} : {})}); });

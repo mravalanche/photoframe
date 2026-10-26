@@ -50,11 +50,11 @@ These full-page captures show the live `/ui/showcase` route at desktop (1365px) 
 | [<img src="images/ui-v2-showcase-light-desktop.png" alt="Light theme component showcase at desktop width" width="560">](images/ui-v2-showcase-light-desktop.png) | [<img src="images/ui-v2-showcase-dark-desktop.png" alt="Dark theme component showcase at desktop width" width="560">](images/ui-v2-showcase-dark-desktop.png) |
 | [<img src="images/ui-v2-showcase-light-mobile.png" alt="Light theme component showcase at phone width" width="240">](images/ui-v2-showcase-light-mobile.png) | [<img src="images/ui-v2-showcase-dark-mobile.png" alt="Dark theme component showcase at phone width" width="240">](images/ui-v2-showcase-dark-mobile.png) |
 
-The integrated mobile screens below use demo data at 390px. The Frame capture shows the contextual Next photo action above the fixed navigation. The Photos capture shows the compact library and its photo-layout table disclosure. The Updates capture shows the current installation state.
+The integrated mobile screens below use demo data at 390px. The Frame capture shows the primary navigation without a permanent activity tray. Photos provides direct framing actions and a photo-layout table. Software updates is a Settings section; its controls wrap within the viewport.
 
 | Frame | Photos | Updates |
 | --- | --- | --- |
-| [<img src="images/ui-v2-frame-mobile.png" alt="Frame screen on a phone with status and Next photo action" width="240">](images/ui-v2-frame-mobile.png) | [<img src="images/ui-v2-photos-mobile.png" alt="Photos screen on a phone with a photo rail and layout table disclosure" width="240">](images/ui-v2-photos-mobile.png) | [<img src="images/ui-v2-updates-mobile.png" alt="Updates screen on a phone showing installation status" width="240">](images/ui-v2-updates-mobile.png) |
+| [<img src="images/ui-v2-frame-mobile.png" alt="Frame screen with three-destination navigation" width="240">](images/ui-v2-frame-mobile.png) | [<img src="images/ui-v2-photos-mobile.png" alt="Photos screen with direct framing and layout controls" width="240">](images/ui-v2-photos-mobile.png) | [<img src="images/ui-v2-updates-mobile.png" alt="Software updates within Settings on a phone" width="240">](images/ui-v2-updates-mobile.png) |
 
 ## Typography and rhythm
 
@@ -72,23 +72,35 @@ Use the Jinja macros in `src/photoframe/templates/components/` as the canonical 
 | --- | --- | --- |
 | Button | `actions.button` | Primary for the next main action; secondary (`btn-outline`) for alternatives; quiet (`btn-ghost`) for low priority; danger (`btn-error`) for destructive actions; success only for a meaningful completed action. `sm`, `md`, `lg` sizes. Loading combines spinner and `aria-busy`; disabled disables interaction. |
 | Link | `actions.link` | Text link (`link-primary`) inside copy; button styles only for action-like navigation. Active navigation uses `aria-current`. |
-| Form fields | `forms.input_field`, `select_field`, `checkbox_field` | `fieldset`, visible label and associated help. `input-error` / `select-error` plus `aria-invalid` for failed validation. Explain the correction in text. |
+| Form fields | `forms.input_field`, `select_field`, `checkbox_field`, `radio_card` | `fieldset`, visible label and associated help. Labels and help wrap within narrow viewports. `input-error` / `select-error` plus `aria-invalid` for failed validation. Explain the correction in text. |
 | Card | `surfaces.card` | Default (`base-100`), soft (`base-200`), emphasis (`primary`). Keep a consistent `card-body` and border. |
 | Disclosure | `surfaces.disclosure` | Native `details` with `collapse-arrow`; short title and optional current-value summary. Use for advanced or less frequent settings. |
 | Empty state | `surfaces.empty_state` | Name the missing content, explain one next step and offer one action when possible. |
-| Badge | `feedback.badge` | Neutral/default, primary/custom, success, warning, error and info. Labels must express the state. |
+| Badge | `feedback.badge` | Distinguish Native orientation, Default framing, Custom framing and Unavailable. Hidden is separate. Orientation alone never implies an error or blocks rotation. |
 | Alert | `feedback.alert` | Info/success status; warning/error alert. Keep text actionable, persistent while relevant and understandable without colour. |
 | Progress | `feedback.progress_bar`, `feedback.steps`, `feedback.loading` | Determinate progress uses `progress`; multi-stage operations use `steps` with current step marked; indeterminate waiting uses `loading-spinner` with visible text. |
 | Table | `data.table` | Semantic caption, column headers, row headers and restrained `table-zebra`. Horizontal scroll stays within the table on narrow screens. |
 | Dialog | `dialogs.dialog` | Native `dialog` with `modal` styling. Give a specific title, consequence text and an explicit danger action when destructive. Return focus to the trigger after close. |
-| Mobile navigation | `navigation.mobile_dock` | Fixed `dock` below the main content; active item has label and `aria-current`. Keep the number of destinations small. |
+| Mobile navigation | `navigation.mobile_dock` | Frame, Photos and Settings, with Updates inside Settings. Keep it visible until the desktop sidebar appears. Active items have labels and `aria-current`. |
 
 The component showcase renders these same macros in both themes. It must be maintained as components change; the repository screenshots provide a reviewable reference without a running browser.
+
+![Photo framing dialog on mobile](images/ui-v2-photo-editor-mobile.png)
+
+Software updates keeps the release history in an Advanced disclosure. Loading the list does not
+download or install software. A chosen release is inspected for compatibility before the separate
+download action, and Apply still requires confirmation. Older updater helpers explain their
+latest-release-only capability; the web app does not silently replace a privileged service.
+
+![Advanced release picker on mobile with simulated releases](images/ui-v2-release-picker-mobile.png)
 
 ## Interaction rules
 
 - Keep the primary destination and current state visible on mobile. The page header and bottom navigation can remain fixed; only the content area scrolls. Respect safe-area insets and leave enough bottom padding for the dock.
 - During a multi-step update, put the current step, concise progress and next available action together near the top or in a compact sticky status area. Avoid forcing a return trip through a long log. Keep detail logs in a disclosure.
+- Do not show a permanent floating Next photo action. Reserve the contextual tray for active operations and actionable update steps.
+- Open photo previews and framing in a shared dialog with focus returned to the trigger. Never force a long scroll to reach the editor. Let the photo-layout table apply the default to the album in one atomic operation; explain when this replaces custom framing.
+- Settings opens configuration directly. Its section chooser and form controls wrap on mobile; page-level horizontal scrolling is never needed.
 - Use HTMX to replace the smallest meaningful status or content region. Announce important changed state through a live region; preserve focus and do not replace the control that currently has focus without deliberate handling.
 - At 320px width, actions must remain reachable and labels readable. Use an in-card vertical stack rather than squeezed side-by-side buttons. Keep dialogs within the viewport and let their content scroll.
 - Every icon-only action needs a text alternative. Interactive targets should be about 44px high on touch screens. The shared focus ring is visible in both themes. Reduced-motion users receive near-instant transitions.

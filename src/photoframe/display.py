@@ -15,6 +15,13 @@ from PIL import Image
 
 from .models import DeviceSettings, DisplayDriver
 
+# These Impression drivers accept already indexed images without quantizing
+# again. Their RGB path uses Pillow's private ImagingCore conversion API with
+# an unloaded palette, which Pillow 13 correctly rejects as "empty palette".
+# Other Inky families have different palette/remapping rules and retain their
+# native set_image path.
+_INDEXED_IMPRESSION_DRIVERS = frozenset({"inky.inky_uc8159", "inky.inky_ac073tc1a"})
+
 
 class DisplayError(RuntimeError):
     """The configured display cannot be discovered or updated."""
@@ -95,8 +102,10 @@ class InkyDisplay:
                 f"Image is {image.size[0]} x {image.size[1]}; expected native "
                 f"{self.profile.resolution[0]} x {self.profile.resolution[1]}"
             )
+        indexed: Image.Image | None = None
         try:
-            self._panel.set_image(image)
+            indexed = self._indexed_impression_image(image)
+            self._panel.set_image(indexed if indexed is not None else image)
             # Inky's show() waits for the panel refresh. Do not emulate a busy
             # percentage: the call is the authoritative completion boundary.
             # The busy signal clearing is the only truthful completion boundary.
@@ -105,6 +114,32 @@ class InkyDisplay:
             self._panel.show(busy_wait=True)
         except Exception as exc:
             raise DisplayError(f"Pimoroni Inky failed to refresh: {exc}") from exc
+        finally:
+            if indexed is not None:
+                indexed.close()
+
+    def _indexed_impression_image(self, image: Image.Image) -> Image.Image | None:
+        if image.mode == "P" or not any(
+            cls.__module__ in _INDEXED_IMPRESSION_DRIVERS for cls in type(self._panel).__mro__
+        ):
+            return None
+        blend = getattr(self._panel, "_palette_blend", None)
+        if not callable(blend):
+            raise DisplayError("The Inky Impression driver does not expose its colour palette")
+        # Use the driver's own calibrated palette and default saturation, not a
+        # generic RGB palette. The pixel indices still have the panel's meaning.
+        palette = blend(0.5)
+        if (
+            not isinstance(palette, (list, tuple, bytes, bytearray))
+            or not 3 <= len(palette) <= 768
+            or len(palette) % 3
+            or any(not isinstance(value, int) or not 0 <= value <= 255 for value in palette)
+        ):
+            raise DisplayError("The Inky Impression driver returned an invalid colour palette")
+        with Image.new("P", (1, 1)) as palette_image, image.convert("RGB") as rgb:
+            palette_image.putpalette(palette)
+            palette_image.load()
+            return rgb.quantize(palette=palette_image, dither=Image.Dither.FLOYDSTEINBERG)
 
 
 def discover_inky(settings: DeviceSettings) -> tuple[InkyDisplay | None, DisplayProfile]:

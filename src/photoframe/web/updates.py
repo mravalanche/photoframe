@@ -3,6 +3,7 @@
 import json
 from uuid import UUID
 
+import httpx
 from fastapi import Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -26,8 +27,11 @@ def register_updates(app, templates, runtime, data_dir):
     app.router.add_event_handler("shutdown", worker.stop)
 
     @app.get("/health/update")
+    @app.head("/health/update")
     def update_health():
-        return {"version": __version__, "ready": True}
+        return JSONResponse(
+            {"version": __version__, "ready": True}, headers={"Cache-Control": "no-store"}
+        )
 
     @app.get("/updates")
     def updates(request: Request):
@@ -42,6 +46,17 @@ def register_updates(app, templates, runtime, data_dir):
         return JSONResponse(
             controller.check_public_release(), headers={"Cache-Control": "no-store"}
         )
+
+    @app.get("/api/updates/catalog")
+    def release_catalog():
+        try:
+            return JSONResponse(controller.release_catalog(), headers={"Cache-Control": "no-store"})
+        except (httpx.HTTPError, OSError, ValueError) as exc:
+            return JSONResponse(
+                {"message": f"Release list unavailable: {exc}"},
+                status_code=502,
+                headers={"Cache-Control": "no-store"},
+            )
 
     @app.post("/api/updates/{action}")
     async def mutate(action: str, request: Request):
@@ -84,7 +99,11 @@ def register_updates(app, templates, runtime, data_dir):
                 return await run_in_threadpool(
                     controller.configure, body["weekly"], body.get("channel")
                 )
-            if action not in {"check", "stage", "activate", "rollback"}:
+            if action in {"inspect", "stage-selected"} and set(body) != {"release"}:
+                raise ValueError("Only a release version is accepted for release selection")
+            if action == "inspect":
+                return await run_in_threadpool(controller.inspect_release, body.get("release"))
+            if action not in {"check", "stage", "stage-selected", "activate", "rollback"}:
                 raise ValueError("Unknown update action")
             if action in {"activate", "rollback"} and body.get("confirmed") is not True:
                 raise ValueError("Confirm Apply & restart before continuing")

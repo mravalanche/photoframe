@@ -49,17 +49,18 @@ def frame(tmp_path):
 
 
 @pytest.mark.parametrize("background", ["black", "blur", "colour"])
-def test_portrait_is_browsable_but_rotation_requires_explicit_framing(tmp_path, background):
+def test_portrait_uses_default_automatically_and_can_save_custom_framing(tmp_path, background):
     _app, client, runtime = frame(tmp_path)
-    assert [p.id for p in runtime.photo_eligibility(runtime.repository.load().frame).eligible] == [
-        "wide"
-    ]
+    assert {p.id for p in runtime.photo_eligibility(runtime.repository.load().frame).eligible} == {
+        "wide",
+        "tall",
+    }
     initial_workspace = client.get("/partials/workspace?view=photos").text
     assert "tall.jpg" in initial_workspace
     assert "Hidden from this frame (0)" in initial_workspace
     client.post("/photo/preview", data={"photo_id": "tall"})
     assert runtime.preview_id() == "tall"
-    assert "not eligible" in client.post("/render/start").text
+    assert not runtime.repository.load().frame.has_custom_framing("tall")
     response = client.post(
         "/photo/framing", data={"photo_id": "tall", "fit_mode": "fit", "matte": background}
     )
@@ -100,9 +101,10 @@ def test_hide_last_photo_is_local_restorable_and_blocks_stale_actions(tmp_path):
     runtime.repository.update(
         lambda saved: setattr(saved.refresh_status, "last_rendered_photo_id", "wide")
     )
+    client.post("/photo/hide", data={"photo_id": "tall"})
     client.post("/photo/preview", data={"photo_id": "wide"})
     response = client.post("/photo/hide", headers=PHOTOS_VIEW, data={"photo_id": "wide"})
-    assert "Hidden from this frame (1)" in response.text
+    assert "Hidden from this frame (2)" in response.text
     assert "No photos remain in rotation" in response.text
     assert runtime.repository.load().refresh_status.last_rendered_photo_id == "wide"
     assert runtime.preview_id() is None
@@ -173,23 +175,104 @@ def test_hidden_unsaved_photo_follows_changed_default_after_restore(tmp_path):
     client.post("/photo/unhide", data={"photo_id": "wide"})
     restored = runtime.repository.load().frame.preference("wide")
     assert not restored.hidden and (restored.fit_mode, restored.matte) == ("fit", "colour")
-    assert [p.id for p in runtime.photo_eligibility(runtime.repository.load().frame).eligible] == [
-        "wide"
-    ]
+    assert {p.id for p in runtime.photo_eligibility(runtime.repository.load().frame).eligible} == {
+        "wide",
+        "tall",
+    }
 
 
-def test_default_layout_does_not_include_opposite_orientation_without_saved_framing(tmp_path):
+def test_default_layout_includes_opposite_orientation_without_custom_framing(tmp_path):
     _app, client, runtime = frame(tmp_path)
     client.post("/photo/default-layout", data={"fit_mode": "fit", "matte": "blur"})
     assert not runtime.repository.load().frame.preference("tall").included
-    assert [p.id for p in runtime.photo_eligibility(runtime.repository.load().frame).eligible] == [
-        "wide"
-    ]
+    assert {p.id for p in runtime.photo_eligibility(runtime.repository.load().frame).eligible} == {
+        "wide",
+        "tall",
+    }
     client.post("/photo/preview", data={"photo_id": "tall"})
     page = client.get("/partials/workspace?view=photos").text
     assert 'name="matte"' in page
-    assert "Save framing to include this photo" in page
-    assert "Not set" in page and "Needs framing" in page
+    assert "Ready to show using the current layout" in page
+    assert "Default framing" in page and "Native orientation" in page
+    assert "Needs framing" not in page
+    assert 'aria-label="Frame photo tall.jpg"' in page
+
+
+def test_bulk_layout_resets_current_album_customs_and_preserves_hidden_and_schedule(tmp_path):
+    _app, client, runtime = frame(tmp_path)
+    client.post("/photo/framing", data={"photo_id": "tall", "fit_mode": "fit", "matte": "black"})
+    client.post("/photo/hide", data={"photo_id": "wide"})
+    from photoframe.models import PhotoPreference
+
+    def add_outside_photo(settings):
+        settings.frame.photo_preferences[settings.frame.photo_scope]["outside-album"] = (
+            PhotoPreference(fit_mode="fit", matte="colour", included=True)
+        )
+
+    runtime.repository.update(add_outside_photo)
+    before = runtime.repository.load()
+    cache_before = runtime.cache.stats()
+    response = client.post(
+        "/photo/layouts/all", headers=PHOTOS_VIEW, data={"fit_mode": "fit", "matte": "blur"}
+    )
+    after = runtime.repository.load()
+    assert "custom layouts reset" in response.text
+    assert 'id="photo-workspace"' in response.text
+    assert after.frame.schedule_anchor == before.frame.schedule_anchor
+    assert after.frame.preference("wide").hidden
+    assert not after.frame.has_custom_framing("wide")
+    assert not after.frame.has_custom_framing("tall")
+    assert after.frame.preference("tall").matte == "blur"
+    assert after.frame.has_custom_framing("outside-album")
+    assert after.frame.preference("outside-album").matte == "colour"
+    assert runtime.cache.stats() == cache_before
+
+
+def test_bulk_layout_invalid_or_busy_request_keeps_saved_preferences(tmp_path):
+    _app, client, runtime = frame(tmp_path)
+    before = runtime.repository.load()
+    response = client.post("/photo/layouts/all", data={"fit_mode": "invalid", "matte": "blur"})
+    assert 'data-notice-kind="error"' in response.text
+    assert runtime.repository.load() == before
+    runtime.renderer.start("wide")
+    response = client.post("/photo/layouts/all", data={"fit_mode": "fit", "matte": "blur"})
+    assert "Wait for the current frame update" in response.text
+    assert runtime.repository.load() == before
+
+
+def test_table_preview_opens_local_editor_and_preserves_table_context(tmp_path):
+    _app, client, _runtime = frame(tmp_path)
+    response = client.post(
+        "/photo/preview?source=layouts", headers=PHOTOS_VIEW, data={"photo_id": "tall"}
+    )
+    assert 'data-photo-editor-dialog data-editor-open="true"' in response.text
+    assert "data-photo-editor-close autofocus" in response.text
+    assert 'hx-post="/photo/framing?source=layouts"' in response.text
+    assert 'id="photo-layouts" open' in response.text
+    assert 'aria-label="Frame photo tall.jpg"' in response.text
+    initial = client.get("/partials/workspace?view=photos")
+    assert 'data-photo-editor-dialog data-editor-open="false"' in initial.text
+
+
+def test_table_hide_and_undo_keep_the_layout_table_open(tmp_path):
+    _app, client, runtime = frame(tmp_path)
+    client.post("/photo/preview?source=layouts", headers=PHOTOS_VIEW, data={"photo_id": "tall"})
+    hidden = client.post(
+        "/photo/hide?source=layouts", headers=PHOTOS_VIEW, data={"photo_id": "tall"}
+    )
+    assert runtime.repository.load().frame.preference("tall").hidden
+    assert 'id="photo-layouts" open' in hidden.text
+    # Both the immediate notice and the affected table row keep the source.
+    assert hidden.text.count('hx-post="/photo/unhide?source=layouts"') >= 2
+    table = hidden.text.split('id="photo-layout-table"', 1)[1].split("</table>", 1)[0]
+    assert "Undo hide" in table
+    restored = client.post(
+        "/photo/unhide?source=layouts", headers=PHOTOS_VIEW, data={"photo_id": "tall"}
+    )
+    assert not runtime.repository.load().frame.preference("tall").hidden
+    assert 'id="photo-layouts" open' in restored.text
+    assert 'aria-label="Frame photo tall.jpg"' in restored.text
+    assert "Undo hide" not in restored.text
 
 
 def test_fit_applies_exif_before_layout_and_preserves_white_matte():
