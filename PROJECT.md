@@ -43,7 +43,7 @@ The application is deliberately small and single-process:
   separate scheduling, preparation, hardware output, refresh, and local-cache responsibilities.
 
 The browser UI uses FastAPI-rendered Jinja fragments and a vendored HTMX 2.0.4 production build.
-The four main destinations are Frame, Photos, Updates, and Settings. Photo actions swap the Photos
+The main destinations are Frame, Photos, and Settings, with Software updates inside Settings. Photo actions swap the Photos
 region, while background status polls update their own fragments. The interface uses shared Jinja
 components, locally built Tailwind and daisyUI styles, and self-hosted fonts. Its two themes and
 review screenshots are documented in [the v2 design system](docs/ui-v2-design-system.md). Node is
@@ -273,14 +273,19 @@ and uses a bounded least-recently-used cache under `photo-cache/`. Relevant `[re
 A provider outage preserves the existing cache and schedules a retry. The persisted refresh status
 records attempts, successes, failures, cache size, scheduled render completion, and render errors.
 
-`GET /health` is designed for an HTTP monitor such as Uptime Kuma:
+`GET /health` and `HEAD /health` report whether the photo-refresh and frame-render lifecycle is healthy:
 
 - HTTP 200 with `status: healthy` follows a successful, non-stale refresh.
-- HTTP 503 with `status: degraded` is returned before the first success, after a failed refresh, or
-  when the most recent success exceeds `health_stale_seconds`.
+- HTTP 503 with `status: degraded` is returned before the first success, after a failed refresh,
+  when the most recent success exceeds `health_stale_seconds`, or after a display render failure.
 
 The JSON response includes retry timing, cache usage, and failure context, allowing monitoring to
-detect a running process that can no longer refresh its source.
+detect a running process that can no longer refresh its source or physical display. A reachable web
+page can therefore coexist with a degraded health response. The response is not cached.
+
+Use `GET /health/live` or `HEAD /health/live` when a monitor should check only that the web process
+is responding. This returns HTTP 200 independently of provider and display health. `/health/update`
+remains the version/readiness endpoint used by the managed update helper.
 
 ## Development and quality gates
 
@@ -474,9 +479,10 @@ Before tagging or pushing a release candidate:
 
 Implemented for review on a feature branch based on `develop`:
 
-- The header has a compact software-update status. The persistent mobile dock exposes Frame, Photos,
-  Updates and Settings, with one contextual progress or next-action tray above it. Settings opens
-  Software updates first, followed by Photo provider, Display hardware, and Advanced & recovery.
+- The header has a compact software-update status and one theme toggle. The persistent mobile dock
+  exposes Frame, Photos and Settings. A contextual tray appears for active operations and relevant
+  update steps. Settings opens Photo provider directly, with Display hardware, Software updates,
+  and Advanced & recovery as sections that wrap within the mobile viewport.
   Shared themes, buttons, typography, status colours and focus styles apply throughout.
 - Album choice, next-photo control, photo order and schedule remain on the Frame page. Photo previews,
   per-photo layouts, the layout table and hidden-photo recovery live on the Photos page.

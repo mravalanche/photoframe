@@ -95,13 +95,18 @@ and HEIC render fallback continue to use the larger preview rendition.
 
 Portrait and square photos appear in the photo browser. Choose **Show whole photo** to keep the
 full image, with a soft photo, colour, white or black background. **Fill frame** crops the edges.
-Save framing to include a photo in rotation; **Show now** updates the physical frame immediately.
+Photos use the default layout automatically, including photos of a different orientation.
+Save individual framing to override the default; **Show now** updates the physical frame immediately.
 These choices do not change the original in Immich.
 
 Under **Default photo layout**, choose how photos without saved framing should appear. The
 default applies to existing and newly added photos without changing individual saved choices.
 Open **Photo layouts** below the photo browser to see each photo's layout and whether it follows
-the default, has a custom choice, or still needs framing.
+the native orientation, uses default framing, has custom framing, or is unavailable. Its bulk layout
+control can apply one layout to the whole album, replacing custom layouts while preserving hidden photos.
+
+Frame, Photos and Settings are the main navigation destinations. Software updates lives inside
+Settings. Preview and framing controls open in a dialog without returning to the top of the page.
 
 **Hide from this frame** removes a photo from rotation without deleting it from Immich. Use
 **Undo** or restore it from **Hidden from this frame**. A hidden photo already on the frame stays visible

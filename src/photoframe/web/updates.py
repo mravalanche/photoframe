@@ -26,8 +26,11 @@ def register_updates(app, templates, runtime, data_dir):
     app.router.add_event_handler("shutdown", worker.stop)
 
     @app.get("/health/update")
+    @app.head("/health/update")
     def update_health():
-        return {"version": __version__, "ready": True}
+        return JSONResponse(
+            {"version": __version__, "ready": True}, headers={"Cache-Control": "no-store"}
+        )
 
     @app.get("/updates")
     def updates(request: Request):

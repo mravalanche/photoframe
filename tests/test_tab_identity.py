@@ -88,7 +88,7 @@ const vm = require('node:vm');
 const identity = require({json.dumps(str(identity_script))});
 const documentListeners = {{}};
 const windowListeners = {{}};
-const themeButton = {{ dataset: {{ themeChoice: 'light' }}, setAttribute(name, value) {{ this[name] = value; }} }};
+const themeButton = {{ setAttribute(name, value) {{ this[name] = value; }} }};
 const notice = {{ dataset: {{ autoDismiss: '6000' }} }};
 const panel = {{
   open: false,
@@ -98,9 +98,11 @@ const panel = {{
 const documentMock = {{
   documentElement: {{ dataset: {{ theme: 'photoframe-dark' }} }},
   addEventListener(name, callback) {{ documentListeners[name] = callback; }},
-  querySelector(selector) {{ return selector === 'meta[name="theme-color"]' ? {{content: ''}} : null; }},
+  querySelector(selector) {{
+    if (selector === '[data-theme-toggle]') return themeButton;
+    return selector === 'meta[name="theme-color"]' ? {{content: ''}} : null;
+  }},
   querySelectorAll(selector) {{
-    if (selector === '[data-theme-choice]') return [themeButton];
     if (selector === '[data-notice][data-auto-dismiss]') return [notice];
     if (selector === '[data-settings-accordion] > [data-settings-panel]') return [panel];
     return [];
@@ -130,7 +132,7 @@ if (panel.dataset.accordionReady !== 'true') throw new Error('accordion setup di
 if (typeof windowListeners.pagehide !== 'function' || typeof windowListeners.pageshow !== 'function') {{
   throw new Error('tab session setup did not continue');
 }}
-if (themeButton['aria-pressed'] !== 'true') throw new Error('theme controls were not synchronized');
+if (themeButton['aria-pressed'] !== 'false') throw new Error('theme controls were not synchronized');
 const nextEvent = {{ detail: {{ verb: 'post', path: '/photo/next', headers: {{}} }} }};
 documentListeners['htmx:configRequest'](nextEvent);
 const nextIntent = nextEvent.detail.headers['X-Photoframe-Render-Intent'];
