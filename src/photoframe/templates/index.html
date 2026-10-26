@@ -484,10 +484,10 @@
       if (!saved) return;
       const rail = document.querySelector('.thumbnail-rail');
       if (rail) rail.scrollLeft = saved.railX;
-      const form = Array.from(document.querySelectorAll('form[action="/photo/preview"]')).find(candidate =>
-        candidate.elements.photo_id?.value === saved.photoId
-        && Boolean(candidate.closest('.thumbnail')) === saved.fromRail,
-      );
+      const forms = Array.from(document.querySelectorAll('form[action="/photo/preview"], form[action="/photo/unhide"]'))
+        .filter(candidate => candidate.elements.photo_id?.value === saved.photoId);
+      const form = forms.find(candidate => Boolean(candidate.closest('.thumbnail')) === saved.fromRail)
+        || forms[0];
       form?.querySelector('button[type="submit"]')?.focus({ preventScroll: true });
       window.scrollTo(0, saved.pageY);
     }
@@ -562,6 +562,18 @@
         };
       }
       if (event.detail.elt?.closest?.('form[action="/photo/preview/clear"]')) {
+        photoEditorClosePending = true;
+      }
+      const visibilityForm = event.detail.elt?.closest?.('form[action="/photo/hide"], form[action="/photo/unhide"]');
+      if (visibilityForm) {
+        if (!visibilityForm.closest('[data-photo-editor-dialog]') || !photoEditorViewState) {
+          photoEditorViewState = {
+            photoId: visibilityForm.elements.photo_id?.value,
+            fromRail: false,
+            railX: document.querySelector('.thumbnail-rail')?.scrollLeft || 0,
+            pageY: window.scrollY,
+          };
+        }
         photoEditorClosePending = true;
       }
     });

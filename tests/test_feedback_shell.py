@@ -119,6 +119,7 @@ const listeners = {{}};
 const trigger = {{focus(options) {{ focused = options.preventScroll; }}}};
 const form = {{elements: {{photo_id: {{value: 'portrait'}}}}, closest: () => null,
   querySelector: () => trigger}};
+let availableForms = [form];
 const rail = {{scrollLeft: 0}};
 const dialog = {{
   dataset: {{editorOpen: 'true'}}, open: false,
@@ -129,7 +130,7 @@ const dialog = {{
 }};
 global.document = {{
   querySelector: selector => selector === '[data-photo-editor-dialog]' ? dialog : rail,
-  querySelectorAll: () => [form],
+  querySelectorAll: () => availableForms,
 }};
 global.window = {{scrollTo(x, y) {{ scrollY = y; }}}};
 vm.runInThisContext('let photoEditorViewState = {{photoId: "portrait", fromRail: false, pageY: 900, railX: 80}};'
@@ -142,5 +143,12 @@ if (dialog.open || !focused || rail.scrollLeft !== 80 || scrollY !== 900) {{
 }}
 setupPhotoEditorDialog();
 if (opened !== 1) throw Error('closed editor reopened after an unrelated interface sync');
+// A hidden photo has no thumbnail/preview trigger; focus its local Restore action.
+availableForms = [{{elements: {{photo_id: {{value: 'portrait'}}}}, closest: () => null,
+  querySelector: () => trigger}}];
+focused = false;
+photoEditorViewState.fromRail = true;
+restorePhotoEditorFocus();
+if (!focused || scrollY !== 900) throw Error('hidden-photo recovery lost the local action');
 """
     subprocess.run([node, "-e", scenario], check=True)
