@@ -69,13 +69,31 @@ def health_payload(
     age = (
         int((current - status.last_success_at).total_seconds()) if status.last_success_at else None
     )
-    healthy = (
-        status.last_success_at is not None
-        and age is not None
-        and age <= settings.refresh.health_stale_seconds
-        and status.consecutive_failures == 0
-        and status.last_render_error is None
+    if status.consecutive_failures:
+        catalog_state = "failed"
+        catalog_detail = status.last_error or "The most recent catalog refresh failed"
+    elif age is None:
+        catalog_state = "not_ready"
+        catalog_detail = "No successful catalog refresh has completed"
+    elif age > settings.refresh.health_stale_seconds:
+        catalog_state = "stale"
+        catalog_detail = "The last successful catalog refresh is stale"
+    else:
+        catalog_state = "healthy"
+        catalog_detail = "Catalog refresh is current"
+    render_state = (
+        "failed"
+        if status.last_render_error
+        else "healthy"
+        if status.last_rendered_photo_id
+        else "not_run"
     )
+    render_detail = status.last_render_error or (
+        "The last frame refresh completed"
+        if status.last_rendered_photo_id
+        else "No completed frame refresh has been recorded"
+    )
+    healthy = catalog_state == "healthy" and status.last_render_error is None
     state = "healthy" if healthy else "degraded"
     return (
         {
@@ -87,8 +105,16 @@ def health_payload(
             "consecutive_failures": status.consecutive_failures,
             "cached_photo_count": status.cached_photo_count,
             "cached_bytes": status.cached_bytes,
+            "checks": {
+                "catalog": {
+                    "status": catalog_state,
+                    "detail": catalog_detail,
+                    "age_seconds": age,
+                },
+                "render": {"status": render_state, "detail": render_detail},
+            },
             "detail": (
-                status.last_render_error or status.last_error
+                status.last_render_error or catalog_detail
                 if not healthy
                 else "Refresh lifecycle is current"
             ),
