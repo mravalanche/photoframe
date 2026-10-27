@@ -32,7 +32,7 @@ element('release-badge-template').content={firstElementChild:makeElement()};
 const summary=()=>element('release-choice-summary').children;
 const badge=label=>summary().find(child=>child.textContent===label);
 const select=version=>{element('release-choice').value=version;element('release-choice').onchange();};
-let nextPoll,modern=true,channel='stable',rejectInspection=false;
+let nextPoll,modern=true,channel='stable',rejectInspection=false,catalogMode='default';
 const verified={version:'9.0.0',updater_protocol:1,settings_schema_min:2,settings_schema_max:2,
   rollback_schema_min:2,rollback_schema_max:2,release_notes:'Verified notes'};
 const context={Option,Set,Date,AbortSignal,CustomEvent:class{},
@@ -45,15 +45,21 @@ const context={Option,Set,Date,AbortSignal,CustomEvent:class{},
       release_selection_supported:modern,release_selection_reason:modern?'':'Administrator helper upgrade required',
       latest_manifest:{version:'10.0.0',release_notes:'Latest notes'}})};
     if(path.endsWith('/session'))return{ok:true,json:async()=>({csrf:'local'})};
-    if(path.endsWith('/catalog'))return{ok:true,json:async()=>({channel,releases:[
+    if(path.endsWith('/catalog')) {
+      const releases=[
+      {version:'9.1.0',channel,relationship:'newer',bundle_available:false,available:false,
+        reason:'Signed bundle is not published',published_at:null},
       {version:'9.0.0',channel,relationship:'newer',bundle_available:true,available:true,
         published_at:'2026-10-25T12:00:00Z',compatibility:'Not verified'},
       {version:'1.0.0',channel,relationship:'older',bundle_available:true,available:false,
         reason:'Not newer than the running version',published_at:null},
       {version:'8.0.0',channel,relationship:'installed',bundle_available:true,available:false,
         reason:'Not newer than the running version',published_at:null},
-      {version:'9.1.0',channel,relationship:'newer',bundle_available:false,available:false,
-        reason:'Signed bundle is not published',published_at:null}]})};
+      ];
+      return {ok:catalogMode!=='error',json:async()=>({channel,message:'Release listing unavailable',
+        releases:catalogMode==='empty'?[]:catalogMode==='older'?releases.filter(r=>r.relationship==='older')
+          :catalogMode==='unavailable'?releases.filter(r=>!r.available):releases})};
+    }
     if(path.endsWith('/inspect'))return{ok:!rejectInspection,json:async()=>rejectInspection
       ? {message:'Signature verification failed'} : {channel,manifest:verified}};
     if(path.endsWith('/preferences'))channel=body.channel;
@@ -63,9 +69,17 @@ const context={Option,Set,Date,AbortSignal,CustomEvent:class{},
   vm.runInNewContext(fs.readFileSync(SCRIPT,'utf8'),context);
   await new Promise(setImmediate);
   await element('load-releases').onclick();
-  assert.equal(element('release-choice').children[2].disabled,false);
-  assert.ok(element('release-choice').children[1].textContent.includes('Stable · Newer'));
-  assert.ok(element('release-choice').children[2].textContent.includes('Stable · Older'));
+  assert.equal(element('release-choice').value,'9.0.0');
+  assert.ok(element('release-choice').children.every(option=>option.value));
+  assert.equal(element('release-choice').children.find(option=>option.value==='1.0.0').disabled,false);
+  assert.ok(element('release-choice').children.find(option=>option.value==='9.0.0').textContent.includes('Stable · Newer'));
+  assert.ok(element('release-choice').children.find(option=>option.value==='1.0.0').textContent.includes('Stable · Older'));
+  assert.ok(badge('Stable').classList.contains('badge-success'));
+  assert.ok(badge('Newer').classList.contains('badge-primary'));
+  assert.equal(badge('Verified'),undefined);
+  assert.equal(element('inspect-release').disabled,false);
+  assert.equal(element('stage-selected-release').disabled,true);
+  assert.equal(calls.some(call=>call.path.endsWith('/inspect')||call.path.endsWith('/stage-selected')),false);
   select('1.0.0');
   assert.ok(badge('Older').classList.contains('badge-neutral'));
   assert.equal(element('inspect-release').disabled,true);
@@ -97,6 +111,28 @@ const context={Option,Set,Date,AbortSignal,CustomEvent:class{},
   assert.equal(badge('Verified'),undefined);
   assert.ok(element('selected-release-detail').textContent.includes('verification failed'));
   rejectInspection=false;
+  await element('inspect-release').onclick();
+  assert.ok(badge('Verified'));
+  catalogMode='error';await element('load-releases').onclick();
+  assert.equal(element('release-choice-summary').hidden,true);
+  assert.equal(element('release-choice').value,'');
+  assert.equal(element('stage-selected-release').disabled,true);
+  assert.ok(element('update-error').textContent.includes('listing unavailable'));
+  catalogMode='unavailable';await element('load-releases').onclick();
+  assert.equal(element('release-choice').value,'9.1.0');
+  assert.ok(badge('Bundle unavailable'));
+  assert.equal(element('inspect-release').disabled,true);
+  assert.equal(element('stage-selected-release').disabled,true);
+  catalogMode='older';await element('load-releases').onclick();
+  assert.equal(element('release-choice').value,'1.0.0');
+  assert.ok(badge('Older'));
+  assert.equal(element('inspect-release').disabled,true);
+  catalogMode='empty';await element('load-releases').onclick();
+  assert.equal(element('release-choice').value,'');
+  assert.equal(element('release-choice').disabled,true);
+  assert.equal(element('release-choice-summary').hidden,true);
+  assert.ok(element('selected-release-detail').textContent.includes('No canonical releases'));
+  catalogMode='default';
   element('update-channel').value='develop';await element('update-channel').onchange();
   await new Promise(setImmediate);
   assert.equal(element('stage-selected-release').disabled,true);

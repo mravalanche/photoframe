@@ -112,14 +112,15 @@
     detail.textContent = verified ? 'Signature and compatibility verified' : choice.reason || 'Compatibility not verified'; summary.append(detail);
   }
   el('load-releases').onclick = async () => {
+    clearReleaseSelection();
     busy = true; controls(); el('update-error').textContent = '';
     try {
       const response = await fetch('/api/updates/catalog', {cache:'no-store', signal:AbortSignal.timeout(15000)});
       const result = await response.json();
       if (!response.ok) throw Error(result.message || 'Release list unavailable.');
       if (result.channel !== state.channel) throw Error('The update channel changed. Load releases again.');
-      clearReleaseSelection(); catalog = result.releases; catalogChannel = result.channel;
-      const choices = [new Option('Choose a published release', '')];
+      catalog = result.releases; catalogChannel = result.channel;
+      const choices = [];
       for (const release of catalog) {
         const date = release.published_at ? new Date(release.published_at) : null;
         const published = date && !Number.isNaN(date.valueOf()) ? date.toLocaleDateString() : 'Date unavailable';
@@ -127,8 +128,14 @@
         choices.push(option);
       }
       el('release-choice').replaceChildren(...choices);
-      el('selected-release-detail').textContent = catalog.length
-        ? 'Choose a version, then verify its signature and compatibility.' : 'No canonical releases were found in this channel.';
+      const initial = catalog.find(release => release.available) || catalog[0];
+      if (initial) {
+        el('release-choice').value = initial.version;
+        el('release-choice').onchange();
+      } else {
+        el('release-choice').replaceChildren(new Option('No releases in this channel', ''));
+        el('selected-release-detail').textContent = 'No canonical releases were found in this channel.';
+      }
     } catch (error) { el('update-error').textContent = error.message; }
     finally { busy = false; controls(); }
   };

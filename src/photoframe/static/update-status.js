@@ -12,6 +12,10 @@
     if (state.latest_manifest || state.phase === 'complete') return {icon: '✓', label: 'Up to date', tone: 'success'};
     return {icon: '—', label: 'Not checked yet', tone: 'neutral'};
   }
+  function headerVisible(state) {
+    return active.has(state.phase) || Boolean(state.staged_version || state.upgrade_available
+      || state.check_error || ['failed', 'unavailable', 'rolled_back'].includes(state.phase));
+  }
   function relativeCheck(timestamp, now = Date.now()) {
     if (!timestamp) return 'Never checked';
     const seconds = Math.max(0, Math.floor((now - timestamp * 1000) / 1000));
@@ -83,11 +87,13 @@
       }
     }
   }
-  globalThis.PhotoframeUpdates = {active, presentation, relativeCheck, paintBadge, releaseNotes};
+  globalThis.PhotoframeUpdates = {active, presentation, relativeCheck, paintBadge, releaseNotes, headerVisible};
   const badge = document.querySelector('[data-update-badge]');
   if (!badge) return;
   function show(state) {
     paintBadge(badge, state);
+    badge.hidden = !headerVisible(state);
+    badge.setAttribute('aria-label', `Software updates: ${presentation(state).label}`);
     badge.title = `Software updates · Last checked: ${relativeCheck(state.last_check)}`;
   }
   // The Settings page already polls; share its result instead of polling twice.
@@ -100,7 +106,7 @@
       const response = await fetch('/api/updates/status', {cache: 'no-store', signal: AbortSignal.timeout(10000)});
       if (!response.ok) throw new Error('Unavailable');
       show(await response.json());
-    } catch (_) { paintBadge(badge, {phase: 'unavailable'}); }
+    } catch (_) { show({phase: 'unavailable'}); }
     setTimeout(poll, 30000);
   }
   poll();

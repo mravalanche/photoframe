@@ -114,3 +114,12 @@ pairs Development (Info) or Stable (Success) with a separate Newer (Primary), In
 (Neutral) badge. Unavailable is Warning. These labels describe release metadata, never compatibility;
 only a successful signature and compatibility inspection earns a Verified label. Badge text wraps
 inside an automatically sized pill in both themes.
+
+Mobile photo records use two compact rows: filename with action, then layout with status.
+Keep touch actions at least 44px; visually clamp filenames to two lines while retaining the
+full name in accessible text. Bulk layout fields stay collapsed above the records, so opening
+Photo layouts reaches the photos immediately. Do not expand explanatory copy ahead of the list.
+The release picker selects the first installable newer entry after loading, without starting
+verification or a download. Header update status appears on phones and desktop only for an
+available/staged update, an active operation, or a failure needing attention. Phones use a 44px
+icon link with the full status in its accessible label; ordinary idle status stays on Updates.
