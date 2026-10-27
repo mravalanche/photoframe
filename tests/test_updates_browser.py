@@ -59,6 +59,15 @@ assert.equal(ui.presentation({...managed,phase:'checking',upgrade_available:true
 assert.equal(ui.presentation({...managed,check_error:'Network error',latest_manifest:{}}).label, 'Check failed');
 assert.equal(ui.presentation({...managed,phase:'failed',staged_version:'1.1'}).label, 'Update failed');
 assert.equal(ui.presentation({managed:false}).label, 'Manual updates');
+for (const state of [managed, {managed:false}, {...managed,latest_manifest:{}}, {...managed,phase:'complete'}]) {
+  assert.equal(ui.headerVisible(state), false, 'idle header should be quiet');
+}
+for (const state of [{upgrade_available:true}, {staged_version:'2.0'}, {phase:'checking'},
+  {phase:'downloading'}, {phase:'restarting'}, {phase:'failed'}, {check_error:'Offline'},
+  {phase:'unavailable'}, {phase:'rolled_back'}]) {
+  assert.equal(ui.headerVisible(state), true, 'actionable update should be visible');
+}
+
 assert.equal(ui.relativeCheck(null), 'Never checked');
 assert.equal(ui.relativeCheck(100,100000), 'Just now');
 assert.equal(ui.relativeCheck(100,160000), '1 minute ago');
