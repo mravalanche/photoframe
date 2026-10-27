@@ -1,7 +1,7 @@
 {% import "components/actions.html" as actions %}
 {% import "components/forms.html" as fields %}
 {% import "components/surfaces.html" as surfaces %}
-{% call surfaces.card('Display hardware', "Set up your frame's display.", 'hardware-title', extra_classes='setting-card hardware-settings') %}
+{% call surfaces.card('Display configuration', '', 'hardware-title', extra_classes='setting-card hardware-settings') %}
     <form method="post" action="/hardware" hx-post="/hardware" hx-target="#workspace" hx-swap="outerHTML" class="grid gap-4 md:grid-cols-2">
       {{ fields.select_field('display-driver', 'display_driver', 'Display driver', [('auto', 'Auto-detect Pimoroni Inky'), ('inky', 'Pimoroni Inky'), ('mock', 'Simulated display')], settings.device.display_driver.value, help=settings.device.display_status) }}
       {{ fields.input_field('display-model', 'display_model', 'Display model', settings.device.display_model or '', placeholder='e.g. Inky Impression 7.3', help='Filled automatically when detection works.') }}

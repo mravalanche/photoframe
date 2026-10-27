@@ -1,8 +1,8 @@
 {% import "components/actions.html" as actions %}
 {% import "components/forms.html" as fields %}
+{% import "components/feedback.html" as feedback %}
 {% import "components/surfaces.html" as surfaces %}
-<section class="update-shell min-w-0 space-y-4" aria-labelledby="software-updates-title">
-  <div><h2 id="software-updates-title" class="text-2xl font-semibold">Software updates</h2><p class="mt-1 text-sm text-base-content/70">Check, download and install a new version when you are ready.</p></div>
+<section class="update-shell min-w-0 space-y-4" aria-labelledby="settings-section-title">
   {% call surfaces.card('Update status', 'What the frame is doing now.', 'status-title') %}
     <div class="flex flex-wrap items-center justify-between gap-3"><p id="update-status-badge" class="update-status-badge inline-flex min-w-0 max-w-full items-center gap-2 text-base font-semibold sm:text-lg" data-tone="neutral"><span data-update-icon aria-hidden="true">—</span><strong class="min-w-0 break-words" data-update-label>Checking installation</strong></p><p class="text-sm text-base-content/70">Installed <strong id="installed-version" class="font-semibold text-base-content">v{{ version }}</strong></p></div>
     <p id="update-status" class="break-words text-sm text-base-content/70" role="status" aria-live="polite">Checking installation…</p>
@@ -29,12 +29,14 @@
 
   <details id="release-notes-section" class="release-notes-section collapse collapse-arrow border border-base-300 bg-base-100" hidden><summary id="release-notes-title" class="collapse-title font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Release notes <span class="text-sm font-normal text-base-content/70">What’s changed</span></summary><div id="release-notes" class="release-notes collapse-content break-words text-sm leading-relaxed [overflow-wrap:anywhere] [&_pre]:whitespace-pre-wrap"></div></details>
 
-  {% call surfaces.disclosure('Advanced: choose a release', 'Published versions in this channel', 'release-picker') %}
+  {% call surfaces.disclosure('Advanced: choose a release', 'Published versions in this channel', 'release-picker', variant='advanced') %}
     <div class="space-y-3">
       <p class="text-sm text-base-content/70">Choose a newer release from the current channel. Verify compatibility before downloading; applying it still requires confirmation.</p>
       <p id="release-picker-reason" class="text-sm text-base-content/70" role="status">Checking release-selection support…</p>
       {{ actions.button('Load published releases', 'secondary', 'sm', id='load-releases') }}
-      <div class="fieldset min-w-0 w-full"><label class="fieldset-legend whitespace-normal" for="release-choice">Release</label><select id="release-choice" class="select min-w-0 w-full" disabled><option value="">Load releases to choose a version</option></select></div>
+      <div class="fieldset min-w-0 w-full"><label class="fieldset-legend whitespace-normal" for="release-choice">Release</label><select id="release-choice" class="select min-w-0 w-full" aria-describedby="release-choice-summary selected-release-detail" disabled><option value="">Load releases to choose a version</option></select></div>
+      <template id="release-badge-template">{{ feedback.badge('') }}</template>
+      <div id="release-choice-summary" class="flex flex-wrap items-center gap-2 text-sm" role="status" aria-live="polite" hidden></div>
       <p id="selected-release-detail" class="break-words text-sm" role="status" aria-live="polite">Compatibility has not been verified.</p>
       <div class="flex flex-wrap gap-2">{{ actions.button('Verify selected release', 'secondary', id='inspect-release', disabled=true) }}{{ actions.button('Download & verify selected', 'secondary', id='stage-selected-release', disabled=true) }}</div>
       <div id="selected-release-notes" class="break-words text-sm leading-relaxed [overflow-wrap:anywhere] [&_pre]:whitespace-pre-wrap"></div>

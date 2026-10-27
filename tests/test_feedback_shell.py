@@ -18,7 +18,7 @@ def test_settings_and_updates_share_the_same_primary_destination() -> None:
         autoescape=select_autoescape(["html"]),
     )
     environment.globals["url_for"] = lambda _route, path: f"/static{path}"
-    for section in ("provider", "updates"):
+    for section in ("provider", "hardware", "updates", "advanced"):
         html = environment.get_template("index.html").render(
             settings_section=section,
             settings_title="Photo provider" if section == "provider" else "Software updates",
@@ -31,6 +31,11 @@ def test_settings_and_updates_share_the_same_primary_destination() -> None:
         assert 'href="/settings/updates"' in html
         assert "data-theme-choice" not in html
         assert "data-cycle-theme" not in html
+        assert html.count('id="settings-section-title"') == 1
+        assert 'id="settings-section-chooser"' in html
+        assert 'aria-labelledby="settings-section-title"' in html
+        assert "grid-cols-2 items-start" not in html
+        assert html.count(f'href="/settings/{section}"') >= 2
 
 
 def test_single_theme_toggle_updates_the_theme_and_accessible_state() -> None:

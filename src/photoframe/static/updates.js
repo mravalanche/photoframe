@@ -85,8 +85,31 @@
   function clearReleaseSelection() {
     catalog = []; catalogChannel = null; verifiedSelection = null;
     el('release-choice').replaceChildren(new Option('Load releases to choose a version', ''));
+    paintReleaseSelection();
     el('selected-release-detail').textContent = 'Compatibility has not been verified.';
     el('selected-release-notes').replaceChildren();
+  }
+  const releaseKind = release => (release.channel || catalogChannel) === 'develop' ? 'Development' : 'Stable';
+  const releaseAge = release => ({newer:'Newer', installed:'Installed', older:'Older'}[release.relationship]
+    || (release.available ? 'Newer' : 'Unavailable'));
+  function paintReleaseSelection(verified = false) {
+    const summary = el('release-choice-summary');
+    const choice = catalog.find(release => release.version === el('release-choice').value);
+    summary.replaceChildren(); summary.hidden = !choice;
+    if (!choice) return;
+    const version = document.createElement('strong'); version.textContent = `v${choice.version}`;
+    summary.append(version);
+    const addBadge = (label, tone) => {
+      const badge = el('release-badge-template').content.firstElementChild.cloneNode(true);
+      badge.textContent = label; badge.classList.remove('badge-neutral');
+      badge.classList.add(`badge-${tone}`); summary.append(badge);
+    };
+    addBadge(releaseKind(choice), releaseKind(choice) === 'Development' ? 'info' : 'success');
+    addBadge(releaseAge(choice), choice.relationship === 'newer' || choice.available ? 'primary' : 'neutral');
+    if (choice.bundle_available === false) addBadge('Bundle unavailable', 'warning');
+    if (verified) addBadge('Verified', 'success');
+    const detail = document.createElement('span'); detail.className = 'text-base-content/70';
+    detail.textContent = verified ? 'Signature and compatibility verified' : choice.reason || 'Compatibility not verified'; summary.append(detail);
   }
   el('load-releases').onclick = async () => {
     busy = true; controls(); el('update-error').textContent = '';
@@ -100,8 +123,8 @@
       for (const release of catalog) {
         const date = release.published_at ? new Date(release.published_at) : null;
         const published = date && !Number.isNaN(date.valueOf()) ? date.toLocaleDateString() : 'Date unavailable';
-        const option = new Option(`v${release.version} · ${published} · ${release.compatibility}`, release.version);
-        option.disabled = !release.available; choices.push(option);
+        const option = new Option(`v${release.version} · ${releaseKind(release)} · ${releaseAge(release)} · ${published}${release.bundle_available === false ? ' · Bundle unavailable' : ''}`, release.version);
+        choices.push(option);
       }
       el('release-choice').replaceChildren(...choices);
       el('selected-release-detail').textContent = catalog.length
@@ -111,13 +134,15 @@
   };
   el('release-choice').onchange = () => {
     verifiedSelection = null; el('selected-release-notes').replaceChildren();
+    paintReleaseSelection();
+    const choice = catalog.find(release => release.version === el('release-choice').value);
     el('selected-release-detail').textContent = el('release-choice').value
-      ? `v${el('release-choice').value}: compatibility has not been verified.` : 'Choose a release.';
+      ? choice?.reason || `v${el('release-choice').value}: compatibility has not been verified.` : 'Choose a release.';
     controls();
   };
   el('inspect-release').onclick = async () => {
     const release = el('release-choice').value, channel = state.channel;
-    verifiedSelection = null; busy = true; controls(); el('update-error').textContent = '';
+    verifiedSelection = null; paintReleaseSelection(); busy = true; controls(); el('update-error').textContent = '';
     el('selected-release-detail').textContent = `Verifying v${release}…`;
     try {
       const result = await send('inspect', {release});
@@ -125,6 +150,7 @@
         throw Error('The selected release changed. Verify it again.');
       }
       verifiedSelection = {...result.manifest, channel};
+      paintReleaseSelection(true);
       el('selected-release-detail').textContent = `v${release} verified for Linux ARM64, updater protocol ${result.manifest.updater_protocol}, settings schema ${result.manifest.settings_schema_min}–${result.manifest.settings_schema_max}, and rollback schema ${result.manifest.rollback_schema_min}–${result.manifest.rollback_schema_max}.`;
       ui.releaseNotes(el('selected-release-notes'), result.manifest.release_notes);
     } catch (error) {

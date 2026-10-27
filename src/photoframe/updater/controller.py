@@ -196,6 +196,9 @@ class UpdateController:
                     "photoframe-manifest.json",
                     f"photoframe-{version}-linux-aarch64.tar.gz",
                 } <= names
+                comparison = (semver(version) > semver(__version__)) - (
+                    semver(version) < semver(__version__)
+                )
                 reason = (
                     "Not newer than the running version"
                     if semver(version) <= semver(__version__)
@@ -207,6 +210,15 @@ class UpdateController:
                 rows.append(
                     {
                         "version": version,
+                        "channel": channel,
+                        "relationship": (
+                            "newer"
+                            if comparison > 0
+                            else "older"
+                            if comparison < 0
+                            else "installed"
+                        ),
+                        "bundle_available": complete,
                         "published_at": published[:64] if isinstance(published, str) else None,
                         "available": not reason,
                         "reason": reason,

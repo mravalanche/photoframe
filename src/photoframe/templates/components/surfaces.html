@@ -8,13 +8,17 @@
 </section>
 {%- endmacro %}
 
-{% macro disclosure(title, summary='', id='', name='', open=false, extra_classes='', attrs={}) -%}
-<details class="collapse collapse-arrow border border-base-300 bg-base-100{% if extra_classes %} {{ extra_classes }}{% endif %}"{% if id %} id="{{ id }}"{% endif %}{% if name %} name="{{ name }}"{% endif %}{% if open %} open{% endif %}{% if attrs %} {{ attrs|xmlattr }}{% endif %}>
-  <summary class="collapse-title flex min-h-12 items-center justify-between gap-3 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"><span>{{ title }}</span>{% if summary %}<span class="text-sm font-normal text-base-content/70">{{ summary }}</span>{% endif %}</summary>
+{% macro disclosure(title, summary='', id='', name='', open=false, extra_classes='', attrs={}, variant='default') -%}
+<details class="collapse collapse-arrow border{% if variant == 'advanced' %} border-info bg-info/15{% else %} border-base-300 bg-base-100{% endif %}{% if extra_classes %} {{ extra_classes }}{% endif %}"{% if id %} id="{{ id }}"{% endif %}{% if name %} name="{{ name }}"{% endif %}{% if open %} open{% endif %}{% if attrs %} {{ attrs|xmlattr }}{% endif %}>
+  <summary class="collapse-title flex min-h-12 flex-wrap items-center justify-between gap-x-3 gap-y-1 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"><span>{{ title }}</span>{% if summary %}<span class="text-sm font-normal text-base-content/70">{{ summary }}</span>{% endif %}</summary>
   <div class="collapse-content">{{ caller() }}</div>
 </details>
 {%- endmacro %}
 
 {% macro empty_state(title, description='', icon='') -%}
 <div class="card border border-dashed border-base-300 bg-base-100"><div class="card-body items-center text-center">{% if icon %}<span class="text-3xl text-base-content/50" aria-hidden="true">{{ icon }}</span>{% endif %}<h3 class="card-title">{{ title }}</h3>{% if description %}<p class="text-sm text-base-content/70">{{ description }}</p>{% endif %}{% if caller is defined %}<div class="card-actions justify-center">{{ caller() }}</div>{% endif %}</div></div>
+{%- endmacro %}
+
+{% macro section_heading(title, description='', id='') -%}
+<header class="space-y-1"><h2{% if id %} id="{{ id }}"{% endif %} class="pf-section-title">{{ title }}</h2>{% if description %}<p class="text-sm text-base-content/70">{{ description }}</p>{% endif %}</header>
 {%- endmacro %}

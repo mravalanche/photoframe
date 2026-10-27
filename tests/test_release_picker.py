@@ -323,3 +323,33 @@ def test_catalog_is_one_bounded_cached_metadata_fetch_without_manifest_downloads
     assert all(row["compatibility"] == "Not verified" for row in first["releases"])
     assert len(requests) == 1 and "per_page=100" in requests[0]
     assert all(call.args[0] == "status" for call in controller.helper.call.call_args_list)
+
+
+def test_catalog_describes_channel_age_and_missing_bundle_without_authorizing_it(
+    tmp_path, monkeypatch
+):
+    _, controller = managed_app(tmp_path)
+    monkeypatch.setattr("photoframe.updater.controller.__version__", "9.0.0.dev2")
+    controller.preferences["channel"] = "develop"
+    controller.catalog_checked_at = float("inf")
+    controller.catalog_cache = [
+        metadata("9.0.0.dev3"),
+        metadata("9.0.0.dev2"),
+        metadata("9.0.0.dev1"),
+        metadata("9.0.0.dev4", assets=[]),
+        metadata("9.0.0"),
+    ]
+    rows = {row["version"]: row for row in controller.release_catalog()["releases"]}
+    assert set(rows) == {"9.0.0.dev1", "9.0.0.dev2", "9.0.0.dev3", "9.0.0.dev4"}
+    assert all(row["channel"] == "develop" for row in rows.values())
+    assert rows["9.0.0.dev3"]["relationship"] == "newer"
+    assert rows["9.0.0.dev3"]["available"]
+    assert rows["9.0.0.dev3"]["compatibility"] == "Not verified"
+    assert rows["9.0.0.dev2"]["relationship"] == "installed"
+    assert rows["9.0.0.dev1"]["relationship"] == "older"
+    assert rows["9.0.0.dev1"]["bundle_available"]
+    assert not rows["9.0.0.dev1"]["available"]
+    assert rows["9.0.0.dev4"]["relationship"] == "newer"
+    assert not rows["9.0.0.dev4"]["bundle_available"]
+    assert not rows["9.0.0.dev4"]["available"]
+    assert all(call.args[0] == "status" for call in controller.helper.call.call_args_list)
