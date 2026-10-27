@@ -80,10 +80,10 @@ def test_portrait_controls_and_last_hidden_photo_remain_recoverable(tmp_path: Pa
             page = client.post("/photo/hide", headers=PHOTOS_VIEW, data={"photo_id": photo.id}).text
         assert 'id="photo-layouts"' in page
         assert 'id="photo-layout-table"' in page
-        assert '<th scope="col">Photo</th>' in page
-        assert '<th scope="col">Layout</th>' in page
-        assert '<th scope="col">Status</th>' in page
-        assert '<th scope="col">Action</th>' in page
+        assert '<th scope="col" role="columnheader">Photo</th>' in page
+        assert '<th scope="col" role="columnheader">Layout</th>' in page
+        assert '<th scope="col" role="columnheader">Status</th>' in page
+        assert '<th scope="col" role="columnheader">Action</th>' in page
         assert page.count('scope="row" class="photo-layout-name') == len(photos)
         assert f'aria-label="Restore {portrait.filename}"' in page
         assert "Undo" in page

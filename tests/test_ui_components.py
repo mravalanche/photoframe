@@ -48,7 +48,9 @@ def test_showcase_renders_shared_components_in_both_themes() -> None:
         structure.feed(html)
         assert f'data-theme="{theme}"' in html
         assert 'class="collapse collapse-arrow' in html
-        assert 'class="table table-zebra"' in html
+        assert 'class="table w-full table-zebra' in html
+        assert 'role="table"' in html
+        assert "border-info bg-info/15" in html
         assert 'class="modal"' in html
         assert 'aria-current="step"' in html
         assert len(structure.ids) == len(set(structure.ids))

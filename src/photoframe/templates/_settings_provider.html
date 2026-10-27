@@ -2,7 +2,7 @@
 {% import "components/feedback.html" as feedback %}
 {% import "components/forms.html" as fields %}
 {% import "components/surfaces.html" as surfaces %}
-{% call surfaces.card('Photo provider', 'Connect to the library that supplies your frame.', 'provider-title', extra_classes='setting-card', attrs={'data-settings-panel': 'provider'}) %}
+{% call surfaces.card('Connection', '', 'provider-title', extra_classes='setting-card', attrs={'data-settings-panel': 'provider'}) %}
     <div>{{ feedback.badge('Connected' if settings.verification.ok else 'Needs attention', 'success' if settings.verification.ok else 'warning') }}</div>
     <form method="post" action="/connection" hx-post="/connection" hx-target="#workspace" hx-swap="outerHTML" class="grid gap-4 md:grid-cols-2">
       {{ fields.select_field('provider-kind', 'provider_kind', 'Provider', [('immich', 'Immich')], 'immich') }}

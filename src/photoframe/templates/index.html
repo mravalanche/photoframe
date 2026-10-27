@@ -1,3 +1,4 @@
+{% import "components/surfaces.html" as surfaces %}
 {% import "components/actions.html" as actions %}
 {% import "components/branding.html" as branding %}
 {% import "components/icons.html" as icons %}
@@ -44,12 +45,15 @@
     {% if settings_section %}
     <div class="mb-6 flex flex-wrap items-end justify-between gap-3"><div><p class="pf-eyebrow">CONFIGURATION</p><h1 class="pf-display-title">Settings</h1></div>{{ actions.link('Back to frame', '/', 'secondary', 'sm') }}</div>
     <div class="grid gap-5 xl:grid-cols-[13rem_minmax(0,1fr)]">
-      <nav class="grid grid-cols-2 items-start gap-2 self-start xl:grid-cols-1" aria-label="Settings sections">
-        {% for key, label in [('provider', 'Photo provider'), ('hardware', 'Display hardware'), ('updates', 'Software updates'), ('advanced', 'Advanced & recovery')] %}
-        <a href="/settings/{{ key }}" class="btn btn-sm h-auto min-h-11 w-full justify-start whitespace-normal py-2 text-left{% if settings_section == key %} btn-primary{% else %} btn-ghost{% endif %}"{% if settings_section == key %} aria-current="page"{% endif %}>{{ label }}</a>
-        {% endfor %}
-      </nav>
-      <section class="min-w-0" aria-label="{{ settings_title }}">
+      {% set settings_items = [('provider', 'Photo provider'), ('hardware', 'Display hardware'), ('updates', 'Software updates'), ('advanced', 'Advanced & recovery')] %}
+      <div class="min-w-0 xl:hidden">
+        {% call surfaces.disclosure('Settings section', settings_title, 'settings-section-chooser') %}
+          {{ navigation.settings_links(settings_items, settings_section) }}
+        {% endcall %}
+      </div>
+      <div class="hidden xl:block">{{ navigation.settings_links(settings_items, settings_section) }}</div>
+      <section class="min-w-0 space-y-5" aria-labelledby="settings-section-title">
+        {{ surfaces.section_heading(settings_title, {'provider': 'Connect to the library that supplies your frame.', 'hardware': "Set up your frame’s display.", 'updates': 'Check, download and install a new version when you are ready.', 'advanced': 'Manage network access and recovery options.'}[settings_section], 'settings-section-title') }}
         {% if settings_section == 'updates' %}{% include "_updates.html" %}
         {% else %}<div hx-get="/partials/workspace?section={{ settings_section }}" hx-trigger="load" hx-swap="outerHTML"><p role="status" class="flex items-center gap-2"><span class="loading loading-spinner loading-sm" aria-hidden="true"></span>Loading settings…</p></div>{% endif %}
       </section>

@@ -420,7 +420,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert '"purpose": "maskable"' in manifest.text
     assert 'action="/photo/start"' in selected_workspace.text
     assert "Start rotation here" in selected_workspace.text
-    assert "Display hardware" in hardware_settings.text
+    assert "Display configuration" in hardware_settings.text
     for name in (
         "display_driver",
         "display_model",
@@ -439,7 +439,7 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'action="/photo/next"' not in frame_status.text
     assert "without changing your schedule" in workspace.text
     assert workspace.text.index('id="frame-status"') < workspace.text.index('action="/photo/next"')
-    assert "Advanced &amp; recovery" in advanced_settings.text
+    assert "Network &amp; recovery" in advanced_settings.text
     assert "Daily at 03:00" in workspace.text
     assert "Album order" in workspace.text
     assert "Landscape frame" in workspace.text
