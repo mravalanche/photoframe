@@ -1,5 +1,5 @@
 {% macro badge(label, tone='neutral', size='md') -%}
-<span class="badge h-auto min-h-6 max-w-full whitespace-normal break-words py-1 text-center leading-tight{% if tone == 'primary' %} badge-primary{% elif tone == 'success' %} badge-success{% elif tone == 'warning' %} badge-warning{% elif tone == 'error' %} badge-error{% elif tone == 'info' %} badge-info{% else %} badge-neutral{% endif %}{% if size == 'sm' %} badge-sm{% elif size == 'lg' %} badge-lg{% endif %}">{{ label }}</span>
+<span class="badge pf-metadata h-auto min-h-6 max-w-full whitespace-normal break-words py-1 text-center leading-tight{% if tone == 'primary' %} badge-primary{% elif tone == 'success' %} badge-success{% elif tone == 'warning' %} badge-warning{% elif tone == 'error' %} badge-error{% elif tone == 'info' %} badge-info{% else %} badge-neutral{% endif %}{% if size == 'sm' %} badge-sm{% elif size == 'lg' %} badge-lg{% endif %}">{{ label }}</span>
 {%- endmacro %}
 
 {% macro alert(message, tone='info', title='', id='') -%}

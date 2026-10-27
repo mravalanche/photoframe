@@ -86,9 +86,10 @@
 }
 
 @layer base {
-  html { font-family: var(--font-sans); }
-  body { background: var(--color-base-200); color: var(--color-base-content); }
-  button, input, select, textarea { font: inherit; }
+  html { font-family: var(--font-sans); font-size: 100%; line-height: 1.5; font-weight: 400; --card-fs: 1rem; --font-size-min: 1rem; }
+  body { background: var(--color-base-200); color: var(--color-base-content); font-size: 1rem; line-height: 1.5; }
+  button, input, select, textarea { font-family: inherit; }
+  strong, b { font-weight: 600; }
   [hidden] { display: none !important; }
   :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 }
@@ -111,3 +112,12 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Semantic type roles override daisyUI's default 12px field labels / small buttons. */
+@utility pf-card-title { font-family: var(--font-sans); font-size: 1.125rem; font-weight: 600; line-height: 1.5rem; }
+@utility pf-subheading { font-family: var(--font-sans); font-size: 1rem; font-weight: 600; line-height: 1.5rem; }
+@utility pf-body { font-family: var(--font-sans); font-size: 1rem; font-weight: 400; line-height: 1.5rem; }
+@utility pf-label { font-family: var(--font-sans); font-size: .875rem; font-weight: 600; line-height: 1.25rem; }
+@utility pf-help { font-family: var(--font-sans); font-size: .875rem; font-weight: 400; line-height: 1.25rem; }
+@utility pf-control { font-family: var(--font-sans); font-size: .875rem; font-weight: 600; line-height: 1.25rem; }
+@utility pf-metadata { font-family: var(--font-sans); font-size: .75rem; font-weight: 500; line-height: 1rem; }
