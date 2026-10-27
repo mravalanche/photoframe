@@ -58,11 +58,48 @@ The integrated mobile screens below use demo data at 390px. The Frame capture sh
 
 ## Typography and rhythm
 
-Inter Variable is the body and control face. Newsreader Variable is the display face for the page title, section headings and editorial photo captions. Use `.pf-display-title` for the main title and `.pf-section-title` for section titles. Use `.pf-eyebrow` sparingly for short uppercase labels; `.pf-supporting` for secondary copy; `.pf-tabular` for numbers that update in place. Keep body copy at 16px, controls at 14–16px, and reserve 12px for short metadata. Text columns use `.pf-measure` (70ch maximum).
+Inter Variable is the application face: controls, navigation, cards, dialogs, body copy and status.
+Newsreader Variable is reserved for editorial page/section titles and the wordmark. Both are
+self-hosted variable fonts; never introduce a second control face, browser-default serif heading,
+or an arbitrary font weight on an individual screen. Diagnostics may use the inherited system
+monospace stack only when presenting literal code.
+
+| Role | Shared utility | Font, size / line height | Weight | Usage |
+| --- | --- | --- | --- | --- |
+| Page title | `pf-display-title` | Newsreader, 32–48px / 1.08 | 500 | One page title, album title |
+| Section title | `pf-section-title` | Newsreader, 24–32px / 1.15 | 500 | Major page sections and wordmark |
+| Card/dialog title | `pf-card-title` | Inter, 18px / 24px | 600 | Cards, photo preview and confirmation dialogs |
+| Subheading | `pf-subheading` | Inter, 16px / 24px | 600 | Disclosures, operational status and groups inside cards |
+| Body | `pf-body` or inherited body | Inter, 16px / 24px | 400 | Reading copy and card body defaults |
+| Supporting/help | `pf-help` | Inter, 14px / 20px | 400 | Descriptions, help and validation text |
+| Field label | `pf-label` | Inter, 14px / 20px | 600 | Associated input/select labels and radio choices |
+| Button | `pf-control` | Inter, 14px / 20px | 600 | All action sizes; size variants change dimensions, not the type role |
+| Input/select value | shared form controls | Inter, 16px | 400 | Readable entry values; avoids iOS focus zoom |
+| Metadata | `pf-metadata` | Inter, 12px / 16px | 500 | Badges, dock labels and short supplementary values |
+| Eyebrow | `pf-eyebrow` | Inter, 12px / 18px, uppercase | 700 | Sparse short section labels only |
+
+Use `pf-supporting` for secondary text colour, `pf-measure` for a 70ch reading width and
+`pf-tabular` for numbers that update in place. Normal emphasis uses 600; 700 is reserved for
+eyebrows. Keep link text in its surrounding type role. Do not shrink field labels or help to
+daisyUI's 12px fieldset default; the shared macros apply explicit roles. Do not add display-serif
+styling to controls or confirmation dialogs.
 
 Spacing follows Tailwind's 4px unit. Default gaps are 8px within a control, 12px between close elements, 16px within cards and 24–32px between sections. daisyUI selector radius is 8px, field radius 10px and card/dialog radius 14px. Surfaces use a one pixel border and minimal elevation. Do not add one-off shadows or arbitrary radii to individual pages.
 
 Fonts are copied from the OFL-licensed `@fontsource-variable/inter` and `@fontsource-variable/newsreader` packages. Only the necessary unicode subsets load. Run `npm run build:css` to copy font files and compile Tailwind; the app serves the checked-in `static/v2.css` and local `static/fonts` files, with no Node or CDN at runtime. License copies ship alongside the fonts.
+
+### Navigation icon family
+
+Frame uses Lucide **image**, Photos uses **images**, and Settings uses the conventional
+**settings** gear. The shared icon macro vendors those [official SVG paths](https://github.com/lucide-icons/lucide/tree/main/icons)
+with round caps/joins and a 2-unit stroke on a 24-unit canvas. The mobile dock renders 24px icons;
+the desktop sidebar renders the same family at 20px. Icons inherit text colour, stay decorative
+beside visible labels, and do not require a runtime icon library or network access.
+
+Dock labels use `pf-metadata`, with a 4px icon/label gap, at least 48px touch targets and space
+for the active marker. The dock retains bottom safe-area padding. Do not replace one destination
+with a differently weighted icon family. The vendored
+[Lucide license](../src/photoframe/static/vendor/lucide-LICENSE.txt) ships with the app.
 
 ## Shared components
 
@@ -74,7 +111,7 @@ Use the Jinja macros in `src/photoframe/templates/components/` as the canonical 
 | Link | `actions.link` | Text link (`link-primary`) inside copy; button styles only for action-like navigation. Active navigation uses `aria-current`. |
 | Form fields | `forms.input_field`, `select_field`, `checkbox_field`, `radio_card` | `fieldset`, visible label and associated help. Labels and help wrap within narrow viewports. `input-error` / `select-error` plus `aria-invalid` for failed validation. Explain the correction in text. |
 | Card | `surfaces.card` | Default (`base-100`), soft (`base-200`), emphasis (`primary`). Keep a consistent `card-body` and border. |
-| Disclosure | `surfaces.disclosure` | Native `details` with `collapse-arrow`; short title and optional current-value summary. `advanced` uses a soft Info surface and border, with an explicit Advanced title. Use for advanced or less frequent settings. |
+| Disclosure | `surfaces.disclosure` | Native `details` with `collapse-arrow`; short title and optional current-value summary. `advanced` uses the same neutral surface and border, with an explicit Advanced title. Expertise is not a status; reserve semantic colours for availability, channel, verification, warnings and errors. Use for advanced or less frequent settings. |
 | Empty state | `surfaces.empty_state` | Name the missing content, explain one next step and offer one action when possible. |
 | Badge | `feedback.badge` | Distinguish Native orientation, Default framing, Custom framing and Unavailable. Hidden is separate. Orientation alone never implies an error or blocks rotation. |
 | Alert | `feedback.alert` | Info/success status; warning/error alert. Keep text actionable, persistent while relevant and understandable without colour. |
@@ -115,11 +152,28 @@ pairs Development (Info) or Stable (Success) with a separate Newer (Primary), In
 only a successful signature and compatibility inspection earns a Verified label. Badge text wraps
 inside an automatically sized pill in both themes.
 
-Mobile photo records use two compact rows: filename with action, then layout with status.
-Keep touch actions at least 44px; visually clamp filenames to two lines while retaining the
-full name in accessible text. Bulk layout fields stay collapsed above the records, so opening
+Mobile photo records use the shared `data.photo_layout_record` macro: a fixed 56px cached
+thumbnail, flexible filename/layout text, and a fixed 80px action track. Status spans beneath the
+text/action tracks so wrapping labels cannot displace the action. Desktop uses a 40px thumbnail
+beside the filename. Keep touch actions at least 44px; visually clamp filenames to two lines
+while retaining the full name in accessible text. Missing previews reveal a local image icon. Bulk layout fields stay collapsed above the records, so opening
 Photo layouts reaches the photos immediately. Do not expand explanatory copy ahead of the list.
 The release picker selects the first installable newer entry after loading, without starting
 verification or a download. Header update status appears on phones and desktop only for an
 available/staged update, an active operation, or a failure needing attention. Phones use a 44px
 icon link with the full status in its accessible label; ordinary idle status stays on Updates.
+
+## Mobile thumbnail records and advanced controls
+
+The app and showcase render the same record macro. Cached thumbnails load lazily through the
+existing endpoint; this view never requests full-size originals. The showcase uses a tiny copy of
+the app’s own generated demo art, so it remains usable offline.
+
+| Light | Dark |
+| --- | --- |
+| [<img src="images/ui-v2-photo-records-light-mobile.png" alt="Aligned mobile photo records with cached thumbnails" width="240">](images/ui-v2-photo-records-light-mobile.png) | [<img src="images/ui-v2-photo-records-dark-mobile.png" alt="Dark mobile photo records and standard navigation icons" width="240">](images/ui-v2-photo-records-dark-mobile.png) |
+| [<img src="images/ui-v2-manual-releases-light-mobile.png" alt="Neutral manual release picker with semantic status labels" width="240">](images/ui-v2-manual-releases-light-mobile.png) | [<img src="images/ui-v2-manual-releases-dark-mobile.png" alt="Neutral dark release picker" width="240">](images/ui-v2-manual-releases-dark-mobile.png) |
+
+Manual release selection and other advanced disclosures use neutral base surfaces. The literal
+Advanced label explains the control’s purpose. Reserve colour for a release’s channel, age,
+verified compatibility, or an actual warning/error; advanced settings alone are not a warning.

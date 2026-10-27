@@ -4,7 +4,7 @@
 {% import "components/surfaces.html" as surfaces %}
 <section class="update-shell min-w-0 space-y-4" aria-labelledby="settings-section-title">
   {% call surfaces.card('Update status', 'What the frame is doing now.', 'status-title') %}
-    <div class="flex flex-wrap items-center justify-between gap-3"><p id="update-status-badge" class="update-status-badge inline-flex min-w-0 max-w-full items-center gap-2 text-base font-semibold sm:text-lg" data-tone="neutral"><span data-update-icon aria-hidden="true">—</span><strong class="min-w-0 break-words" data-update-label>Checking installation</strong></p><p class="text-sm text-base-content/70">Installed <strong id="installed-version" class="font-semibold text-base-content">v{{ version }}</strong></p></div>
+    <div class="flex flex-wrap items-center justify-between gap-3"><p id="update-status-badge" class="update-status-badge inline-flex min-w-0 max-w-full items-center gap-2 pf-subheading" data-tone="neutral"><span data-update-icon aria-hidden="true">—</span><strong class="min-w-0 break-words" data-update-label>Checking installation</strong></p><p class="text-sm text-base-content/70">Installed <strong id="installed-version" class="font-semibold text-base-content">v{{ version }}</strong></p></div>
     <p id="update-status" class="break-words text-sm text-base-content/70" role="status" aria-live="polite">Checking installation…</p>
     <progress id="update-progress" class="progress progress-primary w-full" max="100" value="0" hidden aria-label="Update progress"></progress>
     <p id="update-error" class="break-words empty:hidden text-sm text-error-content" role="alert"></p>
@@ -12,7 +12,7 @@
     <div id="unmanaged" class="space-y-2 border-t border-base-300 pt-4 text-sm" hidden>{{ actions.button('Check latest stable release', 'secondary', id='public-check') }}<p>This installation cannot update from the browser. Your files and configuration are preserved.</p><p>Ask your administrator to follow the <a class="link link-primary" href="https://github.com/mravalanche/photoframe/blob/develop/docs/managed-updates.md">managed installation migration guide</a>.</p></div>
 
     <section id="managed-controls" class="space-y-4 border-t border-base-300 pt-4" hidden aria-labelledby="controls-title">
-      <div><h3 id="controls-title" class="text-lg font-semibold">Next step</h3><p id="update-steps" class="text-sm text-base-content/70">Check for an update, download it, then apply it when you're ready to restart.</p></div>
+      <div><h3 id="controls-title" class="pf-subheading">Next step</h3><p id="update-steps" class="text-sm text-base-content/70">Check for an update, download it, then apply it when you're ready to restart.</p></div>
       <div class="update-actions flex flex-wrap gap-2" aria-describedby="update-steps">
         {{ actions.button('Check now', 'secondary', id='check-update') }}
         {{ actions.button('Download & verify', 'secondary', id='stage-update', disabled=true) }}
@@ -34,7 +34,7 @@
       <p class="text-sm text-base-content/70">Choose a newer release from the current channel. Verify compatibility before downloading; applying it still requires confirmation.</p>
       <p id="release-picker-reason" class="text-sm text-base-content/70" role="status">Checking release-selection support…</p>
       {{ actions.button('Load published releases', 'secondary', 'sm', id='load-releases') }}
-      <div class="fieldset min-w-0 w-full"><label class="fieldset-legend whitespace-normal" for="release-choice">Release</label><select id="release-choice" class="select min-w-0 w-full" aria-describedby="release-choice-summary selected-release-detail" disabled><option value="">Load releases to choose a version</option></select></div>
+      <div class="fieldset min-w-0 w-full"><label class="fieldset-legend pf-label whitespace-normal" for="release-choice">Release</label><select id="release-choice" class="select min-w-0 w-full" aria-describedby="release-choice-summary selected-release-detail" disabled><option value="">Load releases to choose a version</option></select></div>
       <template id="release-badge-template">{{ feedback.badge('') }}</template>
       <div id="release-choice-summary" class="flex flex-wrap items-center gap-2 text-sm" role="status" aria-live="polite" hidden></div>
       <p id="selected-release-detail" class="break-words text-sm" role="status" aria-live="polite">Compatibility has not been verified.</p>
@@ -49,5 +49,5 @@
     <p class="mt-2 text-sm text-base-content/70">If this page doesn't reconnect, wait a few minutes and choose Reconnect. If that fails, check the Photoframe service logs.</p>
   {% endcall %}
 
-  <dialog id="apply-dialog" class="modal" aria-labelledby="confirm-title" aria-describedby="confirm-detail"><div class="modal-box max-w-lg"><form method="dialog"><h2 id="confirm-title" class="text-xl font-semibold">Apply update and restart?</h2><p id="confirm-detail" class="mt-3 text-sm text-base-content/70">Your frame will pause briefly. Your saved settings and photos will be kept.</p><div class="modal-action flex-wrap">{{ actions.button('Cancel', 'secondary', type='submit', attrs={'value': 'cancel', 'autofocus': true}) }}{{ actions.button('Apply & restart', type='submit', id='confirm-action', attrs={'value': 'confirm'}) }}</div></form></div><form method="dialog" class="modal-backdrop"><button aria-label="Close update dialog">close</button></form></dialog>
+  <dialog id="apply-dialog" class="modal" aria-labelledby="confirm-title" aria-describedby="confirm-detail"><div class="modal-box max-w-lg"><form method="dialog"><h2 id="confirm-title" class="pf-card-title">Apply update and restart?</h2><p id="confirm-detail" class="mt-3 text-sm text-base-content/70">Your frame will pause briefly. Your saved settings and photos will be kept.</p><div class="modal-action flex-wrap">{{ actions.button('Cancel', 'secondary', type='submit', attrs={'value': 'cancel', 'autofocus': true}) }}{{ actions.button('Apply & restart', type='submit', id='confirm-action', attrs={'value': 'confirm'}) }}</div></form></div><form method="dialog" class="modal-backdrop"><button aria-label="Close update dialog">close</button></form></dialog>
 </section>

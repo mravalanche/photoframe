@@ -35,7 +35,7 @@
       <a href="/" class="inline-flex min-h-11 min-w-0 items-center gap-2 text-xl font-semibold tracking-tight text-base-content no-underline" aria-label="Photoframe home"><img class="size-9" src="{{ url_for('static', path='/photoframe.svg') }}" alt=""><span class="pf-section-title truncate">photoframe</span></a>
       <div class="ml-auto flex shrink-0 items-center gap-2">
         <a class="inline-flex size-11 shrink-0 items-center justify-center rounded-field border border-base-300 sm:w-auto sm:gap-2 sm:px-3" href="/settings/updates" title="Software updates" aria-label="Software updates" data-update-badge hidden><span data-update-icon aria-hidden="true">○</span><span class="sr-only text-sm sm:not-sr-only" data-update-label>Update status</span></a>
-        <button type="button" class="btn btn-ghost btn-sm min-h-11 gap-2" data-theme-toggle aria-label="Dark mode" aria-pressed="false" title="Switch to dark theme" onclick="setTheme(document.documentElement.dataset.theme === 'photoframe-dark' ? 'light' : 'dark')">{{ icons.icon('theme') }}<span class="hidden sm:inline">Theme</span></button>
+        <button type="button" class="btn btn-ghost btn-sm pf-control min-h-11 gap-2" data-theme-toggle aria-label="Dark mode" aria-pressed="false" title="Switch to dark theme" onclick="setTheme(document.documentElement.dataset.theme === 'photoframe-dark' ? 'light' : 'dark')">{{ icons.icon('theme') }}<span class="hidden sm:inline">Theme</span></button>
       </div>
     </div>
   </header>

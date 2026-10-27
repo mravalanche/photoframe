@@ -7,10 +7,10 @@
   <div class="card-body grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(12rem,1fr)_minmax(0,1.5fr)]">
     <div class="selected-image relative grid max-h-[35dvh] aspect-[3/2] place-items-center overflow-hidden rounded-box bg-base-200" aria-busy="true">
       <img class="max-h-[35dvh] max-w-full object-contain" src="/photos/{{ selected_photo.id }}/prepared?fit_mode={{ selected_framing.fit_mode }}&amp;matte={{ selected_framing.matte }}" alt="Frame preview of {{ selected_photo.filename }}">
-      <div class="preview-feedback is-loading absolute inset-x-2 bottom-2 flex items-center justify-center gap-2 rounded-box bg-base-100/95 px-3 py-2 text-sm shadow-sm" data-preview-feedback role="status" aria-live="polite"><span data-preview-message>Preparing preview…</span><button type="button" class="btn btn-outline btn-sm" data-preview-retry hidden>Retry</button></div>
+      <div class="preview-feedback is-loading absolute inset-x-2 bottom-2 flex items-center justify-center gap-2 rounded-box bg-base-100/95 px-3 py-2 text-sm shadow-sm" data-preview-feedback role="status" aria-live="polite"><span data-preview-message>Preparing preview…</span><button type="button" class="btn btn-outline btn-sm pf-control" data-preview-retry hidden>Retry</button></div>
     </div>
     <div class="selected-copy min-w-0 space-y-4">
-      <div><p class="pf-eyebrow text-primary">Photo preview</p><h2 id="selected-title" class="pf-section-title scroll-mt-24 break-words">{{ selected_photo.filename }}</h2><p class="mt-1 text-sm text-base-content/70">Preview the current layout, or save a custom framing choice.</p></div>
+      <div><p class="pf-eyebrow text-primary">Photo preview</p><h2 id="selected-title" class="pf-card-title scroll-mt-24 break-words">{{ selected_photo.filename }}</h2><p class="mt-1 text-sm text-base-content/70">Preview the current layout, or save a custom framing choice.</p></div>
       <form data-saved-fit="{{ selected_framing.fit_mode }}" data-saved-matte="{{ selected_framing.matte }}" class="framing-form grid gap-3 sm:grid-cols-2" method="post" action="/photo/framing" hx-post="/photo/framing{% if photo_editor_source == 'layouts' %}?source=layouts{% endif %}" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML">
         <input type="hidden" name="photo_id" value="{{ selected_photo.id }}">
         {{ forms.select_field('selected-fit', 'fit_mode', 'Fit', [('fit', 'Show whole photo'), ('fill', 'Fill frame')], selected_framing.fit_mode) }}
