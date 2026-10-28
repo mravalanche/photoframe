@@ -1,5 +1,56 @@
 # Changelog
 
+## [2.0.0](https://github.com/mravalanche/photoframe/compare/v1.5.0...v2.0.0) (2026-10-28)
+
+
+### Features
+
+* **ui:** implement approved inked Photoframe branding ([0d2f007](https://github.com/mravalanche/photoframe/commit/0d2f007bef37c8f9e3c5b8c9c1cc1b434d99512b))
+* **ui:** wire pixel icon into browser and mobile surfaces ([1f5b7ec](https://github.com/mravalanche/photoframe/commit/1f5b7ecca09b5cb53c54d36bd561afcdc8115cc9))
+
+
+### Bug Fixes
+
+* address v2 feedback and recover Inky rendering ([1343de2](https://github.com/mravalanche/photoframe/commit/1343de2fff3c830065cff206dbe728b94ae1f46b))
+* apply default framing automatically and edit photos in context ([18022db](https://github.com/mravalanche/photoframe/commit/18022db5f1534d337f82d1a44b3dce49b8b32704))
+* close photo preview without replacing its table context ([11ac9f5](https://github.com/mravalanche/photoframe/commit/11ac9f5a1d9d2d9a584ebe68c366a5c845e6e1b3))
+* integrate soak recovery and responsive feedback contracts ([1fd0c87](https://github.com/mravalanche/photoframe/commit/1fd0c87cf6cd3661fb702fc874f14e851bf433e0))
+* preserve Inky palettes and report recoverable render health ([61b4198](https://github.com/mravalanche/photoframe/commit/61b41984db05da3f4b4ce5c43847e919c0322309))
+* preserve photo table context through hide and undo ([0a77c27](https://github.com/mravalanche/photoframe/commit/0a77c27742c14f56a7161a112655ca81b46497da))
+* **ui:** align thumbnail records and standardize typography ([6fd550d](https://github.com/mravalanche/photoframe/commit/6fd550dbb17b4de261f783bc07d138dd4c261097))
+* **ui:** align thumbnail records and standardize typography ([dfad87e](https://github.com/mravalanche/photoframe/commit/dfad87e71045b430db50910a7431f6f85c7d0b0d))
+* **ui:** compact mobile photos and useful update status ([a93c4a6](https://github.com/mravalanche/photoframe/commit/a93c4a683d3a426a750c97790b1449d77051aee4))
+* **ui:** compact photo rows and surface useful update status ([b3602a1](https://github.com/mravalanche/photoframe/commit/b3602a1b02df2890015010f81d56f3f120efb11a))
+* **ui:** contain mobile album picker and check open menus in CI ([f3ff1f8](https://github.com/mravalanche/photoframe/commit/f3ff1f88e8eb4403527a70d353b2779cedb2607a))
+* **ui:** contain mobile album picker and gate disclosure layouts in browsers ([0dfd197](https://github.com/mravalanche/photoframe/commit/0dfd19769b14a27bbbd99e512c7135a73f964910))
+* **ui:** invalidate stale scripts in source previews ([05cc2e8](https://github.com/mravalanche/photoframe/commit/05cc2e88ff2f1725a9864e20ba93efc86df110d4))
+* **ui:** keep keyboard focus on visible photo recovery actions ([4b77b74](https://github.com/mravalanche/photoframe/commit/4b77b748e9ce3cd2c176430b0b9d8921eaea6be4))
+* **ui:** restore local photo actions after hide and undo ([fe22c0e](https://github.com/mravalanche/photoframe/commit/fe22c0ed2cf301c7c886addff2ce5a8c98c0a682))
+* **ui:** simplify mobile settings and photo layouts ([9a1fd29](https://github.com/mravalanche/photoframe/commit/9a1fd29d6a7dfdf43d461b53d6d30b662b57d962))
+* **ui:** simplify mobile settings and photo layouts ([d9bca5e](https://github.com/mravalanche/photoframe/commit/d9bca5ea9d3baa650d0a64ac1fd15c542633c127))
+* **ui:** simplify navigation and keep photo editing in place ([d5c5e27](https://github.com/mravalanche/photoframe/commit/d5c5e27c374d0c1ed63df732a387e0cd6966c247))
+* **ui:** wrap network choices and verify responsive editor flow ([86addbe](https://github.com/mravalanche/photoframe/commit/86addbef4e2bf56f0b9f7ccf665d78f164531bde))
+
+
+### Performance Improvements
+
+* request small thumbnails for photo browsing ([83f6c1b](https://github.com/mravalanche/photoframe/commit/83f6c1bd5442c24e943a49feb1176ed03622160c))
+* use smaller thumbnails in photo browsing ([0a1e8d9](https://github.com/mravalanche/photoframe/commit/0a1e8d95cb9628f937be28c9474bea9a7e2d66d1))
+
+
+### Documentation
+
+* document advanced release selection and feedback previews ([22d0089](https://github.com/mravalanche/photoframe/commit/22d008936c58cce6af53b340458c4a1604384c17))
+* feature approved Photoframe branding in README ([ec258c9](https://github.com/mravalanche/photoframe/commit/ec258c9c3921bddbf5da8ce6a8230c88e60e07d8))
+* **ui:** capture approved inked branding and mobile logo ([d2b925f](https://github.com/mravalanche/photoframe/commit/d2b925f6e902b8266d8dd78d99e135e6c2881636))
+* **ui:** capture managed update and release picker flows ([62f7c6e](https://github.com/mravalanche/photoframe/commit/62f7c6e71382eea3c075eeece71d16864594dc26))
+* **ui:** refresh feedback component showcase captures ([6ee1f2d](https://github.com/mravalanche/photoframe/commit/6ee1f2d3f8ae0f46b34989c196db5b07933ba463))
+
+
+### Miscellaneous Chores
+
+* **release:** promote mobile fix for Photoframe 2.0.0 ([#70](https://github.com/mravalanche/photoframe/issues/70)) ([5c5c872](https://github.com/mravalanche/photoframe/commit/5c5c8725b24fdff6b80ae3a9cac1aa3102927d1e))
+
 ## [1.5.0](https://github.com/mravalanche/photoframe/compare/v1.4.0...v1.5.0) (2026-10-25)
 
 
