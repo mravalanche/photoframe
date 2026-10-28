@@ -17,3 +17,7 @@ settings.toml
 artifacts/comment-demo-data/
 artifacts/ui-demo-data/
 *.tmp
+
+# Browser integration failure evidence
+test-results/
+playwright-report/
