@@ -21,6 +21,7 @@ checked-out branch and may include work newer than an installed stable release; 
 | --- | --- |
 | Understand the application and stored data | [Architecture and persistence](../PROJECT.md#architecture-and-persistence) |
 | Run Python and browser quality checks | [Development and quality gates](../PROJECT.md#development-and-quality-gates) |
+| Review the gallery feature branch interactively | [Standalone gallery testing](gallery-testing.md) |
 | Follow shared UI conventions | [v2 design system](ui-v2-design-system.md) |
 | Follow repository-specific working rules | [AGENTS.md](../AGENTS.md) |
 | Plan remaining product and reliability work | [Roadmap](../PROJECT.md#roadmap) |

@@ -599,7 +599,10 @@
           anchor.focus({ preventScroll: true });
         }
       }
-      if (photoEditorClosePending) {
+      const closedEditorHasFocus = document.activeElement?.closest(
+        '[data-photo-editor-dialog]:not([open])',
+      );
+      if (photoEditorClosePending || closedEditorHasFocus) {
         photoEditorClosePending = false;
         restorePhotoEditorFocus();
       }
