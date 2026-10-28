@@ -64,6 +64,21 @@ jobs:
       - name: Run tests
         run: uv run pytest
 
+      - name: Install Chromium for browser integration checks
+        run: npx playwright install --with-deps chromium
+
+      - name: Check open disclosures and menus at mobile and desktop widths
+        run: npm run test:browser
+
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-failure-evidence
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Run Ruff lint checks
         run: uv run ruff check .
 

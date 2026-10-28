@@ -310,6 +310,16 @@ unused-name checks, dependency declaration and tree checks, Bandit, tracked-file
 vulnerability audit. The vulnerability audit needs current advisory data. Run `uv run poe --help`
 for the individual `deps-*` and `security-*` tasks.
 
+Browser integration checks run in required CI before either integration or release merges.
+Run them locally with `npm ci`, `npx playwright install chromium`, and
+`npm run test:browser`. They launch the local demo application, open the disclosures
+and menus on Frame, Photos, every Settings section and the component showcase, and
+check viewport containment at 320, 390, 768 and 1280 pixels. The album regression uses
+long names and thumbnails; update controls and release notes use deterministic local
+responses. Failure screenshots and traces are retained as CI artifacts. Native select
+popups are controlled by the browser/OS; their controls and surrounding layout are
+checked after keyboard activation and dismissal.
+
 Tests are organized by subsystem under `tests/`. Network/TLS coverage includes secure defaults,
 persisted Uvicorn startup, automatic certificate reuse, incomplete-material refusal, supplied-file
 validation/no-overwrite behavior, port errors, confirmation/restart requests, reset behavior, and

@@ -231,12 +231,19 @@ def test_protocol_rejects_malformed_types(field: str, value: object) -> None:
         Request.parse(json.dumps(payload).encode(), "token")
 
 
-def test_stage_installs_offline_at_final_path_then_marks_ready(tmp_path: Path) -> None:
+def test_stage_installs_offline_at_final_path_then_marks_ready(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import hashlib
     import json
 
     from photoframe.updater.manifest import ReleaseManifest, SignedManifest
 
+    # This success case must not depend on the host temporary filesystem size.
+    monkeypatch.setattr(
+        "photoframe.updater.helper.shutil.disk_usage",
+        lambda path: Mock(free=20 * 1024**3),
+    )
     service = updater(tmp_path)
     identity = {
         "version": "1.3.0",
