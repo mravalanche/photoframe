@@ -13,6 +13,7 @@ __pycache__/
 .coverage
 htmlcov/
 data/
+.standalone-data/
 settings.toml
 artifacts/comment-demo-data/
 artifacts/ui-demo-data/
