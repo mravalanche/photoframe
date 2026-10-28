@@ -586,10 +586,10 @@ class ConfigurationService:
         self.runtime.diagnostics.record("display.completed")
 
     def _manual_render_failed(self, message: str) -> None:
-        self.runtime.diagnostics.record("display.failed", message)
         self.repository.update(
             lambda saved: setattr(saved.refresh_status, "last_render_error", message[:500])
         )
+        self.runtime.diagnostics.record("display.failed", message)
 
     def start_render(self, operation_id: str | None = None) -> None:
         if self.runtime.maintenance_gate.maintenance:

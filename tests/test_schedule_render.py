@@ -269,6 +269,7 @@ def test_synchronous_schedule_prepare_failure_is_attempted_once_across_restart(t
     runtime.render_service.prepare = fail_prepare
     runtime.refresh_lifecycle(anchor + timedelta(seconds=30))
     runtime.refresh_lifecycle(anchor + timedelta(seconds=30))
+    wait_for_display(runtime)
     failed = repository.load().refresh_status
     attempted = failed.last_attempted_schedule_key
     assert prepare_calls == 1

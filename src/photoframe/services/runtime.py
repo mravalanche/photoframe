@@ -672,10 +672,10 @@ class Runtime:
                 self.diagnostics.record("display.completed")
 
             def failed(message: str) -> None:
-                self.diagnostics.record("display.failed", message)
                 self.repository.update(
                     lambda saved: setattr(saved.refresh_status, "last_render_error", message[:500])
                 )
+                self.diagnostics.record("display.failed", message)
 
             self.render_service.start(candidate.id, on_complete=completed, on_failure=failed)
         except (ImageProcessingError, ProviderError, RuntimeError) as exc:
