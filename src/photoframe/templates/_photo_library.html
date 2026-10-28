@@ -1,0 +1,48 @@
+{% import "components/actions.html" as actions %}
+{% import "components/data.html" as data %}
+{% import "components/feedback.html" as feedback %}
+{% import "components/forms.html" as forms %}
+{% import "components/surfaces.html" as surfaces %}
+<section class="library-section space-y-5" aria-label="Photo library">
+  <p class="eligibility-summary flex flex-wrap gap-2 text-sm">{{ feedback.badge(eligible|length ~ ' in rotation', 'success') }}{{ feedback.badge(hidden_photos|length ~ ' hidden') }}{% if unsupported_count %}{{ feedback.badge(unsupported_count ~ ' unavailable', 'error') }}{% endif %}</p>
+  <form method="post" action="/album/refresh" data-album-refresh-form hx-post="/album/refresh" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML" hx-disabled-elt="find button" hx-indicator="#album-refresh-progress" class="album-recovery flex flex-wrap items-center gap-3" hx-sync="this:drop">
+    {{ actions.button('Refresh photos & thumbnails', 'secondary', 'sm', type='submit', disabled=render_state.active) }}
+    <span id="album-refresh-progress" class="htmx-indicator text-sm" role="status">Refreshing photos…</span>
+    <p class="text-sm text-base-content/65">Reload this album and retry missing photos.</p>
+  </form>
+  {% if browse_photos %}
+  <div class="thumbnail-rail flex gap-3 overflow-x-auto pb-3" aria-label="Photos available to preview">
+    {% for photo in browse_photos %}<form method="post" action="/photo/preview" hx-post="/photo/preview" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML" class="thumbnail {{ 'selected' if selected_photo and selected_photo.id == photo.id }} relative w-32 shrink-0 sm:w-36">
+      <input type="hidden" name="photo_id" value="{{ photo.id }}"><button type="submit" class="card w-full overflow-hidden border bg-base-100 text-left transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary {{ 'border-primary' if selected_photo and selected_photo.id == photo.id else 'border-base-300' }}" aria-label="Preview {{ photo.filename }}"><img class="aspect-[4/3] w-full object-cover" src="/thumbnail/{{ photo.id }}{% if thumbnail_revision %}?refresh={{ thumbnail_revision }}{% endif %}" loading="lazy" alt=""><span class="block truncate p-2 text-xs" title="{{ photo.filename }}">{{ photo.filename }}</span></button><span class="thumbnail-loading htmx-indicator absolute inset-x-2 bottom-2 rounded-box bg-base-100 px-2 py-1 text-center text-xs" role="status">Opening…</span>
+    </form>{% endfor %}
+  </div>
+  <p class="interaction-note text-sm text-base-content/65">Preview a photo, then choose <strong>Show now</strong> to put it on the frame.</p>
+  {% else %}
+    {% call surfaces.empty_state('No photos to preview', 'Restore a hidden photo or choose another album.', '▧') %}{{ actions.link('Frame settings', '/#frame-settings', 'secondary') }}{% endcall %}
+  {% endif %}
+
+  {% if layout_rows %}
+    {% call surfaces.disclosure('Photo layouts', layout_rows|length ~ (' photo' if layout_rows|length == 1 else ' photos'), 'photo-layouts', open=photo_layouts_open|default(false), extra_classes='photo-layouts setting-card', attrs={'data-photo-layouts': ''}) %}
+      {% call surfaces.disclosure('Set all layouts', id='all-photo-layouts', extra_classes='mb-3') %}
+      <form class="grid gap-3 rounded-box bg-base-200 p-3 sm:grid-cols-2" method="post" action="/photo/layouts/all" hx-post="/photo/layouts/all" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML">
+        <div class="sm:col-span-2"><p class="text-sm text-base-content/70">Sets the frame default and resets custom layouts in this album. Hidden photos stay hidden; originals are unchanged.</p></div>
+        {{ forms.select_field('all-photo-fit', 'fit_mode', 'Fit', [('fill', 'Fill frame'), ('fit', 'Show whole photo')], settings.frame.default_framing.fit_mode) }}
+        {{ forms.select_field('all-photo-matte', 'matte', 'Background', [('blur', 'Soft photo'), ('colour', 'Colour wash'), ('white', 'White'), ('black', 'Black')], settings.frame.default_framing.matte) }}
+        <div class="sm:col-span-2">{{ actions.button('Apply to all photos', 'secondary', type='submit', disabled=render_state.active) }}</div>
+      </form>
+      {% endcall %}
+      {% call data.table('Photo layouts', ['Photo', 'Layout', 'Status', 'Action'], 'photo-layout-table', stacked=true, record_thumbnails=true) %}
+        {% for row in layout_rows %}
+          {% set record_thumbnail = '' if row.unavailable else '/thumbnail/' ~ row.photo.id ~ ('?refresh=' ~ thumbnail_revision if thumbnail_revision else '') %}
+          {% call(slot) data.photo_layout_record(row.photo.filename, record_thumbnail, photo_layout_label(row.framing)) %}
+            {% if slot == 'status' %}{% if row.unavailable %}{{ feedback.badge('Unavailable', 'error') }}<p class="mt-1 max-w-52 text-xs">The image could not be decoded. Refresh photos to retry.</p>{% else %}{{ feedback.badge('Custom framing', 'primary') if row.custom else feedback.badge('Native orientation') if row.native else feedback.badge('Default framing') }}{% endif %}{% if row.framing.hidden %} {{ feedback.badge('Hidden') }}{% endif %}
+            {% else %}{% if row.framing.hidden %}<form method="post" action="/photo/unhide" hx-post="/photo/unhide?source=layouts" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ row.photo.id }}">{{ actions.button('Undo hide' if just_hidden_photo and just_hidden_photo.id == row.photo.id else 'Restore', 'secondary', 'sm', type='submit', attrs={'aria-label': 'Restore ' ~ row.photo.filename}) }}</form>
+          {% elif not row.unavailable %}<form method="post" action="/photo/preview" hx-post="/photo/preview?source=layouts" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ row.photo.id }}">{{ actions.button('Edit framing' if row.custom else 'Preview' if row.native else 'Frame photo', 'secondary', 'sm', type='submit', attrs={'aria-label': ('Edit framing for ' if row.custom else 'Preview ' if row.native else 'Frame photo ' ) ~ row.photo.filename}) }}</form>{% else %}<span class="text-base-content/50" aria-hidden="true">—</span><span class="sr-only">No action available</span>{% endif %}
+            {% endif %}
+          {% endcall %}
+        {% endfor %}
+      {% endcall %}
+      <p class="mt-3 text-xs text-base-content/65">Native matches the display. Default adapts another orientation. Custom is a saved per-photo layout.</p>
+    {% endcall %}
+  {% endif %}
+</section>

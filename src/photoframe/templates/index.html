@@ -1,67 +1,80 @@
+{% import "components/surfaces.html" as surfaces %}
+{% import "components/actions.html" as actions %}
+{% import "components/branding.html" as branding %}
+{% import "components/icons.html" as icons %}
+{% import "components/navigation.html" as navigation %}
+{% set active_nav = 'settings' if settings_section else view|default('frame') %}
+{% set primary_nav = [{'key': 'frame', 'label': 'Frame', 'href': '/'}, {'key': 'photos', 'label': 'Photos', 'href': '/photos'}, {'key': 'settings', 'label': 'Settings', 'href': '/settings'}] %}
 <!doctype html>
-<html lang="en-GB" data-theme="dark">
+<html lang="en-GB" data-theme="photoframe-light">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#fffefa">
   <script>
     (() => {
       let saved = null;
       try { saved = window.localStorage.getItem('photoframe-theme'); } catch (_error) { /* unavailable */ }
-      document.documentElement.dataset.theme = saved === 'light' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = saved === 'dark' ? 'photoframe-dark' : 'photoframe-light';
+      document.querySelector('meta[name="theme-color"]').content = saved === 'dark' ? '#1c2721' : '#fffefa';
     })();
   </script>
-  <title>{{ 'Settings · ' if settings_section else '' }}Photoframe</title>
-  <link rel="icon" href="{{ url_for('static', path='/photoframe.svg') }}" type="image/svg+xml">
-  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}?v={{ version }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/responsive-fixes.css') }}?v={{ version }}">
-  <link rel="stylesheet" href="/static/settings.css?v={{ version }}">
-  <link rel="stylesheet" href="/static/updates.css?v={{ version }}">
-  <script src="/static/update-status.js?v={{ version }}" defer></script>
-  {% if settings_section == 'updates' %}<script src="/static/updates.js?v={{ version }}" defer></script>{% endif %}
-  <script src="/static/thumbnails.js?v={{ version }}" defer></script>
-  <script src="{{ url_for('static', path='/tab-identity.js') }}?v={{ version }}"></script>
+  <title>{{ 'Settings · ' if settings_section else 'Photos · ' if view|default('frame') == 'photos' else '' }}Photoframe</title>
+  {{ branding.icons() }}
+  <link rel="stylesheet" href="{{ url_for('static', path='/v2.css') }}?v={{ version }}&amp;rev={{ ui_revision }}">
+  <script src="/static/update-status.js?v={{ version }}&amp;rev={{ ui_revision }}" defer></script>
+  {% if settings_section == 'updates' %}<script src="/static/updates.js?v={{ version }}&amp;rev={{ ui_revision }}" defer></script>{% endif %}
+  <script src="/static/thumbnails.js?v={{ version }}&amp;rev={{ ui_revision }}" defer></script>
+  <script src="{{ url_for('static', path='/tab-identity.js') }}?v={{ version }}&amp;rev={{ ui_revision }}"></script>
   <script src="{{ url_for('static', path='/vendor/htmx-2.0.4.min.js') }}" defer></script>
 </head>
-<body data-page="{{ 'settings' if settings_section else 'frame' }}">
-  <header class="app-header">
-    <a href="/" class="brand" aria-label="Photoframe home"><span class="brand-mark"><img src="{{ url_for('static', path='/photoframe.svg') }}" alt=""></span><span>Photoframe</span></a>
-    <nav class="header-actions" aria-label="Main navigation">
-      <a class="update-status-badge" href="/settings/updates" title="Software updates" data-update-badge><span data-update-icon aria-hidden="true">○</span><span data-update-label>Update status</span></a>
-      <a class="settings-link" href="/settings" aria-label="Settings" title="Settings"{% if settings_section %} aria-current="page"{% endif %}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9.5 3-.5 2.2-1.7 1-2.2-.7-2.5 4.3 1.7 1.5v2L2.6 15l2.5 4.3 2.2-.7 1.7 1 .5 2.2h5l.5-2.2 1.7-1 2.2.7 2.5-4.3-1.7-1.7v-2l1.7-1.5-2.5-4.3-2.2.7-1.7-1-.5-2.2z"/><circle cx="12" cy="12.4" r="3.3"/></svg></a>
-    </nav>
-    <div class="theme-toggle" role="group" aria-label="Colour theme">
-      <button type="button" data-theme-choice="light" aria-pressed="false" onclick="setTheme('light')">Light</button>
-      <button type="button" data-theme-choice="dark" aria-pressed="true" onclick="setTheme('dark')">Dark</button>
+<body data-page="{{ 'settings' if settings_section else view|default('frame') }}" class="min-h-screen bg-base-200 text-base-content">
+  <header class="sticky top-0 z-50 border-b border-base-300 bg-base-100/95 backdrop-blur">
+    <div class="navbar mx-auto max-w-7xl gap-3 px-4 md:px-6">
+      <a href="/" class="inline-flex min-h-11 min-w-0 items-center gap-2 text-xl font-semibold tracking-tight text-base-content no-underline" aria-label="Photoframe home"><img class="size-9" src="{{ url_for('static', path='/photoframe.svg') }}" alt=""><span class="pf-section-title truncate">photoframe</span></a>
+      <div class="ml-auto flex shrink-0 items-center gap-2">
+        <a class="inline-flex size-11 shrink-0 items-center justify-center rounded-field border border-base-300 sm:w-auto sm:gap-2 sm:px-3" href="/settings/updates" title="Software updates" aria-label="Software updates" data-update-badge hidden><span data-update-icon aria-hidden="true">○</span><span class="sr-only text-sm sm:not-sr-only" data-update-label>Update status</span></a>
+        <button type="button" class="btn btn-ghost btn-sm pf-control min-h-11 gap-2" data-theme-toggle aria-label="Dark mode" aria-pressed="false" title="Switch to dark theme" onclick="setTheme(document.documentElement.dataset.theme === 'photoframe-dark' ? 'light' : 'dark')">{{ icons.icon('theme') }}<span class="hidden sm:inline">Theme</span></button>
+      </div>
     </div>
   </header>
-  <main class="app-shell{% if settings_section %} settings-shell{% endif %}">
+  <div class="mx-auto flex max-w-7xl gap-8 px-4 md:px-6">
+    <aside class="hidden w-48 shrink-0 pt-8 lg:block" aria-label="Primary navigation"><nav class="sticky top-24 flex flex-col gap-1">{% for item in primary_nav %}<a href="{{ item.href }}" class="flex min-h-11 items-center gap-3 rounded-box px-3 text-sm font-medium no-underline focus-visible:outline-2 focus-visible:outline-primary{% if item.key == active_nav %} bg-primary/10 text-primary{% else %} text-base-content/70 hover:bg-base-300/60 hover:text-base-content{% endif %}"{% if item.key == active_nav %} aria-current="page"{% endif %}>{{ icons.icon(item.key) }}{{ item.label }}</a>{% endfor %}</nav></aside>
+  <main class="min-w-0 flex-1 pb-36 pt-6 lg:pb-16 md:pt-8" id="main-content">
     {% if settings_section %}
-    <div class="settings-heading"><div><p class="kicker">CONFIGURATION</p><h1>Settings</h1></div><a class="secondary" href="/">← Back to frame</a></div>
-    <div class="settings-layout">
-      <nav class="settings-nav" aria-label="Settings sections">
-        {% for key, label in [('updates', 'Software updates'), ('provider', 'Photo provider'), ('hardware', 'Display hardware'), ('advanced', 'Advanced & recovery')] %}
-        <a href="/settings/{{ key }}"{% if settings_section == key %} aria-current="page"{% endif %}>{{ label }}</a>
-        {% endfor %}
-      </nav>
-      <section class="settings-content" aria-label="{{ settings_title }}">
+    <div class="mb-6 flex flex-wrap items-end justify-between gap-3"><div><p class="pf-eyebrow">CONFIGURATION</p><h1 class="pf-display-title">Settings</h1></div>{{ actions.link('Back to frame', '/', 'secondary', 'sm') }}</div>
+    <div class="grid gap-5 xl:grid-cols-[13rem_minmax(0,1fr)]">
+      {% set settings_items = [('provider', 'Photo provider'), ('hardware', 'Display hardware'), ('updates', 'Software updates'), ('advanced', 'Advanced & recovery')] %}
+      <div class="min-w-0 xl:hidden">
+        {% call surfaces.disclosure('Settings section', settings_title, 'settings-section-chooser') %}
+          {{ navigation.settings_links(settings_items, settings_section) }}
+        {% endcall %}
+      </div>
+      <div class="hidden xl:block">{{ navigation.settings_links(settings_items, settings_section) }}</div>
+      <section class="min-w-0 space-y-5" aria-labelledby="settings-section-title">
+        {{ surfaces.section_heading(settings_title, {'provider': 'Connect to the library that supplies your frame.', 'hardware': "Set up your frame’s display.", 'updates': 'Check, download and install a new version when you are ready.', 'advanced': 'Manage network access and recovery options.'}[settings_section], 'settings-section-title') }}
         {% if settings_section == 'updates' %}{% include "_updates.html" %}
-        {% else %}<div hx-get="/partials/workspace?section={{ settings_section }}" hx-trigger="load" hx-swap="outerHTML"><div class="loading">Loading settings…</div></div>{% endif %}
+        {% else %}<div hx-get="/partials/workspace?section={{ settings_section }}" hx-trigger="load" hx-swap="outerHTML"><p role="status" class="flex items-center gap-2"><span class="loading loading-spinner loading-sm" aria-hidden="true"></span>Loading settings…</p></div>{% endif %}
       </section>
     </div>
     {% else %}
-    {% include "_loading_workspace.html" %}
+    <div hx-get="/partials/workspace?view={{ view|default('frame') }}" hx-trigger="load" hx-swap="outerHTML" data-workspace-loading>{% include "_loading_workspace.html" %}</div>
     {% endif %}
   </main>
+  </div>
   <script>
     function setTheme(theme) {
-      document.documentElement.dataset.theme = theme;
+      document.documentElement.dataset.theme = theme === 'dark' ? 'photoframe-dark' : 'photoframe-light';
+      document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#1c2721' : '#fffefa';
       try { window.localStorage.setItem('photoframe-theme', theme); } catch (_error) { /* unavailable */ }
-      document.querySelectorAll('[data-theme-choice]').forEach(button => {
-        button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme));
-      });
+      const toggle = document.querySelector('[data-theme-toggle]');
+      if (toggle) {
+        toggle.setAttribute('aria-pressed', String(theme === 'dark'));
+        toggle.setAttribute('title', `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`);
+      }
     }
-    function syncThemeToggle() { setTheme(document.documentElement.dataset.theme || 'dark'); }
+    function syncThemeToggle() { setTheme(document.documentElement.dataset.theme === 'photoframe-dark' ? 'dark' : 'light'); }
     function dismissNotice(control) {
       const notice = control?.closest?.('[data-notice]') || control;
       if (!notice) return;
@@ -181,6 +194,8 @@
         const isPending = pendingAlbumSelection?.id === choice.dataset.albumId;
         choice.classList.toggle('chosen', isCurrent);
         choice.classList.toggle('pending', isPending);
+        choice.classList.toggle('border-primary', isCurrent || isPending);
+        choice.classList.toggle('border-base-300', !isCurrent && !isPending);
         if (input) input.checked = isPending || (!pendingAlbumSelection && isCurrent);
         if (state) state.textContent = isPending ? 'Pending' : isCurrent ? 'Current' : 'Choose';
       });
@@ -238,7 +253,7 @@
     function previewFeedback(state, message, loading = false, error = false) {
       const feedback = state.editor.querySelector('[data-preview-feedback]');
       feedback.hidden = !message;
-      feedback.classList.toggle('loading', loading);
+      feedback.classList.toggle('is-loading', loading);
       feedback.querySelector('[data-preview-message]').textContent = message;
       feedback.querySelector('[data-preview-retry]').hidden = !error;
       state.editor.querySelector('.selected-image').setAttribute('aria-busy', String(loading));
@@ -328,7 +343,7 @@
       state.desiredUrl = url.href;
       previewFeedback(state, 'Updating preview…', true);
       loadFramingPreview(state);
-      editor.querySelectorAll('.selected-actions .primary, .rotation-action button').forEach(button => {
+      editor.querySelectorAll('.selected-actions .btn-primary, .rotation-action button').forEach(button => {
         button.disabled = dirty || !!editor.querySelector('.framing-required');
       });
       form.querySelector('[data-framing-hint]').textContent = dirty ? 'Save framing to show this photo' : editor.querySelector('.framing-required') ? 'Save framing to include this photo' : 'Ready to show';
@@ -466,6 +481,38 @@
       control.textContent = 'Resetting Photoframe…';
       form.requestSubmit();
     }
+    let photoEditorViewState = null;
+    let photoEditorClosePending = false;
+    function restorePhotoEditorFocus() {
+      const saved = photoEditorViewState;
+      if (!saved) return;
+      const rail = document.querySelector('.thumbnail-rail');
+      if (rail) rail.scrollLeft = saved.railX;
+      const forms = Array.from(document.querySelectorAll('form[action="/photo/preview"], form[action="/photo/unhide"]'))
+        .filter(candidate => candidate.elements.photo_id?.value === saved.photoId);
+      const localRow = !saved.fromRail && forms.find(candidate =>
+        candidate.closest('#photo-layout-table') && candidate.closest('details')?.open,
+      );
+      const form = localRow || forms.find(candidate => Boolean(candidate.closest('.thumbnail')) === saved.fromRail)
+        || forms[0];
+      form?.querySelector('button[type="submit"]')?.focus({ preventScroll: true });
+      window.scrollTo(0, saved.pageY);
+    }
+    function setupPhotoEditorDialog() {
+      const dialog = document.querySelector('[data-photo-editor-dialog]');
+      if (!dialog) return;
+      if (!dialog.dataset.editorReady) {
+        dialog.dataset.editorReady = 'true';
+        dialog.addEventListener('close', restorePhotoEditorFocus);
+        dialog.querySelectorAll('[data-photo-editor-close]').forEach(control => {
+          control.addEventListener('click', () => dialog.close());
+        });
+      }
+      if (dialog.dataset.editorOpen !== 'true' || dialog.open) return;
+      dialog.dataset.editorOpen = 'false';
+      dialog.showModal();
+      if (photoEditorViewState) window.scrollTo(0, photoEditorViewState.pageY);
+    }
     function syncInterface() {
       syncThemeToggle();
       setupNotifications();
@@ -473,6 +520,7 @@
       setupNetworkSettings();
       setupAlbumSelection();
       setupFramingPreviews();
+      setupPhotoEditorDialog();
       setupScheduleSettings();
     }
     function workspaceLoadFailed(event) {
@@ -495,7 +543,6 @@
       if (intent) event.detail.headers['X-Photoframe-Render-Intent'] = intent;
     });
 
-    let previewScrollState = null;
     document.addEventListener('htmx:beforeRequest', event => {
       const albumForm = event.detail.elt?.closest?.('[data-album-confirm-form]');
       if (albumForm) {
@@ -504,17 +551,38 @@
       }
       const settingsPanel = event.detail.elt?.closest?.('[data-settings-panel]');
       if (settingsPanel) {
-        const anchor = settingsPanel.querySelector(':scope > summary, :scope > .settings-intro h2');
+        const anchor = settingsPanel.querySelector(':scope > summary, h2');
         activeSettingsPanel = settingsPanel.dataset.settingsPanel;
         settingsPanelViewState = {
           panelId: activeSettingsPanel,
           anchorTop: anchor?.getBoundingClientRect().top,
         };
       }
-      const thumbnail = event.detail.elt?.closest?.('.thumbnail');
-      if (!thumbnail) return;
-      const rail = thumbnail.closest('.thumbnail-rail');
-      previewScrollState = { pageY: window.scrollY, railX: rail?.scrollLeft || 0 };
+      const previewForm = event.detail.elt?.closest?.('form[action="/photo/preview"]');
+      if (previewForm) {
+        const rail = previewForm.closest('.thumbnail-rail');
+        photoEditorViewState = {
+          photoId: previewForm.elements.photo_id?.value,
+          fromRail: Boolean(previewForm.closest('.thumbnail')),
+          railX: rail?.scrollLeft || 0,
+          pageY: window.scrollY,
+        };
+      }
+      if (event.detail.elt?.closest?.('form[action="/photo/preview/clear"]')) {
+        photoEditorClosePending = true;
+      }
+      const visibilityForm = event.detail.elt?.closest?.('form[action="/photo/hide"], form[action="/photo/unhide"]');
+      if (visibilityForm) {
+        if (!visibilityForm.closest('[data-photo-editor-dialog]') || !photoEditorViewState) {
+          photoEditorViewState = {
+            photoId: visibilityForm.elements.photo_id?.value,
+            fromRail: false,
+            railX: document.querySelector('.thumbnail-rail')?.scrollLeft || 0,
+            pageY: window.scrollY,
+          };
+        }
+        photoEditorClosePending = true;
+      }
     });
     document.addEventListener('htmx:afterRequest', event => {
       if (event.detail.elt?.closest?.('[data-album-confirm-form]')) setAlbumBusy(false);
@@ -524,27 +592,27 @@
         const savedPanel = settingsPanelViewState;
         settingsPanelViewState = null;
         const panel = document.querySelector(`[data-settings-panel="${savedPanel.panelId}"]`);
-        const anchor = panel?.querySelector(':scope > summary, :scope > .settings-intro h2');
+        const anchor = panel?.querySelector(':scope > summary, h2');
         if (anchor) {
           const newTop = anchor.getBoundingClientRect().top;
           if (Number.isFinite(savedPanel.anchorTop)) window.scrollBy(0, newTop - savedPanel.anchorTop);
           anchor.focus({ preventScroll: true });
         }
       }
-      if (!previewScrollState) return;
-      const saved = previewScrollState;
-      previewScrollState = null;
-      const rail = document.querySelector('.thumbnail-rail');
-      if (rail) rail.scrollLeft = saved.railX;
-      window.scrollTo(0, saved.pageY);
+      if (photoEditorClosePending) {
+        photoEditorClosePending = false;
+        restorePhotoEditorFocus();
+      }
     });
   </script>
-  <aside id="activity-dock" class="activity-dock" aria-label="Current activity" hidden>
-    <div><strong data-activity-title role="status" aria-live="polite" aria-atomic="true"></strong><p data-activity-detail></p></div>
-    <button type="button" class="secondary" data-activity-cancel hidden>Cancel loading</button>
-    <button type="button" class="quiet" data-activity-dismiss aria-label="Dismiss activity status" hidden>×</button>
-    <progress aria-label="Current operation progress" hidden></progress>
+  <aside id="activity-dock" class="activity-dock fixed inset-x-3 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-2xl rounded-box border border-base-300 bg-base-100 p-3 shadow-lg lg:inset-x-auto lg:right-6 lg:bottom-6 lg:w-[28rem]" aria-label="Current activity and next action" hidden>
+    <div class="flex items-center gap-3"><div class="min-w-0 flex-1"><strong class="block text-sm" data-activity-title role="status" aria-live="polite" aria-atomic="true"></strong><p class="pf-supporting truncate text-xs" data-activity-detail></p></div>
+    <button type="button" class="btn btn-outline btn-sm" data-activity-cancel hidden>Cancel loading</button>
+    <button type="button" class="btn btn-primary btn-sm" data-context-action hidden></button>
+    <button type="button" class="btn btn-ghost btn-sm btn-square" data-activity-dismiss aria-label="Dismiss activity status" hidden>{{ icons.icon('close', 16) }}</button></div>
+    <progress class="progress progress-primary mt-2 w-full" aria-label="Current operation progress" hidden></progress>
   </aside>
-  <script src="{{ url_for('static', path='/activity.js') }}?v={{ version }}" defer></script>
+  {{ navigation.mobile_dock(primary_nav, active_nav) }}
+  <script src="{{ url_for('static', path='/activity.js') }}?v={{ version }}&amp;rev={{ ui_revision }}" defer></script>
 </body>
 </html>

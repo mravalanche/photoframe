@@ -4,20 +4,20 @@
 {% set is_custom = seconds not in steps %}
 {% set position = steps.index(seconds) if not is_custom else 5 %}
 {% set divisor = 86400 if seconds % 86400 == 0 else 3600 if seconds % 3600 == 0 else 60 if seconds % 60 == 0 else 1 %}
-<fieldset class="interval-fields span-2" data-schedule-fields="interval">
-  <legend>Time between photos</legend>
-  <label class="interval-slider-label" for="interval-slider">Every <output data-interval-label for="interval-slider">{% if is_custom %}{{ seconds // divisor }} {{ 'days' if divisor == 86400 else 'hours' if divisor == 3600 else 'minutes' if divisor == 60 else 'seconds' }}{% else %}{{ labels[position] }}{% endif %}</output></label>
-  <input class="interval-slider" id="interval-slider" list="interval-stops" type="range" min="0" max="9" step="1" value="{{ position }}" aria-valuetext="{{ labels[position] }}" aria-describedby="interval-slider-help" data-interval-slider {{ 'disabled' if is_custom }}>
+<fieldset class="interval-fields grid gap-2 rounded-box border border-base-300 p-3 sm:col-span-2" data-schedule-fields="interval">
+  <legend class="px-1 text-sm font-semibold">Time between photos</legend>
+  <label class="interval-slider-label text-sm" for="interval-slider">Every <output class="font-semibold text-primary" data-interval-label for="interval-slider">{% if is_custom %}{{ seconds // divisor }} {{ 'days' if divisor == 86400 else 'hours' if divisor == 3600 else 'minutes' if divisor == 60 else 'seconds' }}{% else %}{{ labels[position] }}{% endif %}</output></label>
+  <input class="interval-slider range range-primary w-full" id="interval-slider" list="interval-stops" type="range" min="0" max="9" step="1" value="{{ position }}" aria-valuetext="{{ labels[position] }}" aria-describedby="interval-slider-help" data-interval-slider {{ 'disabled' if is_custom }}>
   <datalist id="interval-stops">{% for index in range(10) %}<option value="{{ index }}"></option>{% endfor %}</datalist>
-  <div class="interval-scale" aria-hidden="true"><span>30 seconds</span><span>1 day</span></div>
-  <small id="interval-slider-help">Choose a common interval or set an exact one below.</small>
-  <label class="interval-custom-choice"><input type="checkbox" data-interval-custom {{ 'checked' if is_custom }}> Custom interval</label>
+  <div class="interval-scale flex justify-between text-xs text-base-content/60" aria-hidden="true"><span>30 seconds</span><span>1 day</span></div>
+  <small id="interval-slider-help" class="text-xs text-base-content/65">Choose a common interval or set an exact one below.</small>
+  <label class="interval-custom-choice flex cursor-pointer items-center gap-2 text-sm"><input class="checkbox checkbox-primary checkbox-sm" type="checkbox" data-interval-custom {{ 'checked' if is_custom }}> Custom interval</label>
   <div data-interval-custom-fields {{ 'hidden' if not is_custom }}>
-    <div class="interval-inputs">
-      <label for="interval-value">Every<input id="interval-value" name="interval_value" type="number" inputmode="numeric" min="{{ 30 if divisor == 1 else 1 }}" max="{{ 2592000 // divisor }}" step="1" required value="{{ seconds // divisor }}" aria-describedby="interval-help"></label>
-      <label for="interval-unit">Unit<select id="interval-unit" name="interval_unit">{% for value, label, factor in [('seconds', 'Seconds', 1), ('minutes', 'Minutes', 60), ('hours', 'Hours', 3600), ('days', 'Days', 86400)] %}<option value="{{ value }}" {{ 'selected' if divisor == factor }}>{{ label }}</option>{% endfor %}</select></label>
+    <div class="interval-inputs grid gap-3 sm:grid-cols-2">
+      <label class="fieldset" for="interval-value"><span class="fieldset-legend pf-label">Every</span><input class="input w-full" id="interval-value" name="interval_value" type="number" inputmode="numeric" min="{{ 30 if divisor == 1 else 1 }}" max="{{ 2592000 // divisor }}" step="1" required value="{{ seconds // divisor }}" aria-describedby="interval-help"></label>
+      <label class="fieldset" for="interval-unit"><span class="fieldset-legend pf-label">Unit</span><select class="select w-full" id="interval-unit" name="interval_unit">{% for value, label, factor in [('seconds', 'Seconds', 1), ('minutes', 'Minutes', 60), ('hours', 'Hours', 3600), ('days', 'Days', 86400)] %}<option value="{{ value }}" {{ 'selected' if divisor == factor }}>{{ label }}</option>{% endfor %}</select></label>
     </div>
-    <small id="interval-help">Choose a whole number, from 30 seconds to 30 days.</small>
-    <small data-interval-conversion role="status"></small>
+    <small id="interval-help" class="mt-1 block text-xs text-base-content/65">Choose a whole number, from 30 seconds to 30 days.</small>
+    <small class="block text-xs text-base-content/65" data-interval-conversion role="status"></small>
   </div>
 </fieldset>

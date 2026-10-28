@@ -1,40 +1,53 @@
-<section class="update-shell" aria-labelledby="software-updates-title">
-  <h2 id="software-updates-title">Software updates</h2>
-  <p class="update-intro">Check and install Photoframe updates.</p>
-  <section class="update-card" aria-labelledby="status-title">
-    <div class="update-card-heading">
-      <h3 id="status-title" class="update-eyebrow">Update status</h3>
-      <div class="installed-version"><span>Installed version</span><strong id="installed-version">v{{ version }}</strong></div>
-    </div>
-    <p id="update-status-badge" class="update-status-badge update-status-hero" data-tone="neutral"><span data-update-icon aria-hidden="true">—</span><strong data-update-label>Checking installation</strong></p>
-    <p id="update-status" role="status" aria-live="polite">Checking installation…</p>
-    <progress id="update-progress" max="100" value="0" hidden aria-label="Update progress"></progress>
-    <div class="update-metadata">
-      <p id="update-release"></p>
-      <p class="update-last-check"><span>Last checked</span><time id="update-last-check">Never checked</time></p>
-    </div>
-    <p id="update-error" role="alert"></p>
-    <button class="secondary" id="reconnect" type="button" hidden>Reconnect</button>
-    <div id="unmanaged" hidden><button class="secondary" id="public-check" type="button">Check latest stable release</button><p>This installation cannot update from the browser. Your files and configuration are preserved.</p><p>Ask your administrator to follow the <a href="https://github.com/mravalanche/photoframe/blob/develop/docs/managed-updates.md">managed installation migration guide</a>.</p></div>
-  </section>
-  <section class="update-card" id="managed-controls" hidden aria-labelledby="controls-title">
-    <h3 id="controls-title">Manage updates</h3>
-    <div>
-      <label for="update-channel">Update channel</label>
-      <select id="update-channel" aria-describedby="channel-description"><option value="stable">Stable</option><option value="develop">Develop — testing builds</option></select>
-      <p id="channel-description">Use Stable for everyday updates or Develop to test upcoming releases. Switching channels won't install an update.</p>
-      <label class="update-checkbox"><input id="weekly-checks" type="checkbox"> Check this channel weekly</label>
-      <p>Weekly checks won't download or install updates.</p>
-      <p id="update-steps">Check for an update, download it, then apply it when you're ready to restart.</p>
-      <div class="update-actions" aria-describedby="update-steps">
-        <button class="secondary" id="check-update" type="button">Check now</button>
-        <button class="secondary" id="stage-update" type="button" disabled>Download & verify</button>
-        <button class="primary" id="apply-update" type="button" disabled>Apply & restart</button>
-        <button class="quiet" id="rollback-update" type="button" hidden>Restore previous version</button>
+{% import "components/actions.html" as actions %}
+{% import "components/forms.html" as fields %}
+{% import "components/feedback.html" as feedback %}
+{% import "components/surfaces.html" as surfaces %}
+<section class="update-shell min-w-0 space-y-4" aria-labelledby="settings-section-title">
+  {% call surfaces.card('Update status', 'What the frame is doing now.', 'status-title') %}
+    <div class="flex flex-wrap items-center justify-between gap-3"><p id="update-status-badge" class="update-status-badge inline-flex min-w-0 max-w-full items-center gap-2 pf-subheading" data-tone="neutral"><span data-update-icon aria-hidden="true">—</span><strong class="min-w-0 break-words" data-update-label>Checking installation</strong></p><p class="text-sm text-base-content/70">Installed <strong id="installed-version" class="font-semibold text-base-content">v{{ version }}</strong></p></div>
+    <p id="update-status" class="break-words text-sm text-base-content/70" role="status" aria-live="polite">Checking installation…</p>
+    <progress id="update-progress" class="progress progress-primary w-full" max="100" value="0" hidden aria-label="Update progress"></progress>
+    <p id="update-error" class="break-words empty:hidden text-sm text-error-content" role="alert"></p>
+    {{ actions.button('Reconnect', 'secondary', id='reconnect', attrs={'hidden': true}) }}
+    <div id="unmanaged" class="space-y-2 border-t border-base-300 pt-4 text-sm" hidden>{{ actions.button('Check latest stable release', 'secondary', id='public-check') }}<p>This installation cannot update from the browser. Your files and configuration are preserved.</p><p>Ask your administrator to follow the <a class="link link-primary" href="https://github.com/mravalanche/photoframe/blob/develop/docs/managed-updates.md">managed installation migration guide</a>.</p></div>
+
+    <section id="managed-controls" class="space-y-4 border-t border-base-300 pt-4" hidden aria-labelledby="controls-title">
+      <div><h3 id="controls-title" class="pf-subheading">Next step</h3><p id="update-steps" class="text-sm text-base-content/70">Check for an update, download it, then apply it when you're ready to restart.</p></div>
+      <div class="update-actions flex flex-wrap gap-2" aria-describedby="update-steps">
+        {{ actions.button('Check now', 'secondary', id='check-update') }}
+        {{ actions.button('Download & verify', 'secondary', id='stage-update', disabled=true) }}
+        {{ actions.button('Apply & restart', id='apply-update', disabled=true) }}
+        {{ actions.button('Restore previous version', 'quiet', id='rollback-update', attrs={'hidden': true}) }}
       </div>
+      <div class="grid gap-4 border-t border-base-300 pt-4 md:grid-cols-2">
+        {{ fields.select_field('update-channel', 'update_channel', 'Update channel', [('stable', 'Stable'), ('develop', 'Develop — testing builds')], 'stable', help="Use Stable for everyday updates or Develop to test upcoming releases. Switching channels won't install an update.") }}
+        <div>{{ fields.checkbox_field('weekly-checks', 'weekly_checks', 'Check this channel weekly', help="Weekly checks won't download or install updates.") }}</div>
+      </div>
+    </section>
+    <div class="flex flex-wrap justify-between gap-2 border-t border-base-300 pt-4 text-sm"><p id="update-release" class="min-w-0 break-words empty:hidden"></p><p class="update-last-check text-base-content/70"><span>Last checked </span><time id="update-last-check">Never checked</time></p></div>
+  {% endcall %}
+
+  <details id="release-notes-section" class="release-notes-section collapse collapse-arrow border border-base-300 bg-base-100" hidden><summary id="release-notes-title" class="collapse-title font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Release notes <span class="text-sm font-normal text-base-content/70">What’s changed</span></summary><div id="release-notes" class="release-notes collapse-content break-words text-sm leading-relaxed [overflow-wrap:anywhere] [&_pre]:whitespace-pre-wrap"></div></details>
+
+  {% call surfaces.disclosure('Advanced: choose a release', 'Published versions in this channel', 'release-picker', variant='advanced') %}
+    <div class="space-y-3">
+      <p class="text-sm text-base-content/70">Choose a newer release from the current channel. Verify compatibility before downloading; applying it still requires confirmation.</p>
+      <p id="release-picker-reason" class="text-sm text-base-content/70" role="status">Checking release-selection support…</p>
+      {{ actions.button('Load published releases', 'secondary', 'sm', id='load-releases') }}
+      <div class="fieldset min-w-0 w-full"><label class="fieldset-legend pf-label whitespace-normal" for="release-choice">Release</label><select id="release-choice" class="select min-w-0 w-full" aria-describedby="release-choice-summary selected-release-detail" disabled><option value="">Load releases to choose a version</option></select></div>
+      <template id="release-badge-template">{{ feedback.badge('') }}</template>
+      <div id="release-choice-summary" class="flex flex-wrap items-center gap-2 text-sm" role="status" aria-live="polite" hidden></div>
+      <p id="selected-release-detail" class="break-words text-sm" role="status" aria-live="polite">Compatibility has not been verified.</p>
+      <div class="flex flex-wrap gap-2">{{ actions.button('Verify selected release', 'secondary', id='inspect-release', disabled=true) }}{{ actions.button('Download & verify selected', 'secondary', id='stage-selected-release', disabled=true) }}</div>
+      <div id="selected-release-notes" class="break-words text-sm leading-relaxed [overflow-wrap:anywhere] [&_pre]:whitespace-pre-wrap"></div>
     </div>
-  </section>
-  <details id="release-notes-section" class="update-card release-notes-section" hidden><summary id="release-notes-title">Release notes<span class="release-notes-hint">What’s changed</span></summary><div id="release-notes" class="release-notes"></div></details>
-  <section class="update-card update-help"><h3>During an update</h3><p>Your photos and settings are kept. The frame continues showing its current photo, and this page reconnects after the restart. If the update fails to start, the previous version is restored.</p><details><summary>Recovery and diagnostics</summary><p id="update-diagnostics">No update in progress.</p><p>If this page doesn't reconnect, wait a few minutes and choose Reconnect. If that fails, check the Photoframe service logs.</p></details></section>
-  <dialog id="apply-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-detail"><form method="dialog"><h2 id="confirm-title">Apply update and restart?</h2><p id="confirm-detail">Your frame will pause briefly. Your saved settings and photos will be kept.</p><div class="update-actions"><button class="secondary" value="cancel" autofocus>Cancel</button><button class="primary" id="confirm-action" value="confirm">Apply & restart</button></div></form></dialog>
+  {% endcall %}
+
+  {% call surfaces.disclosure('During an update', 'Recovery and diagnostics', 'update-help') %}
+    <p class="text-sm text-base-content/70">Your photos and settings are kept. The frame continues showing its current photo, and this page reconnects after the restart. If the update fails to start, the previous version is restored.</p>
+    <p id="update-diagnostics" class="mt-4 break-all text-sm text-base-content/70">No update in progress.</p>
+    <p class="mt-2 text-sm text-base-content/70">If this page doesn't reconnect, wait a few minutes and choose Reconnect. If that fails, check the Photoframe service logs.</p>
+  {% endcall %}
+
+  <dialog id="apply-dialog" class="modal" aria-labelledby="confirm-title" aria-describedby="confirm-detail"><div class="modal-box max-w-lg"><form method="dialog"><h2 id="confirm-title" class="pf-card-title">Apply update and restart?</h2><p id="confirm-detail" class="mt-3 text-sm text-base-content/70">Your frame will pause briefly. Your saved settings and photos will be kept.</p><div class="modal-action flex-wrap">{{ actions.button('Cancel', 'secondary', type='submit', attrs={'value': 'cancel', 'autofocus': true}) }}{{ actions.button('Apply & restart', type='submit', id='confirm-action', attrs={'value': 'confirm'}) }}</div></form></div><form method="dialog" class="modal-backdrop"><button aria-label="Close update dialog">close</button></form></dialog>
 </section>

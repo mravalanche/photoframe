@@ -11,6 +11,7 @@ from photoframe.web import create_app
 
 RENDER_INTENT = "38ebca82-c30a-4727-bb05-37fb455c97d6"
 RENDER_HEADERS = {"X-Photoframe-Render-Intent": RENDER_INTENT}
+PHOTOS_HEADERS = {"X-Photoframe-View": "photos"}
 
 
 class FakeProvider:
@@ -29,6 +30,9 @@ class FakeProvider:
 
     def thumbnail(self, photo_id: str) -> tuple[bytes, str]:
         return b"image", "image/jpeg"
+
+    def render_preview(self, photo_id: str) -> tuple[bytes, str]:
+        return self.thumbnail(photo_id)
 
     def original(self, photo_id: str) -> tuple[bytes, str]:
         image = Image.new("RGB", (1200, 800), "navy")
@@ -120,10 +124,11 @@ def test_complete_local_web_flow(tmp_path: Path):
         assert "Connected for test" in response.text
         assert "secret" not in response.text
         response = client.post("/album/select", data={"album_id": "album"})
-        assert "1 in rotation" in response.text
-        assert "1 need framing" in response.text
-        assert "0 unavailable" in response.text
-        assert "wide.jpg" in response.text
+        assert "2 in rotation" in response.text
+        photos = client.get("/partials/workspace?view=photos")
+        assert "Default framing" in photos.text
+        assert "Needs framing" not in photos.text
+        assert "wide.jpg" in photos.text
         response = client.post(
             "/workflow",
             data={
@@ -176,6 +181,59 @@ class PreviewFallbackProvider(MixedFormatProvider):
         return super().thumbnail(photo_id)
 
 
+def test_small_browser_thumbnail_and_larger_frame_preview_are_separate(tmp_path: Path):
+    class RenditionProvider(FakeProvider):
+        def thumbnail(self, photo_id: str) -> tuple[bytes, str]:
+            return b"small", "image/webp"
+
+        def render_preview(self, photo_id: str) -> tuple[bytes, str]:
+            return b"large", "image/jpeg"
+
+    app = create_app(tmp_path, lambda _kind: RenditionProvider())
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
+        client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
+        client.post("/album/select", data={"album_id": "album"})
+        small = client.get("/thumbnail/wide")
+        large = client.get("/thumbnail/wide?size=preview")
+        unknown = client.get("/thumbnail/not-in-album?size=preview")
+
+    assert (small.content, small.headers["content-type"]) == (b"small", "image/webp")
+    assert (large.content, large.headers["content-type"]) == (b"large", "image/jpeg")
+    assert small.headers["cache-control"] == "private, max-age=300"
+    assert large.headers["cache-control"] == "private, max-age=300"
+    assert unknown.status_code == 404
+
+
+def test_undecodable_original_uses_large_preview_for_frame_not_small_thumbnail(tmp_path: Path):
+    class FallbackProvider(MixedFormatProvider):
+        def __init__(self):
+            super().__init__()
+            self.small_calls = 0
+            self.preview_calls = 0
+
+        def thumbnail(self, photo_id: str) -> tuple[bytes, str]:
+            self.small_calls += 1
+            return b"small thumbnail", "image/webp"
+
+        def render_preview(self, photo_id: str) -> tuple[bytes, str]:
+            self.preview_calls += 1
+            return FakeProvider.original(self, photo_id)
+
+    provider = FallbackProvider()
+    app = create_app(tmp_path, lambda _kind: provider)
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
+        client.post("/connection", data={"server_url": "https://immich.test", "api_key": "secret"})
+        client.post("/album/select", data={"album_id": "album"})
+        small = client.get("/thumbnail/heic")
+        source = app.state.runtime.render_source("heic")
+
+    assert small.content == b"small thumbnail"
+    assert provider.small_calls == 1
+    assert provider.preview_calls == 1
+    with Image.open(BytesIO(source)) as image:
+        assert image.size == (1200, 800)
+
+
 def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path):
     app = create_app(tmp_path, lambda _kind: FakeProvider())
     with TestClient(app, headers={"Origin": "http://testserver"}) as client:
@@ -195,10 +253,12 @@ def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path)
         )
         runtime = app.state.runtime
         original_start = runtime.repository.load().frame.starting_photo_id
-        response = client.post("/photo/preview", data={"photo_id": "wide"})
-        assert "PHOTO PREVIEW" in response.text
-        assert 'data-frame-transition="manual-preview"' in response.text
-        assert "Preview selected" in response.text
+        response = client.post("/photo/preview", data={"photo_id": "wide"}, headers=PHOTOS_HEADERS)
+        frame_status = client.get("/partials/frame-status")
+        assert "Photo preview" in response.text
+        assert 'id="photo-workspace"' in response.text
+        assert 'data-frame-transition="manual-preview"' in frame_status.text
+        assert "Preview selected" in frame_status.text
         assert "Show now" in response.text
         assert runtime.repository.load().frame.starting_photo_id == original_start
         response = client.post("/render/start", headers=RENDER_HEADERS)
@@ -219,7 +279,7 @@ def test_render_requires_native_display_dimensions(tmp_path: Path):
         response = client.post("/render/start")
 
     assert "native display width and height" in response.text
-    assert 'class="notice error" role="alert"' in response.text
+    assert 'class="notice error alert alert-error" role="alert"' in response.text
     assert 'data-notice-kind="error"' in response.text
     assert 'aria-label="Dismiss notification"' in response.text
 
@@ -229,11 +289,11 @@ def test_demo_mode_is_local_and_renderable(tmp_path: Path):
     with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         page = client.get("/partials/workspace")
         assert "Quiet places" in page.text
-        assert "SELECTED ALBUM" in page.text
+        assert "Selected album" in page.text
         assert "Demo library" in page.text
         assert "Demo photos" in page.text
         assert 'name="timezone"' not in page.text
-        assert 'class="album-thumbnail" src="/thumbnail/coast"' in page.text
+        assert 'src="/thumbnail/coast"' in page.text
         assert "Northumberland coast.jpg" in page.text
         assert client.get("/thumbnail/coast").headers["content-type"] == "image/svg+xml"
 
@@ -251,19 +311,19 @@ def test_unsupported_assets_are_filtered_once_and_reported_by_category(tmp_path:
         )
         response = client.post("/album/select", data={"album_id": "album"})
         calls_after_scan = list(provider.original_calls)
-        refreshed = client.get("/partials/workspace")
-        rejected = client.post("/photo/preview", data={"photo_id": "heic"})
+        refreshed = client.get("/partials/workspace?view=photos")
+        rejected = client.post("/photo/preview", data={"photo_id": "heic"}, headers=PHOTOS_HEADERS)
 
-    assert "1 in rotation" in response.text
-    assert "1 need framing" in response.text
-    assert "1 unavailable" in response.text
-    assert 'aria-label="Preview wide.jpg"' in response.text
-    assert 'aria-label="Preview phone.heic"' not in response.text
+    assert "2 in rotation" in response.text
+    assert "Default framing" in refreshed.text
+    assert "1 unavailable" in refreshed.text
+    assert 'aria-label="Preview wide.jpg"' in refreshed.text
+    assert 'aria-label="Preview phone.heic"' not in refreshed.text
     assert "phone.heic" in refreshed.text
     assert "Unavailable" in refreshed.text
     assert 'aria-label="Preview phone.heic"' not in refreshed.text
     assert provider.original_calls == calls_after_scan
-    assert sorted(calls_after_scan) == ["heic", "wide"]
+    assert sorted(calls_after_scan) == ["heic", "tall", "wide"]
     assert "not eligible or cannot be decoded" in rejected.text
 
 
@@ -279,19 +339,19 @@ def test_decodable_provider_preview_keeps_heic_original_eligible(tmp_path: Path)
             },
         )
         response = client.post("/album/select", data={"album_id": "album"})
-        refreshed = client.get("/partials/workspace")
-        previewed = client.post("/photo/preview", data={"photo_id": "heic"})
+        refreshed = client.get("/partials/workspace?view=photos")
+        previewed = client.post("/photo/preview", data={"photo_id": "heic"}, headers=PHOTOS_HEADERS)
         app.state.runtime.repository.update(
             lambda settings: settings.device.set_display_size(1200, 800)
         )
         rendered = client.post("/render/start")
 
-    assert "2 in rotation" in response.text
-    assert "1 need framing" in response.text
-    assert "0 unavailable" in response.text
-    assert 'aria-label="Preview phone.heic"' in response.text
+    assert "3 in rotation" in response.text
+    assert "Default framing" in refreshed.text
+    assert "Unavailable" not in refreshed.text
+    assert 'aria-label="Preview phone.heic"' in refreshed.text
     assert "phone.heic" in refreshed.text
-    assert "PHOTO PREVIEW" in previewed.text
+    assert "Photo preview" in previewed.text
     assert "Preparing image" in rendered.text
     assert app.state.runtime.prepared_image is not None
     assert provider.original_calls.count("heic") == 1
@@ -307,11 +367,16 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
         advanced_settings = client.get("/partials/workspace?section=advanced")
         hardware_settings = client.get("/partials/workspace?section=hardware")
         frame_status = client.get("/partials/frame-status")
-        selected_workspace = client.post("/photo/preview", data={"photo_id": "coast"})
+        selected_workspace = client.post(
+            "/photo/preview", data={"photo_id": "coast"}, headers=PHOTOS_HEADERS
+        )
         htmx = client.get("/static/vendor/htmx-2.0.4.min.js")
         tab_identity = client.get("/static/tab-identity.js")
         responsive_css = client.get("/static/responsive-fixes.css")
         icon = client.get("/static/photoframe.svg")
+        png_icon = client.get("/static/favicon-32.png")
+        touch_icon = client.get("/static/apple-touch-icon.png")
+        manifest = client.get("/static/manifest.webmanifest")
 
     assert "/static/vendor/htmx-2.0.4.min.js" in page.text
     assert "unpkg.com" not in page.text
@@ -321,33 +386,41 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert "PhotoframeTabIdentity" in tab_identity.text
     assert "createBrowserSession" in page.text
     assert "randomUUID: () => self.crypto.randomUUID()" not in page.text
-    assert 'data-theme-choice="light" aria-pressed="false"' in page.text
-    assert 'data-theme-choice="dark" aria-pressed="true"' in page.text
+    assert 'data-theme-toggle aria-label="Dark mode" aria-pressed="false"' in page.text
+    assert "data-theme-choice=" not in page.text
     assert "setupNotifications" in page.text
     assert "setupAlbumSelection" in page.text
     assert ".notification-stack" in responsive_css.text
-    assert 'rel="icon" href="http://testserver/static/photoframe.svg"' in page.text
-    assert 'class="brand-mark"><img src="http://testserver/static/photoframe.svg"' in page.text
-    assert 'class="source-state"><span class="status-dot"' in workspace.text
-    assert ".source-state" in responsive_css.text
+    assert 'rel="icon" href="/static/favicon.svg?v=inked"' in page.text
+    assert 'href="/static/favicon-32.png?v=inked"' in page.text
+    assert 'href="/static/favicon.ico?v=inked"' in page.text
+    assert 'href="/static/apple-touch-icon.png?v=inked"' in page.text
+    assert 'href="/static/manifest.webmanifest?v=inked"' in page.text
+    assert 'name="theme-color" content="#fffefa"' in page.text
+    assert 'alt=""' in page.text
+    assert 'class="device-status online badge' in workspace.text
     assert "data-settings-accordion" in workspace.text
-    assert '<section class="setting-card" data-settings-panel="provider"' in provider_settings.text
+    assert 'data-settings-panel="provider"' in provider_settings.text
     assert '<details class="setting-card"' not in provider_settings.text
     assert 'data-settings-panel="provider"' not in workspace.text
-    assert 'name="frame-settings" data-settings-panel="album"' in workspace.text
-    assert 'name="frame-settings" data-settings-panel="default-layout"' in workspace.text
-    assert 'name="frame-settings" data-settings-panel="display"' in workspace.text
-    assert workspace.text.count('class="disclosure-icon"') == 4
+    assert 'data-settings-panel="album"' in workspace.text
+    assert 'data-settings-panel="default-layout"' in workspace.text
+    assert 'data-settings-panel="display"' in workspace.text
+    assert workspace.text.count('name="frame-settings"') == 3
     assert "setupSettingsAccordion" in page.text
     assert "activeSettingsPanel" in page.text
     assert "/static/tab-identity.js" in page.text
     assert "htmx:configRequest" in page.text
     assert ".setting-card[open]" in responsive_css.text
     assert icon.status_code == 200
-    assert 'id="mdi-image-frame"' in icon.text
+    assert 'id="photoframe-inked-mark"' in icon.text
+    assert png_icon.status_code == 200
+    assert touch_icon.status_code == 200
+    assert manifest.status_code == 200
+    assert '"purpose": "maskable"' in manifest.text
     assert 'action="/photo/start"' in selected_workspace.text
     assert "Start rotation here" in selected_workspace.text
-    assert "Display hardware" in hardware_settings.text
+    assert "Display configuration" in hardware_settings.text
     for name in (
         "display_driver",
         "display_model",
@@ -365,15 +438,13 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert 'action="/photo/next"' in workspace.text
     assert 'action="/photo/next"' not in frame_status.text
     assert "without changing your schedule" in workspace.text
-    assert workspace.text.index('id="frame-status"') < workspace.text.index(
-        'class="frame-next-action"'
-    )
-    assert "Advanced &amp; recovery" in advanced_settings.text
+    assert workspace.text.index('id="frame-status"') < workspace.text.index('action="/photo/next"')
+    assert "Network &amp; recovery" in advanced_settings.text
     assert "Daily at 03:00" in workspace.text
     assert "Album order" in workspace.text
     assert "Landscape frame" in workspace.text
     assert "Simulator · 24-hour" not in advanced_settings.text
-    assert "Network & web security" in advanced_settings.text
+    assert "Network &amp; web security" in advanced_settings.text
     assert "This device only" in advanced_settings.text
     assert "Devices on my local network" in advanced_settings.text
     assert 'name="network_access" value="local_network"' in advanced_settings.text
@@ -391,15 +462,11 @@ def test_ui_acceptance_contracts_are_present(tmp_path: Path):
     assert "Address after restart" in advanced_settings.text
     assert "setupNetworkSettings" in page.text
     assert "confirmNetworkChange" in page.text
-    assert 'class="advanced-card-content advanced-card-body"' in advanced_settings.text
+    assert "advanced-card-body" in advanced_settings.text
     assert 'id="network-port"' in advanced_settings.text
     assert 'aria-describedby="network-port-help"' in advanced_settings.text
     assert 'aria-describedby="certificate-path-help"' in advanced_settings.text
     assert 'aria-describedby="private-key-path-help"' in advanced_settings.text
-    assert ".advanced-card-body" in responsive_css.text
-    assert "padding: 26px 32px" in responsive_css.text
-    assert ".network-field > input" in responsive_css.text
-    assert "@media (max-width: 700px)" in responsive_css.text
     assert "Reset Photoframe?" in advanced_settings.text
     assert "Keep current settings" in advanced_settings.text
     assert "Reset to defaults" in advanced_settings.text
@@ -416,8 +483,8 @@ def test_album_picker_is_local_until_confirm_and_exposes_accessible_states(tmp_p
         before = app.state.runtime.repository.load()
 
     assert app.state.runtime.repository.load() == before
-    assert '<fieldset class="album-list" data-album-picker' in workspace.text
-    assert '<legend class="visually-hidden">Choose an album to review</legend>' in workspace.text
+    assert "data-album-picker" in workspace.text
+    assert '<legend class="sr-only">Choose an album to review</legend>' in workspace.text
     assert 'type="radio" name="pending_album" value="album"' in workspace.text
     assert "data-album-confirmation hidden" in workspace.text
     assert (
@@ -427,7 +494,7 @@ def test_album_picker_is_local_until_confirm_and_exposes_accessible_states(tmp_p
     announcement = workspace.text.index("data-album-announcement")
     confirmation = workspace.text.index("data-album-confirmation")
     assert announcement < confirmation
-    assert "data-album-cancel>Cancel</button>" in workspace.text
+    assert 'data-album-cancel=""' in workspace.text
     assert 'action="/album/select"' in workspace.text
     assert workspace.text.count('action="/album/select"') == 1
     assert "setAlbumBusy(true)" in page.text
@@ -451,8 +518,8 @@ def test_album_confirm_is_the_only_route_mutation_point_and_marks_current(tmp_pa
     assert saved.frame.album_id == "album"
     assert saved.frame.album_name == "Family"
     assert 'data-current-album-id="album"' in response.text
-    assert 'class="album-choice chosen"' in response.text
-    assert "<b data-album-state>Current</b>" in response.text
+    assert 'class="album-choice chosen border-primary' in response.text
+    assert re.search(r"<b[^>]* data-album-state>Current</b>", response.text)
 
 
 def test_album_confirm_keeps_the_picture_currently_represented_on_frame(tmp_path: Path):
@@ -635,14 +702,14 @@ def test_shuffle_setting_persists_and_start_here_anchors_new_round(tmp_path: Pat
         saved = runtime.repository.load()
         first_deck = saved.frame.shuffle_photo_ids
         assert saved.frame.photo_order == PhotoOrder.SHUFFLE
-        assert len(first_deck) == 5
+        assert len(first_deck) == 6
 
         client.post("/photo/preview", data={"photo_id": "coast"})
         response = client.post("/photo/start", data={"photo_id": "coast"})
         saved = runtime.repository.load()
         assert "new shuffled round" in response.text
         assert saved.frame.shuffle_photo_ids[0] == "coast"
-        assert len(set(saved.frame.shuffle_photo_ids)) == 5
+        assert len(set(saved.frame.shuffle_photo_ids)) == 6
 
 
 def test_reset_clears_configuration_secret_cache_and_runtime(tmp_path: Path):
@@ -652,7 +719,7 @@ def test_reset_clears_configuration_secret_cache_and_runtime(tmp_path: Path):
         client.post("/album/select", data={"album_id": "album"})
         runtime = app.state.runtime
         runtime.cache.put(runtime._cache_key("wide"), b"cached-photo")
-        assert runtime.cache.stats().files == 1
+        assert runtime.cache.stats().files == 2
 
         response = client.post("/reset")
 
@@ -692,8 +759,8 @@ def test_background_polling_never_replaces_the_settings_workspace(tmp_path: Path
         frame_status = client.get("/partials/frame-status")
         render_status = client.get("/partials/render-status")
 
-    workspace_tag = workspace.text.split(">", 1)[0]
-    assert workspace_tag == '<div id="workspace" class="workspace"'
+    assert 'id="workspace"' in workspace.text
+    assert 'hx-headers=\'{"X-Photoframe-View":"frame"}\'' in workspace.text
     assert 'id="frame-status"' in workspace.text
     assert 'hx-get="/partials/frame-status"' in frame_status.text
     assert 'hx-trigger="every 1s"' in frame_status.text
@@ -860,3 +927,40 @@ def test_completed_render_visibility_uses_fixed_server_deadlines(tmp_path: Path)
     assert 'id="render-status"' not in expired.text
     assert runtime.renderer.snapshot().phase.value == "idle"
     assert runtime.preview_id() is None
+
+
+def test_photos_route_has_its_own_shell_and_navigation(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
+        page = client.get("/photos")
+        workspace = client.get("/partials/workspace?view=photos")
+
+    assert page.status_code == 200
+    assert "data-workspace-loading" in page.text
+    assert 'id="photo-workspace"' in workspace.text
+    assert 'aria-current="page"' in page.text
+    assert 'href="/photos"' in page.text
+    assert 'id="photo-layout-table"' in workspace.text
+    assert 'id="frame-status"' not in workspace.text
+    assert '"X-Photoframe-View":"photos"' in workspace.text
+
+
+def test_hide_and_restore_keep_photos_view_and_feedback_region(tmp_path: Path):
+    app = create_app(tmp_path, demo_mode=True)
+    with TestClient(app, headers={"Origin": "http://testserver"}) as client:
+        previewed = client.post(
+            "/photo/preview", data={"photo_id": "coast"}, headers=PHOTOS_HEADERS
+        )
+        hidden = client.post("/photo/hide", data={"photo_id": "coast"}, headers=PHOTOS_HEADERS)
+        restored = client.post("/photo/unhide", data={"photo_id": "coast"}, headers=PHOTOS_HEADERS)
+
+    for response in (previewed, hidden, restored):
+        assert response.status_code == 200
+        assert 'id="photo-workspace"' in response.text
+        assert 'id="workspace-notices"' in response.text
+        assert '"X-Photoframe-View":"photos"' in response.text
+    assert "coast" in hidden.text
+    assert "hidden from this frame" in hidden.text
+    assert 'action="/photo/unhide"' in hidden.text
+    assert "restored" in restored.text.lower()
+    assert 'id="frame-status"' not in restored.text

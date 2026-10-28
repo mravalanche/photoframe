@@ -1,0 +1,25 @@
+{# Caller supplies tr/td content so domain tables stay semantic and flexible.
+   Stacked tables keep one set of controls and row identities across breakpoints. #}
+{% macro table(caption, headers, id='', striped=true, stacked=false, record_thumbnails=false) -%}
+<div class="{% if stacked %}min-w-0{% else %}overflow-x-auto{% endif %} rounded-box border border-base-300" role="region" aria-label="{{ caption }}"{% if not stacked %} tabindex="0"{% endif %}><table class="table w-full{% if striped %} table-zebra{% endif %}{% if stacked %} max-md:block max-md:[&_thead]:sr-only max-md:[&_tbody]:block max-md:[&_tr]:grid {% if record_thumbnails %}max-md:[&_tr]:grid-cols-[3.5rem_minmax(0,1fr)_5rem] max-md:[&_tbody_tr]:relative max-md:[&_tbody_tr]:min-h-28{% else %}max-md:[&_tr]:grid-cols-[minmax(0,1fr)_auto]{% endif %} max-md:[&_tr]:gap-x-3 max-md:[&_tr]:gap-y-1 max-md:[&_tr]:px-3 {% if record_thumbnails %}max-md:[&_tr]:py-3{% else %}max-md:[&_tr]:py-2{% endif %} max-md:[&_th]:p-0 max-md:[&_td]:p-0 max-md:[&_th]:min-w-0 max-md:[&_td]:min-w-0 max-md:[&_td]:whitespace-normal max-md:[&_td]:border-0 max-md:[&_th]:border-0 max-md:[&_button]:min-h-11{% endif %}"{% if id %} id="{{ id }}"{% endif %}{% if stacked %} role="table"{% endif %}><caption class="sr-only">{{ caption }}</caption><thead{% if stacked %} role="rowgroup"{% endif %}><tr{% if stacked %} role="row"{% endif %}>{% for heading in headers %}<th scope="col"{% if stacked %} role="columnheader"{% endif %}>{{ heading }}</th>{% endfor %}</tr></thead><tbody{% if stacked %} role="rowgroup"{% endif %}>{{ caller() }}</tbody></table></div>
+{%- endmacro %}
+
+
+{# One record layout for the app and showcase. Caller supplies status and action.
+   Mobile has fixed thumbnail/action tracks; metadata stays under its filename. #}
+{% import "components/icons.html" as icons %}
+{% macro photo_layout_record(filename, thumbnail_src, layout) -%}
+<tr role="row">
+  <th scope="row" class="photo-layout-name max-w-64 break-words text-sm font-medium max-md:col-start-2 max-md:row-start-1 max-md:max-w-none [overflow-wrap:anywhere]" role="rowheader">
+    <span class="flex items-center gap-3 max-md:contents">
+      <span class="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-field bg-base-300 text-base-content/65 max-md:absolute max-md:left-3 max-md:top-3 max-md:size-14 [&_.thumbnail-error]:hidden" aria-hidden="true">
+        {{ icons.icon("frame") }}{% if thumbnail_src %}<img class="absolute inset-0 size-full object-cover" src="{{ thumbnail_src }}" loading="lazy" width="56" height="56" alt="">{% endif %}
+      </span>
+      <span class="min-w-0 max-md:line-clamp-2" title="{{ filename }}">{{ filename }}</span>
+    </span>
+  </th>
+  <td class="break-words text-base-content/75 max-md:col-start-2 max-md:row-start-2 text-sm" role="cell">{{ layout }}</td>
+  <td class="align-middle max-md:col-span-2 max-md:col-start-2 max-md:row-start-3 max-md:[&_.badge]:text-xs" role="cell">{{ caller('status') }}</td>
+  <td class="align-middle max-md:col-start-3 max-md:row-span-2 max-md:row-start-1 max-md:[&_button]:h-auto max-md:[&_button]:w-full max-md:[&_button]:whitespace-normal max-md:[&_button]:px-2 max-md:[&_button]:py-1" role="cell">{{ caller('action') }}</td>
+</tr>
+{%- endmacro %}

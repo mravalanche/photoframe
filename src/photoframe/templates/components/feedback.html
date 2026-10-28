@@ -1,0 +1,19 @@
+{% macro badge(label, tone='neutral', size='md') -%}
+<span class="badge pf-metadata h-auto min-h-6 max-w-full whitespace-normal break-words py-1 text-center leading-tight{% if tone == 'primary' %} badge-primary{% elif tone == 'success' %} badge-success{% elif tone == 'warning' %} badge-warning{% elif tone == 'error' %} badge-error{% elif tone == 'info' %} badge-info{% else %} badge-neutral{% endif %}{% if size == 'sm' %} badge-sm{% elif size == 'lg' %} badge-lg{% endif %}">{{ label }}</span>
+{%- endmacro %}
+
+{% macro alert(message, tone='info', title='', id='') -%}
+<div class="alert{% if tone == 'success' %} alert-success{% elif tone == 'warning' %} alert-warning{% elif tone == 'error' %} alert-error{% else %} alert-info{% endif %}" role="{{ 'alert' if tone in ('error', 'warning') else 'status' }}"{% if id %} id="{{ id }}"{% endif %}><div>{% if title %}<strong class="block font-semibold">{{ title }}</strong>{% endif %}<span>{{ message }}</span></div></div>
+{%- endmacro %}
+
+{% macro progress_bar(id, label, value, max=100, tone='primary') -%}
+<div><label for="{{ id }}" class="mb-2 block text-sm font-medium">{{ label }}</label><progress id="{{ id }}" class="progress w-full{% if tone == 'success' %} progress-success{% elif tone == 'warning' %} progress-warning{% elif tone == 'error' %} progress-error{% else %} progress-primary{% endif %}" value="{{ value }}" max="{{ max }}">{{ value }} of {{ max }}</progress></div>
+{%- endmacro %}
+
+{% macro steps(items) -%}
+<ol class="steps w-full" aria-label="Progress">{% for item in items %}<li class="step{% if item.state == 'done' or item.state == 'current' %} step-primary{% elif item.state == 'error' %} step-error{% endif %}"{% if item.state == 'current' %} aria-current="step"{% endif %}>{{ item.label }}</li>{% endfor %}</ol>
+{%- endmacro %}
+
+{% macro loading(label='Loading') -%}
+<span class="inline-flex items-center gap-2" role="status"><span class="loading loading-spinner loading-sm" aria-hidden="true"></span><span>{{ label }}</span></span>
+{%- endmacro %}

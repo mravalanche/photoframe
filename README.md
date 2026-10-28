@@ -1,3 +1,5 @@
+<img src="src/photoframe/static/photoframe.svg" width="96" height="96" alt="Photoframe: a mountain photograph emerging from ink pixels">
+
 # Photoframe
 
 Software updates: see the [managed web updater and one-time migration guide](docs/managed-updates.md).
@@ -16,6 +18,8 @@ makes the complete setup flow usable before hardware is connected.
 
 For architecture, Raspberry Pi operations, security detail, and planned work, see
 [PROJECT.md](PROJECT.md).
+For the interface themes, shared components, and screenshots, see the
+[v2 design system](docs/ui-v2-design-system.md).
 
 ## Prerequisites
 
@@ -57,11 +61,11 @@ firewall reach, trust warnings, and all installer options.
 
 ## First use
 
-1. Open **Settings → Photo provider** using the cog, enter the Immich server root URL and API key, then save and verify.
+1. Open **Settings → Photo provider**, enter the Immich server root URL and API key, then save and verify.
 2. Under **Album**, refresh the available albums and choose one.
 3. Under **Schedule & orientation**, choose orientation, rotation and photo order.
    Configure the physical display separately under **Settings → Display hardware**.
-4. Preview a photo. Choose its framing, then use **Show now** to update the frame or
+4. Open **Photos** and preview a photo. Choose its framing, then use **Show now** to update the frame or
    **Start rotation here** to change where rotation resumes.
 5. If another device on the local network needs access, open **Settings → Advanced & recovery** and
    configure the listener before saving.
@@ -84,18 +88,29 @@ To limit memory use on the frame, Immich responses are capped at 32 MiB and albu
 assets. Large JPEGs are downsampled before decoding; images that still exceed the decoding limit
 use the provider preview when available. Unsupported images are excluded from the frame's photo
 list.
+Photo and album rails request Immich's smaller thumbnail rendition. The displayed-photo fallback
+and HEIC render fallback continue to use the larger preview rendition.
 
 ## Basic configuration
 
 Portrait and square photos appear in the photo browser. Choose **Show whole photo** to keep the
 full image, with a soft photo, colour, white or black background. **Fill frame** crops the edges.
-Save framing to include a photo in rotation; **Show now** updates the physical frame immediately.
+Photos use the default layout automatically, including photos of a different orientation.
+Save individual framing to override the default; **Show now** updates the physical frame immediately.
 These choices do not change the original in Immich.
 
 Under **Default photo layout**, choose how photos without saved framing should appear. The
 default applies to existing and newly added photos without changing individual saved choices.
 Open **Photo layouts** below the photo browser to see each photo's layout and whether it follows
-the default, has a custom choice, or still needs framing.
+the native orientation, uses default framing, has custom framing, or is unavailable. Its bulk layout
+control can apply one layout to the whole album, replacing custom layouts while preserving hidden photos.
+
+Frame, Photos and Settings are the main navigation destinations. Software updates lives inside
+Settings. Preview and framing controls open in a dialog without returning to the top of the page.
+Software updates also has an Advanced release chooser for published versions in the selected channel.
+Selected versions must pass signature, compatibility and upgrade checks; existing updater helpers
+explain when an administrator upgrade is needed to enable this option. See the
+[managed updater guide](docs/managed-updates.md#advanced-release-selection).
 
 **Hide from this frame** removes a photo from rotation without deleting it from Immich. Use
 **Undo** or restore it from **Hidden from this frame**. A hidden photo already on the frame stays visible
@@ -124,6 +139,17 @@ encrypts traffic but does not add authentication. The automatic local certificat
 by browsers automatically, so each client must accept it or be configured to trust it. See
 [Security model and limitations](PROJECT.md#security-model-and-limitations) before enabling LAN
 access.
+
+## Branding and interface
+
+The Photoframe mark shows a photograph being inked into existence, square by square, on an
+e-ink display. Its spruce and warm-paper colours come from the application's light and dark themes.
+The [editable SVG](src/photoframe/static/photoframe.svg) is the source for the app logo,
+browser favicons, and Android/iOS home-screen icons.
+
+See the [design system](docs/ui-v2-design-system.md) for theme tokens, shared components,
+icon generation instructions, and screenshots at app and favicon sizes. Node tooling is needed
+only to rebuild these checked-in assets; the installed app serves them locally.
 
 ## Tests
 

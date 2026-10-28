@@ -41,6 +41,9 @@ class RecoveringProvider:
         self.thumbnail_calls += 1
         return (self.source if self.preview_available else b"not ready"), "image/jpeg"
 
+    def render_preview(self, photo_id):
+        return self.thumbnail(photo_id)
+
     def validate_connection(self):
         return "Connected"
 

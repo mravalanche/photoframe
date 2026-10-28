@@ -1,0 +1,10 @@
+{% import "components/icons.html" as icons %}
+{% macro mobile_dock(items, active) -%}
+<nav class="dock [&>a]:m-0 [&>a]:h-14 [&>a]:min-h-12 [&>a]:gap-1 [&>a]:pt-1 [&>a]:pb-2 border-t border-base-300 bg-base-100 pb-[env(safe-area-inset-bottom)] lg:hidden" aria-label="Primary navigation">{% for item in items %}<a href="{{ item.href }}" class="{% if item.key == active %}dock-active{% endif %} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" data-nav-key="{{ item.key }}"{% if item.key == active %} aria-current="page"{% endif %}>{{ icons.icon(item.key, 24) }}<span class="dock-label pf-metadata">{{ item.label }}</span></a>{% endfor %}</nav>
+{%- endmacro %}
+
+{% macro settings_links(items, active) -%}
+<nav class="flex flex-col gap-1" aria-label="Settings sections">
+{% for key, label in items %}<a href="/settings/{{ key }}" class="flex min-h-11 items-center rounded-field px-3 py-2 text-sm font-medium no-underline focus-visible:outline-2 focus-visible:outline-primary{% if active == key %} bg-primary/10 text-primary{% else %} text-base-content/75 hover:bg-base-300/60{% endif %}"{% if active == key %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+</nav>
+{%- endmacro %}

@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Barrier, Event, Thread
+from typing import cast
 
 from photoframe.cache import PhotoCache
 from photoframe.lifecycle import RefreshCoordinator, RefreshWorker, health_payload
@@ -148,3 +149,41 @@ def test_refresh_worker_survives_unexpected_exception():
     assert recorded.wait(1)
     assert worker.thread.is_alive()
     worker.stop()
+
+
+def test_health_distinguishes_a_working_catalog_from_a_failed_display():
+    current = datetime(2026, 10, 26, tzinfo=UTC)
+    settings = AppSettings()
+    settings.refresh_status.last_success_at = current
+    settings.refresh_status.last_attempt_at = current
+    settings.refresh_status.cached_photo_count = 195
+    settings.refresh_status.last_render_error = "Pimoroni Inky failed to refresh: empty palette"
+    payload, healthy = health_payload(settings, current, version="2.0.0.dev1")
+    assert not healthy
+    assert payload["status"] == "degraded"
+    assert payload["checks"] == {
+        "catalog": {"status": "healthy", "detail": "Catalog refresh is current", "age_seconds": 0},
+        "render": {"status": "failed", "detail": settings.refresh_status.last_render_error},
+    }
+    assert payload["detail"] == settings.refresh_status.last_render_error
+    settings.refresh_status.last_render_error = None
+    settings.refresh_status.last_rendered_photo_id = "coast"
+    payload, healthy = health_payload(settings, current)
+    assert healthy
+    assert cast(dict[str, dict[str, object]], payload["checks"])["render"]["status"] == "healthy"
+
+
+def test_health_reports_why_catalog_is_not_ready_or_stale():
+    current = datetime(2026, 10, 26, tzinfo=UTC)
+    settings = AppSettings()
+    payload, healthy = health_payload(settings, current)
+    assert not healthy
+    assert cast(dict[str, dict[str, object]], payload["checks"])["catalog"]["status"] == "not_ready"
+    assert payload["detail"] == "No successful catalog refresh has completed"
+    settings.refresh_status.last_success_at = current - timedelta(
+        seconds=settings.refresh.health_stale_seconds + 1
+    )
+    payload, healthy = health_payload(settings, current)
+    assert not healthy
+    assert cast(dict[str, dict[str, object]], payload["checks"])["catalog"]["status"] == "stale"
+    assert payload["detail"] == "The last successful catalog refresh is stale"
