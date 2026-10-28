@@ -1,7 +1,9 @@
 const { defineConfig } = require('@playwright/test');
 module.exports = defineConfig({
   testDir: './tests/browser',
-  fullyParallel: true,
+  // Browser projects share one mutable demo runtime (preview, layouts and hidden photos).
+  workers: 1,
+  fullyParallel: false,
   use: {
     baseURL: 'http://127.0.0.1:8765',
     trace: 'retain-on-failure',

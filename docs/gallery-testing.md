@@ -59,6 +59,7 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Browser checks launch and stop their own temporary local demo. Failure screenshots and
+Browser checks launch and stop their own temporary local demo. They run with one worker because
+all browser projects share that demo’s preview, framing and hidden-photo state. Failure screenshots and
 traces are written under ignored `test-results/`. These checks do not start the persistent
 standalone session described above.
