@@ -163,6 +163,20 @@ verification or a download. Header update status appears on phones and desktop o
 available/staged update, an active operation, or a failure needing attention. Phones use a 44px
 icon link with the full status in its accessible label; ordinary idle status stays on Updates.
 
+## Photo gallery
+
+The Photos gallery uses two columns on phones and three on larger screens. Each image is a
+native button that opens the existing framing dialog. Keep the caption to one line: a shared
+neutral fit badge and a flexible, ellipsized filename. Full filenames and framing details stay
+available through the button's accessible name and tooltip. Do not add a separate framing action
+under each image.
+
+Use the shared info badge over the image for **On frame now**. This represents the last completed
+display update; the selected-photo outline represents the current preview. Keep those states
+distinct. Retain visible keyboard focus, meaningful thumbnail-failure text and focus restoration
+after HTMX swaps. Default layouts, bulk layouts and hidden-photo recovery remain available below
+the gallery.
+
 ## Mobile thumbnail records and advanced controls
 
 The app and showcase render the same record macro. Cached thumbnails load lazily through the
