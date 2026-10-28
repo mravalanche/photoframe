@@ -5,9 +5,8 @@ from pathlib import Path
 
 import pytest
 
-spec = importlib.util.spec_from_file_location(
-    "run_standalone", Path(__file__).parents[1] / "scripts/run_standalone.py"
-)
+SCRIPT = Path(__file__).parents[1] / "scripts/run_standalone.py"
+spec = importlib.util.spec_from_file_location("run_standalone", SCRIPT)
 assert spec is not None and spec.loader is not None
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
@@ -33,7 +32,7 @@ def test_standalone_refuses_existing_unmarked_data(tmp_path: Path):
 
 def test_standalone_help_does_not_construct_an_app_or_create_data(tmp_path: Path):
     result = subprocess.run(
-        [sys.executable, str(Path(module.__file__)), "--help"],
+        [sys.executable, str(SCRIPT), "--help"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
