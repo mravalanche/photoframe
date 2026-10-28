@@ -15,6 +15,7 @@ from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
 from ..cache import CacheStats, PhotoCache
+from ..diagnostics import DiagnosticLog
 from ..display import InkyDisplay, apply_profile, discover_inky
 from ..image_processing import ImageProcessingError, image_is_decodable, prepare_for_display
 from ..lifecycle import RefreshCoordinator
@@ -45,6 +46,7 @@ class Runtime:
         maintenance_gate: MaintenanceGate | None = None,
     ):
         self.repository, self.secrets = settings, secrets
+        self.diagnostics = DiagnosticLog(settings.data_dir)
         self.provider_resolver = provider_resolver
         self.demo_provider = demo_provider
         self.maintenance_gate = maintenance_gate or MaintenanceGate()
@@ -57,7 +59,7 @@ class Runtime:
         self.renderer = MockRenderCoordinator()
         self.display: InkyDisplay | None = None
         self.cache = PhotoCache(settings.data_dir, self.repository.load().refresh.cache_max_bytes)
-        self.refresh_coordinator = RefreshCoordinator(self)
+        self.refresh_coordinator = RefreshCoordinator(self, self.diagnostics)
         self._runtime_lock = RLock()
         self._library_load_lock = Lock()
         self._library_load: AlbumLoad | None = None
@@ -154,6 +156,7 @@ class Runtime:
                 apply_profile(saved.device, profile)
 
         self.repository.update(persist)
+        self.diagnostics.record("display.ready" if display else "display.unavailable")
 
     def provider(self) -> PhotoProvider:
         if self.demo_provider:
@@ -552,6 +555,7 @@ class Runtime:
                     try:
                         self.refresh_photos()
                     except (ProviderError, RuntimeError, OSError) as exc:
+                        self.diagnostics.record("catalog.failed", exc)
                         message = str(exc)[:500]
 
                         def record_restart_failure(saved):
@@ -568,6 +572,8 @@ class Runtime:
                     settings = self.repository.load()
             attempted = self.refresh_coordinator.run_if_due(settings, now)
             if attempted:
+                if not settings.refresh_status.last_error:
+                    self.diagnostics.record("catalog.refreshed")
                 refreshed_status = settings.refresh_status.model_copy(deep=True)
                 self.repository.update(
                     lambda saved: setattr(saved, "refresh_status", refreshed_status)
@@ -592,6 +598,7 @@ class Runtime:
                 self._refresh_idle.set()
 
     def record_worker_failure(self, exc: Exception) -> None:
+        self.diagnostics.record("worker.failed", exc)
         current = datetime.now(UTC)
         message = f"Refresh worker error: {exc}"[:500]
 
@@ -662,14 +669,17 @@ class Runtime:
                     saved.refresh_status.last_render_error = None
 
                 self.repository.update(save_completion)
+                self.diagnostics.record("display.completed")
 
             def failed(message: str) -> None:
+                self.diagnostics.record("display.failed", message)
                 self.repository.update(
                     lambda saved: setattr(saved.refresh_status, "last_render_error", message[:500])
                 )
 
             self.render_service.start(candidate.id, on_complete=completed, on_failure=failed)
         except (ImageProcessingError, ProviderError, RuntimeError) as exc:
+            self.diagnostics.record("display.failed", exc)
             message = str(exc)[:500]
             self.repository.update(
                 lambda saved: setattr(saved.refresh_status, "last_render_error", message)
