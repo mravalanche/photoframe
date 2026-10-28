@@ -102,3 +102,20 @@ test('photo framing dialog and its menus fit', async ({ page }) => {
   await editor.getByRole('button', { name: 'Close photo editor', exact: true }).click();
   await expect(editor).not.toBeVisible();
 });
+
+test('conditional schedule menus fit when revealed', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('#schedule-settings > summary').click();
+  for (const mode of ['daily', 'weekly', 'interval']) {
+    await page.locator('#frame-schedule-mode').selectOption(mode);
+    if (mode === 'interval') await page.locator('[data-interval-custom]').check();
+    await fitsViewport(page, `${mode} schedule`);
+    const menus = page.locator('#schedule-settings select:visible:enabled');
+    for (let i = 0; i < await menus.count(); i++) {
+      await menus.nth(i).focus();
+      await page.keyboard.press('Alt+ArrowDown');
+      await page.keyboard.press('Escape');
+      await fitsViewport(page, `${mode} schedule menu ${i}`);
+    }
+  }
+});
