@@ -30,3 +30,7 @@
     <div class="flex flex-wrap items-center justify-between gap-4 border-t border-base-300 pt-6"><div><h3 class="pf-subheading">Reset &amp; recovery</h3><p class="text-sm text-base-content/70">Remove this Photoframe’s configuration and local photo data. The app stays installed.</p></div>{{ actions.button('Reset Photoframe', 'danger', attrs={'onclick': 'openResetDialog()'}) }}</div>
   </div>
 {% endcall %}
+{% call surfaces.card('Activity & diagnostics', 'Recent app events and failures, kept on this frame across restarts.', 'diagnostics-title') %}
+  <p class="pf-help text-base-content/70">The latest 500 events are retained. This log contains safe operational details, without photo names, network names or credentials.</p>
+  {% include "_diagnostics.html" %}
+{% endcall %}

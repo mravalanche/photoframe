@@ -9,6 +9,7 @@ from threading import Event, Thread
 from typing import Protocol
 
 from .cache import CacheStats
+from .diagnostics import DiagnosticLog
 from .models import AppSettings, FrameSettings, Photo
 from .providers import ProviderError
 
@@ -23,8 +24,9 @@ class RefreshRuntime(Protocol):
 class RefreshCoordinator:
     """Does one bounded refresh attempt when due; safe to call frequently."""
 
-    def __init__(self, runtime: RefreshRuntime) -> None:
+    def __init__(self, runtime: RefreshRuntime, diagnostics: DiagnosticLog | None = None) -> None:
         self.runtime = runtime
+        self.diagnostics = diagnostics
 
     @staticmethod
     def due(settings: AppSettings, now: datetime) -> bool:
@@ -52,6 +54,9 @@ class RefreshCoordinator:
             status.cached_photo_count, status.cached_bytes = cache.files, cache.bytes
             return True
         except (ProviderError, RuntimeError, OSError) as exc:
+            # Preserve the typed transport cause before status stores only text.
+            if self.diagnostics:
+                self.diagnostics.record("catalog.failed", exc)
             status.consecutive_failures += 1
             status.last_error = str(exc)[:500]
             status.next_attempt_at = current + timedelta(seconds=policy.retry_seconds)

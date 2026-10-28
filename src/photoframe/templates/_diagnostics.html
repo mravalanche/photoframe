@@ -1,0 +1,24 @@
+{% import "components/actions.html" as actions %}
+{% import "components/feedback.html" as feedback %}
+{% import "components/forms.html" as fields %}
+<div id="diagnostic-log" class="space-y-4">
+  {% if diagnostic_storage_error %}{{ feedback.alert('History could not be read or saved on disk. Events shown here may be lost on restart. Check free space and data-directory permissions.', 'warning') }}{% endif %}
+  <form method="get" action="/partials/diagnostics" hx-get="/partials/diagnostics" hx-target="#diagnostic-log" hx-swap="outerHTML" hx-request='{"timeout":10000}' hx-on::after-request="if (!event.detail.successful) document.getElementById('diagnostic-load-error').hidden = false" class="flex flex-wrap items-end gap-3">
+    <div class="min-w-0 w-full sm:w-56">{{ fields.select_field('diagnostic-level', 'level', 'Show events', [('all', 'All events'), ('errors', 'Errors and warnings')], diagnostic_level|default('all')) }}</div>
+    {{ actions.button('Refresh log', 'secondary', type='submit') }}
+    {{ actions.link('Download log', '/diagnostics/download', 'quiet', attrs={'download': '', 'aria-describedby': 'diagnostic-download-help'}) }}
+  </form>
+  <p id="diagnostic-load-error" class="pf-help text-error" role="alert" hidden>Could not refresh the log. Your previous results are still shown. Try Refresh log again.</p>
+  <p id="diagnostic-download-help" class="pf-help text-base-content/70">Newest first · times in UTC · showing up to 100 events. Download includes all retained events.</p>
+  <div role="status" aria-live="polite" class="pf-help text-base-content/70">{{ diagnostic_events|default([])|length }} events shown.</div>
+  <ol class="max-h-96 overflow-y-auto divide-y divide-base-300 rounded-box border border-base-300" aria-label="Recent app events">
+    {% for event in diagnostic_events|default([]) %}
+    <li class="space-y-1 p-3">
+      <div class="flex flex-wrap items-center gap-2"><time class="pf-metadata text-base-content/70" datetime="{{ event.timestamp }}">{{ event.timestamp[:19]|replace('T', ' ') }} UTC</time>{{ feedback.badge(event.level|title, 'error' if event.level == 'error' else 'warning' if event.level == 'warning' else 'neutral') }}</div>
+      <p class="pf-label">{{ event.message }}</p>
+      {% if event.detail %}<p class="pf-help break-words text-base-content/75">{{ event.detail }}</p>{% endif %}
+    </li>
+    {% else %}<li class="p-4 pf-help text-base-content/70">No recent events recorded{% if diagnostic_level|default('all') == 'errors' %} matching this filter{% endif %}.</li>{% endfor %}
+  </ol>
+  <p class="pf-help text-base-content/70">If this page cannot be reached, check the Pi’s system logs after reconnecting. A sudden power loss cannot write a shutdown event.</p>
+</div>

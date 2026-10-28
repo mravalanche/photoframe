@@ -173,8 +173,10 @@ class ConfigurationService:
             self.repository.update(record_success)
             self.runtime.refresh_albums()
             self.runtime.clear_photos()
+            self.runtime.diagnostics.record("provider.connected")
             return message
         except Exception as exc:
+            self.runtime.diagnostics.record("provider.failed", exc)
             checked_at = datetime.now(UTC)
             message = str(exc)
 
@@ -226,6 +228,7 @@ class ConfigurationService:
         except AlbumLoadCancelled:
             raise
         except Exception as exc:
+            self.runtime.diagnostics.record("catalog.failed", exc)
             raise RuntimeError(
                 "The album could not be refreshed. Your current photos are unchanged; "
                 "check the photo source and try again."
@@ -258,6 +261,7 @@ class ConfigurationService:
                 record_refresh,
                 preview_id=preview_id if preview_id in eligible_ids else None,
             )
+        self.runtime.diagnostics.record("catalog.refreshed")
         return (
             f"Refreshed {len(photos)} photos; {len(eligible)} available for this frame. "
             "The picture on your frame and its schedule are unchanged."
@@ -314,6 +318,7 @@ class ConfigurationService:
         except AlbumLoadCancelled:
             raise
         except Exception as exc:
+            self.runtime.diagnostics.record("catalog.failed", exc)
             raise RuntimeError(
                 f"Could not use {album.name}. Your current album is unchanged; "
                 "check the photo source and try again."
@@ -339,6 +344,7 @@ class ConfigurationService:
 
         with load.committing() if load else nullcontext():
             self.runtime.commit_album(photos, displayed_before, choose_album)
+        self.runtime.diagnostics.record("catalog.refreshed")
         return f"Selected {album.name}; found {len(photos)} images"
 
     def save_workflow(self, form: WorkflowInput) -> str:
@@ -577,11 +583,13 @@ class ConfigurationService:
             settings.refresh_status.last_render_error = None
 
         self.repository.update(save)
+        self.runtime.diagnostics.record("display.completed")
 
     def _manual_render_failed(self, message: str) -> None:
         self.repository.update(
             lambda saved: setattr(saved.refresh_status, "last_render_error", message[:500])
         )
+        self.runtime.diagnostics.record("display.failed", message)
 
     def start_render(self, operation_id: str | None = None) -> None:
         if self.runtime.maintenance_gate.maintenance:

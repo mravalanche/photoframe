@@ -165,7 +165,16 @@ def create_app(
             return await call_next(request)
 
         if not request.url.path.startswith(
-            ("/api/updates/", "/api/activity", "/updates", "/settings", "/health", "/static/")
+            (
+                "/api/updates/",
+                "/api/activity",
+                "/updates",
+                "/settings",
+                "/health",
+                "/static/",
+                "/diagnostics",
+                "/partials/diagnostics",
+            )
         ):
             try:
                 with runtime.maintenance_gate.operation():
@@ -174,15 +183,25 @@ def create_app(
                 return JSONResponse({"message": str(exc)}, status_code=503)
         return await admitted_request()
 
+    @app.middleware("http")
+    async def record_unexpected_request_failure(request: Request, call_next):
+        try:
+            return await call_next(request)
+        except Exception as exc:
+            runtime.diagnostics.record("request.failed", exc)
+            raise
+
     worker = RefreshWorker(runtime.refresh_lifecycle, runtime.record_worker_failure)
 
     @app.on_event("startup")
     def start_refresh_worker() -> None:
+        runtime.diagnostics.record("app.started")
         worker.start()
 
     @app.on_event("shutdown")
     def stop_refresh_worker() -> None:
         worker.stop()
+        runtime.diagnostics.record("app.stopped")
 
     def workspace_context(
         request: Request, notice: str | None = None, error: str | None = None
@@ -403,6 +422,8 @@ def create_app(
                     f"{'This device only' if settings.network.access == NetworkAccess.DEVICE_ONLY else 'Local network'}"
                     f" · {settings.network.protocol.value.upper()} · {settings.network.port}"
                 ),
+                "diagnostic_events": runtime.diagnostics.recent(),
+                "diagnostic_storage_error": runtime.diagnostics.storage_error,
             }
         else:
             context = workspace_context(request, notice=notice, error=error)
@@ -415,6 +436,7 @@ def create_app(
             request,
             "_workspace.html",
             context,
+            headers={"Cache-Control": "no-store"} if section == "advanced" else None,
         )
 
     def render_operation_id(request: Request) -> str | None:
@@ -470,6 +492,30 @@ def create_app(
     @app.get("/partials/workspace", response_class=HTMLResponse)
     def workspace_partial(request: Request) -> HTMLResponse:
         return workspace(request)
+
+    @app.get("/partials/diagnostics", response_class=HTMLResponse)
+    def diagnostics_partial(request: Request, level: str = "all") -> HTMLResponse:
+        return templates.TemplateResponse(
+            request,
+            "_diagnostics.html",
+            {
+                "diagnostic_events": runtime.diagnostics.recent(failures_only=level == "errors"),
+                "diagnostic_storage_error": runtime.diagnostics.storage_error,
+                "diagnostic_level": "errors" if level == "errors" else "all",
+            },
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @app.get("/diagnostics/download")
+    def diagnostics_download() -> Response:
+        return Response(
+            runtime.diagnostics.text(),
+            media_type="text/plain",
+            headers={
+                "Content-Disposition": 'attachment; filename="photoframe-diagnostics.txt"',
+                "Cache-Control": "no-store",
+            },
+        )
 
     @app.get("/partials/frame-status", response_class=HTMLResponse)
     def frame_status_partial(request: Request) -> HTMLResponse:

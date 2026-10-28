@@ -59,6 +59,9 @@ def test_manual_hardware_failure_degrades_health_and_successful_retry_recovers(
         assert failed.json()["checks"]["render"]["status"] == "failed"
         error = runtime.repository.load().refresh_status.last_render_error
         assert error is not None and "SPI device unavailable" in error
+        events = runtime.diagnostics.recent(failures_only=True)
+        assert events[0]["code"] == "display.failed"
+        assert "panel connection" in events[0]["detail"]
 
         panel.failed = False
         response = client.post(route, data={"request_id": "retry"})
@@ -69,5 +72,6 @@ def test_manual_hardware_failure_degrades_health_and_successful_retry_recovers(
         recovered = client.get("/health")
         assert recovered.status_code == 200
         assert recovered.json()["checks"]["render"]["status"] == "healthy"
+        assert runtime.diagnostics.recent()[0]["code"] == "display.completed"
     finally:
         client.close()

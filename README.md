@@ -131,6 +131,11 @@ Changing the active endpoint requires confirmation. Photoframe restarts its web 
 response is sent, so reconnect at the address shown in the preview. `0.0.0.0` is a bind address,
 not a browser address, and `localhost` does not reach the frame from another device.
 
+**Settings → Advanced & recovery → Activity & diagnostics** shows recent failures and
+app events, retained across restarts, with a downloadable log. See
+[diagnostics and connectivity](docs/diagnostics.md) for retention, troubleshooting,
+and Raspberry Pi Wi-Fi recovery considerations.
+
 ## Security note
 
 Photoframe has no application login or user authentication. LAN binding is intended only for a
