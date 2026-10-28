@@ -45,6 +45,8 @@ def main() -> None:
     # configuration before Uvicorn imports it, including for hardware detection.
     os.environ["PHOTOFRAME_DATA_DIR"] = str(target)
     os.environ["PHOTOFRAME_DEMO_MODE"] = "1"
+    for marker in ("PHOTOFRAME_MANAGED_ROOT", "PHOTOFRAME_RELEASE_SLOT"):
+        os.environ.pop(marker, None)
     print(f"Standalone demo: http://127.0.0.1:{args.port}/photos")
     print(f"Demo data: {target}")
     uvicorn.run("photoframe.web.routes:app", host="127.0.0.1", port=args.port)

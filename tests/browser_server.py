@@ -9,4 +9,6 @@ if __name__ == "__main__":
     with TemporaryDirectory(prefix="photoframe-browser-") as directory:
         os.environ["PHOTOFRAME_DATA_DIR"] = directory
         os.environ["PHOTOFRAME_DEMO_MODE"] = "1"
+        for marker in ("PHOTOFRAME_MANAGED_ROOT", "PHOTOFRAME_RELEASE_SLOT"):
+            os.environ.pop(marker, None)
         uvicorn.run("photoframe.web.routes:app", host="127.0.0.1", port=8765)

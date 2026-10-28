@@ -18,6 +18,9 @@ to loopback and uses the built-in local demo provider and display simulator. It 
 Immich connection, API key or physical display. Node is needed to rebuild CSS and run
 browser checks, but not to run the app.
 
+The demo keeps the display simulator even when hardware settings are saved. The launcher
+also disables inherited managed-installation markers, so it cannot activate the system updater.
+
 Demo state is retained in the ignored `.standalone-data/` directory in this checkout.
 Restarting with the same directory preserves saved photo layouts, hidden choices and
 diagnostic history. Production data is separate. The launcher refuses to reuse a

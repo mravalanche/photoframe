@@ -41,3 +41,38 @@ def test_standalone_help_does_not_construct_an_app_or_create_data(tmp_path: Path
     )
     assert "--data-dir" in result.stdout
     assert not list(tmp_path.iterdir())
+
+
+def test_standalone_disables_inherited_managed_installation(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("PHOTOFRAME_DATA_DIR", "/unused/old-data")
+    monkeypatch.setenv("PHOTOFRAME_DEMO_MODE", "0")
+    for name in ("PHOTOFRAME_MANAGED_ROOT", "PHOTOFRAME_RELEASE_SLOT"):
+        monkeypatch.setenv(name, "/unused/managed-marker")
+    monkeypatch.setattr(sys, "argv", ["run_standalone.py", "--data-dir", str(tmp_path)])
+    calls = []
+    monkeypatch.setattr(module.uvicorn, "run", lambda *args, **kwargs: calls.append((args, kwargs)))
+    module.main()
+    assert module.os.environ["PHOTOFRAME_DEMO_MODE"] == "1"
+    assert module.os.environ["PHOTOFRAME_DATA_DIR"] == str(tmp_path)
+    assert "PHOTOFRAME_MANAGED_ROOT" not in module.os.environ
+    assert "PHOTOFRAME_RELEASE_SLOT" not in module.os.environ
+    assert calls == [(("photoframe.web.routes:app",), {"host": "127.0.0.1", "port": 8765})]
+
+
+def test_demo_display_setup_never_probes_physical_hardware(tmp_path: Path, monkeypatch):
+    from photoframe.providers import DemoProvider
+    from photoframe.services.runtime import Runtime
+    from photoframe.settings import SecretStore, SettingsRepository
+
+    monkeypatch.setattr(
+        "photoframe.services.runtime.discover_inky",
+        lambda device: pytest.fail("Demo must never probe physical display hardware"),
+    )
+    runtime = Runtime(
+        SettingsRepository(tmp_path),
+        SecretStore(tmp_path),
+        lambda kind: DemoProvider(),
+        DemoProvider(),
+    )
+    runtime.initialise_display()
+    assert not runtime.has_display()
