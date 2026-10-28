@@ -2,18 +2,18 @@
 
 This document records the current scope, design, deployment model, operational behavior, security
 boundaries, and planned work for Photoframe. For a short installation and first-use path, start
-with [README.md](README.md).
+with [README.md](README.md). The [documentation index](docs/README.md) groups guides by task.
 
 ## Scope
 
 Photoframe is a local-first FastAPI application for configuring and operating a digital photo
-frame. Version 1:
+frame. It:
 
 - connects to an Immich photo library with a read-scoped API key;
-- loads albums and filters photos by the configured frame orientation;
+- loads albums with landscape, portrait and square photos, respecting hidden-photo choices;
 - provides browser-based selection, preview, schedule, and render controls;
-- prepares originals at the exact display resolution with EXIF correction, central cropping, RGB
-  conversion, and Lanczos resizing;
+- prepares originals at the exact display resolution with EXIF correction, whole-photo or fill
+  layouts, configurable backgrounds, RGB conversion, and Lanczos resizing;
 - auto-detects supported Pimoroni Inky panels or uses explicit display dimensions;
 - refreshes the catalog and bounded local photo cache unattended;
 - supports local-only or local-network HTTP/HTTPS operation without requiring a reverse proxy; and
@@ -61,6 +61,7 @@ The directory contains:
 - `settings.toml`: human-readable, validated application configuration, including `[network]`;
 - `.secret-key` and `secrets.bin`: the local Fernet key and encrypted Immich API key;
 - `photo-cache/`: bounded provider originals and cache metadata;
+- `diagnostics.json`: bounded app event history, retained across restarts;
 - `tls/photoframe-local.crt` and `tls/photoframe-local.key`: automatic HTTPS material, when used;
   and
 - runtime refresh and render status persisted as part of `settings.toml`.
@@ -72,7 +73,9 @@ The installer additionally creates the data directory with mode `0700`. Hand edi
 Reset restores application and listener settings to defaults, removes the stored provider
 credential and downloaded photo cache, and clears runtime selection. If the listener changes, the
 server returns to HTTP on `127.0.0.1:8000` and restarts. An existing app-generated TLS identity is
-retained under `tls/` and can be reused if automatic HTTPS is enabled again.
+retained under `tls/` and can be reused if automatic HTTPS is enabled again. Operational
+diagnostics history is also retained; see [diagnostics and connectivity](docs/diagnostics.md)
+for its contents, retention limits and troubleshooting steps.
 
 ## Raspberry Pi and systemd
 
@@ -283,6 +286,10 @@ The JSON response includes retry timing, cache usage, and failure context, allow
 detect a running process that can no longer refresh its source or physical display. A reachable web
 page can therefore coexist with a degraded health response. The response is not cached.
 
+Recent app events and failures are available under **Settings → Advanced & recovery →
+Activity & diagnostics**, with a downloadable history. For log limitations and read-only Pi
+network checks, see [diagnostics and connectivity](docs/diagnostics.md).
+
 Use `GET /health/live` or `HEAD /health/live` when a monitor should check only that the web process
 is responding. This returns HTTP 200 independently of provider and display health. `/health/update`
 remains the version/readiness endpoint used by the managed update helper.
@@ -389,19 +396,15 @@ green-CI path through develop.
 
 ### Feature priorities — agreed 2026-09-20
 
-The order below is the product backlog, separate from the engineering and release-readiness
-work below. These are proposals, not implemented features. Portrait-photo support is the first
-priority, followed by hiding photos from the frame.
+The original priority order is retained below. Checked entries are implemented; unchecked
+entries are proposals, separate from engineering and release-readiness work.
 
-- [ ] **1. Portrait photos and per-photo framing.** Make portrait and square photos discoverable
-  and selectable even on a landscape frame; they are currently excluded by orientation. Offer
-  per-photo **Show whole photo / Fill frame**, simple black or white borders, and an accurate
-  preview using the same preparation as the physical display. Preserve current defaults for
-  other photos and provider originals. Start here before considering a manual crop/focal-point
-  editor or automatic face detection.
-- [ ] **2. Hide from this frame.** Exclude selected photos from this frame's rotation without
-  deleting or modifying them in Immich. Include immediate Undo and a hidden-photo list with
-  Restore. Persist exclusions across restart and handle hiding the last eligible photo safely.
+- [x] **1. Portrait photos and per-photo framing.** Landscape, portrait and square photos are
+  discoverable. Whole-photo/fill layouts, backgrounds, a shared default and saved per-photo
+  choices use an accurate frame preview without modifying provider originals. Manual focal-point
+  editing and automatic face detection remain separate future possibilities.
+- [x] **2. Hide from this frame.** Hidden photos are excluded from rotation without changing
+  Immich. Undo and a hidden-photo list allow restoration, and choices persist across restarts.
 - [ ] **3. Keep this photo.** Hold the last successfully displayed photo until a chosen time or
   manual resume, with the exact local resume time visible. Persist through restart, continue
   library refreshes, and resume without replaying missed updates. Make the effect of manually
@@ -419,6 +422,12 @@ priority, followed by hiding photos from the frame.
 
 ### Developer maintenance and appliance reliability
 
+- [x] **Basic app diagnostics.** Bounded persistent events and safe failure details are available
+  in Advanced settings with refresh, filtering and download. The browser needs a reachable app;
+  abrupt power loss and network outages may still require system logs.
+- [ ] **Read-only network diagnostics.** Consider interface state, local address, cached Wi-Fi
+  signal and locally retained state transitions. Investigate actual NetworkManager behavior on
+  the Pi before choosing any separately authorised reconnect or watchdog changes.
 - [ ] **Review outdated code, dependencies and tooling.** Audit runtime/development dependencies,
   Python APIs, GitHub Actions, installer assumptions and documentation. Record supported versions
   and replace obsolete usage with tested alternatives; distinguish useful upgrades from churn.
@@ -475,49 +484,38 @@ Before tagging or pushing a release candidate:
 - [ ] Run `uv lock --check` and `uv run poe check` with current advisory data.
 - [ ] Review the complete diff, including generated lock or secret-baseline changes.
 - [ ] Confirm README quick-start commands and all local Markdown links.
+- [ ] Pass `npm run test:browser`, including open disclosures, menus and conditional controls
+  at phone, tablet and desktop widths; review any failure screenshots or traces.
 - [ ] Test a clean first run at HTTP `127.0.0.1:8000`.
 - [ ] Test confirmed changes for LAN binding, port, automatic HTTPS, and supplied HTTPS files.
 - [ ] Verify systemd install, restart, boot startup, logs, and uninstall on Raspberry Pi.
 - [ ] Confirm no credentials, private keys, data-directory files, caches, or test artifacts are
   tracked.
 - [ ] Record known limitations, migration notes, and recovery steps in the release notes.
-- [ ] Commit only reviewed changes, create the release tag, and push through the normal protected
-  branch/review process.
+- [ ] Commit reviewed changes and use the protected develop-to-main and Release Please PR flow.
+  Let Release Please create the stable tag; approve the protected signing job and verify its assets.
 
 
-## Settings, recovery and loading follow-up (September 2026)
+## Current interface and reliability status
 
-Implemented for review on a feature branch based on `develop`:
+Frame, Photos and Settings share the same themes, typography, components and mobile dock.
+Software updates lives in Settings; the contextual activity tray appears for active operations
+and relevant update steps. Album selection, photo order and schedule stay on Frame. Photos owns
+preview, framing, layout records and hidden-photo recovery.
 
-- The header has a compact software-update status and one theme toggle. The persistent mobile dock
-  exposes Frame, Photos and Settings. A contextual tray appears for active operations and relevant
-  update steps. Settings opens Photo provider directly, with Display hardware, Software updates,
-  and Advanced & recovery as sections that wrap within the mobile viewport.
-  Shared themes, buttons, typography, status colours and focus styles apply throughout.
-- Album choice, next-photo control, photo order and schedule remain on the Frame page. Photo previews,
-  per-photo layouts, the layout table and hidden-photo recovery live on the Photos page.
-  Hardware saves preserve the schedule and run under the exclusive operation guard. Existing
-  combined workflow submissions remain supported; schedule-only saves preserve hardware.
-- Software updates show a status icon with text, relative last-check time (exact time available
-  on the timestamp), and a separate expandable release-notes panel below the controls. The installed version
-  has its own display and refreshes after an update; application assets use release-version URLs. Browser controls
-  disable while status is unavailable. The existing session, origin, confirmation and restart
-  protections remain intact; `/updates` redirects to the Settings section.
-- **Refresh photos & thumbnails** reloads the selected album and retries negative decode verdicts.
-  It preserves the displayed photo, valid preview, and schedule, and changes thumbnail URLs to
-  bypass stale browser cache. Failed provider refresh leaves the current catalog intact.
-  Missing thumbnails show an explicit unavailable placeholder.
-- Slow loading is an explicit user priority. The initial shell shows saved album/schedule
-  information, Settings links and an accessible loading/error/retry state immediately. Settings
-  sections use only saved configuration and do not wait for photo fetching or eligibility checks.
-  Provider, hardware and workflow saves run blocking work off the event loop.
+The initial page shell and Settings use saved configuration without waiting for provider photo
+loading. Album preparation reports phases and counts, supports cooperative cancellation between
+requests, and commits a replacement album only when it is ready. Provider failures preserve the
+current catalog and displayed photo. **Refresh photos & thumbnails** retries missing-image verdicts
+and refreshes browser thumbnail URLs.
 
-Album preparation now exposes phases and prepared-photo counts for initial/background loading,
-selection and manual recovery. Cancellation is cooperative between photo requests, with an atomic
-commit boundary; a later confirmed album choice replaces queued preparation. The initial workspace
-leaves photo loading to the background worker so the album picker can appear earlier.
-Unvalidated photos are not made eligible. Measure responsiveness on the physical frame;
-the original missing-image incident has not been reproduced on that device.
+The mobile Album selector is constrained to the viewport. Required browser integration checks
+open disclosures and menus, including photo framing, published-release selection, weekly schedules
+and custom intervals. These layout checks complement the remaining accessibility and physical
+hardware checks in the roadmap.
 
-Release state: the Settings/recovery work and later photo-control and presentation updates
-shipped in stable `v1.4.0`. The remaining physical failure-injection drill is tracked above.
+The v2 interface and mobile overflow fix are included in stable `v2.0.0`. App diagnostics was
+integrated afterwards. Documentation follows its branch; use the installed version's
+[release notes](CHANGELOG.md) to check feature availability. The wider physical failure-injection
+drill remains outstanding, and the original missing-image incident has not been reproduced on
+that device.

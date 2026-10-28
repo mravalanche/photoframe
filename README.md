@@ -16,10 +16,8 @@ It connects to Immich, selects and filters an album for the installed display, p
 the panel's native resolution, and drives supported Pimoroni Inky hardware. A built-in simulator
 makes the complete setup flow usable before hardware is connected.
 
-For architecture, Raspberry Pi operations, security detail, and planned work, see
-[PROJECT.md](PROJECT.md).
-For the interface themes, shared components, and screenshots, see the
-[v2 design system](docs/ui-v2-design-system.md).
+Use the [documentation index](docs/README.md) to find setup, troubleshooting, updates,
+architecture, interface conventions, and contributor guidance.
 
 ## Prerequisites
 
