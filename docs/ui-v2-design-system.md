@@ -174,7 +174,8 @@ Photos and Frame use their destination name as the main heading, with a quiet `A
 subtitle. The editor uses one flat surface, a compact sticky “Photo preview” heading and one 44px corner X.
 Controls sit beside the image on desktop and below a compact image on phones; Fit and Background
 share a row. The editor supports Escape and backdrop
-clicks, and restores focus to its opener. A drag that begins inside the panel does not dismiss it.
+clicks, and restores focus to its opener. Keep the root scrollbar gutter stable while this
+editor is open so scroll-lock and scroll-driven gutter detection cannot oscillate its width. A drag that begins inside the panel does not dismiss it.
 
 On Frame, a pending preview appears as a quiet marker outside the image. Its explanation lasts
 four seconds, then stays dismissed across status polling and navigation until the selected photo

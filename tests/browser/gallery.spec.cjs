@@ -147,6 +147,20 @@ for (const theme of ['light', 'dark']) {
     await expect(editor.locator('section.card')).toHaveCount(0);
     await editor.locator('.modal-box').evaluate(el => { el.scrollTop = el.scrollHeight; });
     await expect(close).toBeInViewport();
+    const positions = await close.evaluate(async button => {
+      const panel = button.closest('.modal-box');
+      await Promise.all(panel.getAnimations().map(animation => animation.finished.catch(() => {})));
+      await document.fonts.ready;
+      const positions = [];
+      for (let frame = 0; frame < 12; frame++) {
+        await new Promise(requestAnimationFrame);
+        const {x, y, width, height} = button.getBoundingClientRect();
+        positions.push([x, y, width, height]);
+      }
+      return [...new Set(positions.map(position => JSON.stringify(position)))];
+    });
+    // A scrollbar-gutter/scroll-lock feedback loop previously moved the X every frame.
+    expect(positions).toHaveLength(1);
     const box = await close.boundingBox();
     expect(box.width).toBeGreaterThanOrEqual(44);
     expect(box.height).toBeGreaterThanOrEqual(44);
