@@ -27,6 +27,12 @@
       {% endcall %}
     </section>
 
+    <section class="space-y-4" aria-labelledby="release-type-title"><h2 id="release-type-title" class="pf-section-title">Release notes</h2>
+      {% call surfaces.card('Software changes', 'The latest and selected releases use the same readable notes.', 'release-notes-card') %}
+        <div class="pf-release-notes" id="showcase-release-notes"><h3>Photoframe 2.1.0</h3><p>A quieter gallery and clearer software updates.</p><h4>Improvements</h4><ul><li>Browse compact photo thumbnails.</li><li>Read <strong>verified release notes</strong> before downloading.</li></ul><h4>Try this release</h4><ol><li>Select the Develop channel.</li><li>Choose <code>Check now</code> and review the details.</li></ol><p><a href="/settings/updates">Open Software updates</a></p><pre><code>photoframe --help</code></pre></div>
+      {% endcall %}
+    </section>
+
     <section class="space-y-4" aria-labelledby="actions-title"><h2 id="actions-title" class="pf-section-title">Actions and navigation</h2>
       {% call surfaces.card('Buttons', 'One variant for each kind of action.', 'button-card') %}
         <div class="flex flex-wrap items-center gap-3">{{ actions.button('Show now') }}{{ actions.button('Refresh photos', 'secondary') }}{{ actions.button('Close preview', 'quiet') }}{{ actions.button('Remove', 'danger') }}{{ actions.button('Saved', 'success') }}{{ actions.button('Preparing', loading=true) }}{{ actions.button('Unavailable', disabled=true) }}</div>

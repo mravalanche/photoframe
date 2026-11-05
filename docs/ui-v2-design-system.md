@@ -101,6 +101,14 @@ for the active marker. The dock retains bottom safe-area padding. Do not replace
 with a differently weighted icon family. The vendored
 [Lucide license](../src/photoframe/static/vendor/lucide-LICENSE.txt) ships with the app.
 
+## Release-note typography
+
+Both latest-release and selected-release notes use `pf-release-notes`, also demonstrated in
+`/ui/showcase`. Keep the safe DOM Markdown renderer unchanged: this class supplies Inter heading
+hierarchy, paragraph rhythm, bullet and numbered lists, underlined semantic links and neutral code
+surfaces. Long links and preformatted lines wrap within the viewport in both themes. Keyboard
+focus follows the shared visible-focus treatment.
+
 ## Shared components
 
 Use the Jinja macros in `src/photoframe/templates/components/` as the canonical API. Their Daisy classes and variants are deliberate. Add a variant there when a product need recurs; avoid local copies of the same control.
