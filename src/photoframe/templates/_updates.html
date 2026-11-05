@@ -27,7 +27,7 @@
     <div class="flex flex-wrap justify-between gap-2 border-t border-base-300 pt-4 text-sm"><p id="update-release" class="min-w-0 break-words empty:hidden"></p><p class="update-last-check text-base-content/70"><span>Last checked </span><time id="update-last-check">Never checked</time></p></div>
   {% endcall %}
 
-  <details id="release-notes-section" class="release-notes-section collapse collapse-arrow border border-base-300 bg-base-100" hidden><summary id="release-notes-title" class="collapse-title font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Release notes <span class="text-sm font-normal text-base-content/70">What’s changed</span></summary><div id="release-notes" class="release-notes collapse-content break-words text-sm leading-relaxed [overflow-wrap:anywhere] [&_pre]:whitespace-pre-wrap"></div></details>
+  <details id="release-notes-section" class="release-notes-section collapse collapse-arrow border border-base-300 bg-base-100" hidden><summary id="release-notes-title" class="collapse-title font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Release notes <span class="text-sm font-normal text-base-content/70">What’s changed</span></summary><div id="release-notes" class="release-notes pf-release-notes collapse-content"></div></details>
 
   {% call surfaces.disclosure('Advanced: choose a release', 'Published versions in this channel', 'release-picker', variant='advanced') %}
     <div class="space-y-3">
@@ -39,7 +39,7 @@
       <div id="release-choice-summary" class="flex flex-wrap items-center gap-2 text-sm" role="status" aria-live="polite" hidden></div>
       <p id="selected-release-detail" class="break-words text-sm" role="status" aria-live="polite">Compatibility has not been verified.</p>
       <div class="flex flex-wrap gap-2">{{ actions.button('Verify selected release', 'secondary', id='inspect-release', disabled=true) }}{{ actions.button('Download & verify selected', 'secondary', id='stage-selected-release', disabled=true) }}</div>
-      <div id="selected-release-notes" class="break-words text-sm leading-relaxed [overflow-wrap:anywhere] [&_pre]:whitespace-pre-wrap"></div>
+      <div id="selected-release-notes" class="pf-release-notes"></div>
     </div>
   {% endcall %}
 
