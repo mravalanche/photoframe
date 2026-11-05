@@ -102,8 +102,13 @@ def create_app(
     album_change = AlbumChangeJob(configuration)
     if not is_demo:
         runtime.initialise_display()
-    templates = Jinja2Templates(directory=package / "templates")
-    templates.env.globals["ui_revision"] = ui_asset_revision(package / "static")
+    templates = Jinja2Templates(
+        directory=package / "templates",
+        # Source-checkout previews can rebuild assets without restarting the app.
+        context_processors=[
+            lambda _request: {"ui_revision": ui_asset_revision(package / "static")}
+        ],
+    )
 
     if is_demo:
 

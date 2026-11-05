@@ -183,3 +183,26 @@ for (const theme of ['light', 'dark']) {
   });
 
 }
+
+
+test('gallery keeps its real grid and corner badges behind a forwarded backend host', async ({ page }) => {
+  await page.route('**/photos', async route => {
+    // Emulate a port forward that passes the VM host rather than the browser origin.
+    const response = await route.fetch({ headers: {
+      ...route.request().headers(), host: 'internal-frame.invalid:8765',
+    } });
+    await route.fulfill({ response });
+  });
+  await page.goto('/photos');
+  await expect(page.locator('#photo-gallery')).toBeVisible();
+  await fitsGallery(page);
+  const placement = await page.locator('[data-gallery-photo="coast"] button').evaluate(button => {
+    const image = button.getBoundingClientRect();
+    const badge = button.querySelector('[data-gallery-fit] .badge').getBoundingClientRect();
+    return {left: badge.left - image.left, bottom: image.bottom - badge.bottom,
+      imageWidth: image.width, badgeWidth: badge.width};
+  });
+  expect(placement.left).toBeLessThanOrEqual(8);
+  expect(placement.bottom).toBeLessThanOrEqual(8);
+  expect(placement.badgeWidth).toBeLessThan(placement.imageWidth);
+});
