@@ -445,6 +445,48 @@ entries are proposals, separate from engineering and release-readiness work.
   available photos through an offline restart. Provide concise readiness/failure information
   without requiring users to manage a cache queue; preserve storage and memory bounds.
 
+### First-time setup — deferred planning, 2026-11-05
+
+This is future work, outside today's dev-release scope. The existing `--headless` installer
+configures the app listener and HTTPS; it does not provision the Pi's Wi-Fi connection.
+
+- [ ] **Choose a headless onboarding route.** Compare these options before implementation:
+  - **Pre-provision with Raspberry Pi Imager:** configure home Wi-Fi while preparing the SD card,
+    then guide the owner to the frame's local address and app setup. Lowest added complexity;
+    retain it as a fallback, although changing networks may require another setup route.
+  - **Temporary Pi setup hotspot plus QR code (preferred direction to prototype):** show a
+    per-device, protected hotspot's join QR on the Inky panel, with its name, manual join details
+    and setup address. The phone joins the Pi, then a local setup page accepts the home network
+    and password. A Wi-Fi join QR connects the scanning phone to the encoded network; it does
+    not by itself transfer the home's Wi-Fi credentials to the Pi. Use a separate link/QR for
+    the setup page if needed. Test hotspot support and the hotspot-to-home-network handover on
+    the supported Pi/OS before committing to this route; do not assume concurrent connections.
+  - **Companion-assisted provisioning:** investigate Bluetooth or a companion application if
+    hotspot handover proves unreliable. This may avoid switching the phone's Wi-Fi, but adds
+    client-platform, pairing and maintenance work; defer unless the simpler routes fall short.
+- [ ] **Define a complete first-run journey.** Sequence network connection, local-address
+  discovery, provider setup, album choice and the first successful render. Separate successful
+  Wi-Fi association from provider/internet availability. Keep the flow usable offline, with
+  manual alternatives to QR scanning and clear progress on the frame and phone.
+- [ ] **Design the provisioning security and recovery boundary before building it.** Keep the
+  normal web app unprivileged; separately review a narrow OS networking helper and installer
+  permissions. Authorize setup through physical presence or a device-specific setup secret;
+  choose how the local page protects submitted credentials. Keep home passwords out of QR
+  codes, URLs, app settings, diagnostics and downloads; let the OS network manager retain them.
+  Make setup access time-limited, shut it down after success, and remove the displayed join
+  secret from e-ink. Specify an explicit physical recovery action rather than opening setup
+  automatically after every transient outage. Preserve existing app settings and saved working
+  network profiles until a replacement is confirmed.
+- [ ] **Prove the future prototype on hardware.** Cover fresh boot without internet, supported
+  phone QR scanning and manual entry, incorrect passwords, hidden SSIDs and supported bands,
+  interruption/reboot during handover, reconnecting the phone to the home network, finding the
+  new frame address, and deliberate setup re-entry after a router change. Confirm that ordinary
+  operation does not expose setup endpoints or retain credential-bearing logs/display content.
+
+Reference capabilities: [Raspberry Pi Imager OS customisation](https://www.raspberrypi.com/documentation/computers/getting-started.html)
+and [NetworkManager hotspot commands](https://networkmanager.pages.freedesktop.org/NetworkManager/NetworkManager/nmcli.html).
+These establish available building blocks, not a validated Photoframe provisioning design.
+
 ### P0 — security, recovery, and release confidence
 
 - [ ] Define and implement an optional authentication model before recommending access beyond a
