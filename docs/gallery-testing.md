@@ -34,15 +34,16 @@ a service or leave a server running.
 ## Interactive walkthrough
 
 1. Open Photos at desktop and phone widths. Each image opens the existing framing modal;
-   its single caption line contains the fit pill and truncated filename. Check the full
-   accessible filename, keyboard focus and touch targets.
+   a small fit pill overlays each compact thumbnail. Check the full
+   accessible filename, keyboard focus and touch targets. Confirm the sole corner X stays visible while scrolling, and backdrop clicks dismiss the editor.
 2. Change whole-photo/fill and background options. Save framing, close and reopen the
    modal, and check that the choice and gallery pill agree. Use Show now with the
    simulator and check the distinct On frame now badge.
 3. Hide a photo, use Undo, then hide and restore it from hidden-photo recovery. Check
    default and bulk layouts, and open all disclosures and menus without horizontal page
    scrolling.
-4. Open Settings → Advanced & recovery → Activity & diagnostics. Refresh, filter and
+4. On Frame, confirm a preview explanation disappears after four seconds, leaving only a quiet marker outside the photo; polling must not bring it back.
+5. Open Settings → Advanced & recovery → Activity & diagnostics. Refresh, filter and
    download the log. Stop and restart the standalone app and confirm history remains.
 
 The demo can validate navigation, framing workflows and diagnostics interaction. It

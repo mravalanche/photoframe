@@ -504,6 +504,17 @@
       if (!dialog.dataset.editorReady) {
         dialog.dataset.editorReady = 'true';
         dialog.addEventListener('close', restorePhotoEditorFocus);
+        const outsidePanel = event => {
+          const panel = dialog.querySelector('.modal-box').getBoundingClientRect();
+          return event.target === dialog && (event.clientX < panel.left || event.clientX > panel.right
+            || event.clientY < panel.top || event.clientY > panel.bottom);
+        };
+        let pressedOutside = false;
+        dialog.addEventListener('pointerdown', event => { pressedOutside = outsidePanel(event); });
+        dialog.addEventListener('click', event => {
+          if (pressedOutside && outsidePanel(event)) dialog.close();
+          pressedOutside = false;
+        });
         dialog.querySelectorAll('[data-photo-editor-close]').forEach(control => {
           control.addEventListener('click', () => dialog.close());
         });
@@ -513,6 +524,24 @@
       dialog.showModal();
       if (photoEditorViewState) window.scrollTo(0, photoEditorViewState.pageY);
     }
+    let manualPreviewNotice = null;
+    try {
+      manualPreviewNotice = JSON.parse(sessionStorage.getItem('photoframe-preview-notice'));
+    } catch (_error) { /* The notice still works when browser storage is unavailable. */ }
+    function setupManualPreviewNotice() {
+      const notice = document.querySelector('[data-manual-preview-notice]');
+      if (!notice) return;
+      const key = notice.dataset.previewKey;
+      if (manualPreviewNotice?.key !== key || !Number.isFinite(manualPreviewNotice?.expires)) {
+        manualPreviewNotice = {key, expires: Date.now() + 4000};
+        try {
+          sessionStorage.setItem('photoframe-preview-notice', JSON.stringify(manualPreviewNotice));
+        } catch (_error) { /* Keep the in-memory deadline across HTMX swaps. */ }
+      }
+      const remaining = manualPreviewNotice.expires - Date.now();
+      notice.hidden = remaining <= 0;
+      if (remaining > 0) window.setTimeout(() => { notice.hidden = true; }, remaining);
+    }
     function syncInterface() {
       syncThemeToggle();
       setupNotifications();
@@ -521,6 +550,7 @@
       setupAlbumSelection();
       setupFramingPreviews();
       setupPhotoEditorDialog();
+      setupManualPreviewNotice();
       setupScheduleSettings();
     }
     function workspaceLoadFailed(event) {

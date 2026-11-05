@@ -165,17 +165,18 @@ icon link with the full status in its accessible label; ordinary idle status sta
 
 ## Photo gallery
 
-The Photos gallery uses two columns on phones and three on larger screens. Each image is a
-native button that opens the existing framing dialog. Keep the caption to one line: a shared
-neutral fit badge and a flexible, ellipsized filename. Full filenames and framing details stay
-available through the button's accessible name and tooltip. Do not add a separate framing action
-under each image.
+The Photos gallery uses compact 4:3 thumbnails: three columns on phones, four from 640px,
+and five from 1024px. The shared neutral fit badge uses compact “Whole” / “Fill” labels at the bottom-left;
+confirmed “On frame” state uses an info badge at the top-left. Filenames remain in each
+button's accessible name and title, and in the editor, without a visible gallery caption.
 
-Use the shared info badge over the image for **On frame now**. This represents the last completed
-display update; the selected-photo outline represents the current preview. Keep those states
-distinct. Retain visible keyboard focus, meaningful thumbnail-failure text and focus restoration
-after HTMX swaps. Default layouts, bulk layouts and hidden-photo recovery remain available below
-the gallery.
+Photos and Frame use their destination name as the main heading, with a quiet `Album · name`
+subtitle. The editor has one 44px corner X in a sticky header, supports Escape and backdrop
+clicks, and restores focus to its opener. A drag that begins inside the panel does not dismiss it.
+
+On Frame, a pending preview appears as a quiet marker outside the image. Its explanation lasts
+four seconds, then stays dismissed across status polling and navigation until the selected photo
+changes. Active rendering, failure and completion feedback retain their existing behavior.
 
 ## Mobile thumbnail records and advanced controls
 

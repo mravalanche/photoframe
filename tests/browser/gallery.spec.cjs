@@ -12,23 +12,22 @@ async function fitsGallery(page) {
       width,
       scrollWidth: document.documentElement.scrollWidth,
       columns: getComputedStyle(gallery).gridTemplateColumns.split(' ').length,
-      captions: [...gallery.querySelectorAll('[data-gallery-caption]')].map(caption => {
-        const filename = caption.querySelector('[data-gallery-filename]');
-        return {
-          height: caption.getBoundingClientRect().height,
-          itemHeight: Math.max(...[...caption.children].map(el => el.getBoundingClientRect().height)),
-          right: caption.getBoundingClientRect().right,
-          filenameStyle: getComputedStyle(filename).textOverflow,
-        };
+      badges: [...gallery.querySelectorAll('[data-gallery-fit]')].map(badge => {
+        const button = badge.closest('button').getBoundingClientRect();
+        const rect = badge.getBoundingClientRect();
+        return {left: rect.left - button.left, right: button.right - rect.right,
+          bottom: button.bottom - rect.bottom,
+          badgeHeight: badge.querySelector('.badge').getBoundingClientRect().height};
       }),
     };
   });
   expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width + 1);
-  expect(layout.columns).toBe(layout.width < 768 ? 2 : 3);
-  for (const caption of layout.captions) {
-    expect(caption.height).toBeLessThanOrEqual(caption.itemHeight + 1);
-    expect(caption.right).toBeLessThanOrEqual(layout.width + 1);
-    expect(caption.filenameStyle).toBe('ellipsis');
+  expect(layout.columns).toBe(layout.width < 640 ? 3 : layout.width < 1024 ? 4 : 5);
+  for (const badge of layout.badges) {
+    expect(badge.left).toBeGreaterThanOrEqual(0);
+    expect(badge.right).toBeGreaterThanOrEqual(0);
+    expect(badge.bottom).toBeGreaterThanOrEqual(0);
+    expect(badge.badgeHeight).toBeLessThanOrEqual(22);
   }
 }
 
@@ -39,7 +38,9 @@ for (const theme of ['light', 'dark']) {
     let tile = page.locator('[data-gallery-photo="portrait"]');
     await expect(tile).toBeVisible();
     await fitsGallery(page);
-    const filename = await tile.locator('[data-gallery-filename]').getAttribute('title');
+    const filename = (await tile.getByRole('button').getAttribute('title')).split(' · ')[0];
+    await expect(tile).not.toContainText(filename);
+    await expect(page.locator('[data-selected-album]')).toContainText('Album ·');
     let button = tile.getByRole('button');
     await expect(button).toHaveAccessibleName(new RegExp(filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     await expect(button).toHaveAttribute('aria-haspopup', 'dialog');
@@ -56,7 +57,7 @@ for (const theme of ['light', 'dark']) {
       await editor.locator('#selected-fit').selectOption('fit');
       await editor.locator('#selected-matte').selectOption('black');
       await editor.getByRole('button', { name: 'Save framing', exact: true }).click();
-      await expect(page.locator('[data-gallery-photo="portrait"] [data-gallery-caption] .badge')).toHaveText('Whole photo');
+      await expect(page.locator('[data-gallery-photo="portrait"] [data-gallery-fit] .badge')).toHaveText('Whole');
       await expect(editor.locator('#selected-fit')).toHaveValue('fit');
       await page.keyboard.press('Escape');
       await expect(editor).toBeHidden();
@@ -66,7 +67,7 @@ for (const theme of ['light', 'dark']) {
       expect(Math.abs(await page.evaluate(() => scrollY) - scrollBefore)).toBeLessThanOrEqual(3);
       await expect(button).toHaveAccessibleName(/Custom framing · Whole photo · Black/);
 
-      // Tapping the photo reopens the saved layout; the caption itself is not a control.
+      // Tapping the thumbnail reopens its saved layout.
       await button.tap();
       await expect(editor).toBeVisible();
       await expect(editor.locator('#selected-fit')).toHaveValue('fit');
@@ -107,7 +108,7 @@ for (const theme of ['light', 'dark']) {
     await expect(button).toBeFocused();
   });
 
-  test(`gallery handles long captions and accessible missing thumbnails in ${theme}`, async ({ page }) => {
+  test(`gallery preserves accessible filenames and missing-thumbnail recovery in ${theme}`, async ({ page }) => {
     await page.addInitScript(theme => localStorage.setItem('photoframe-theme', theme), theme);
     await page.route('**/thumbnail/portrait*', route => route.abort());
     await page.goto('/photos');
@@ -117,7 +118,7 @@ for (const theme of ['light', 'dark']) {
     await expect(tile.locator('.thumbnail-error')).toBeVisible();
     await expect(button).toHaveAccessibleDescription('Preview unavailable');
     await expect(button.locator('button')).toHaveCount(0);
-    await tile.locator('[data-gallery-filename]').evaluate(el => { el.textContent = 'An extremely long filename with no gaps '.repeat(20) + 'unbrokentext'.repeat(30); });
+    await button.evaluate(el => { el.setAttribute('aria-label', 'Preview ' + 'A very long filename '.repeat(60)); });
     await fitsGallery(page);
     await button.tap();
     await expect(page.locator('#photo-editor-dialog')).toBeVisible();
@@ -130,4 +131,55 @@ for (const theme of ['light', 'dark']) {
     await expect(page.locator('[data-gallery-photo="portrait"] .thumbnail-error')).toHaveCount(0);
     await expect(page.locator('[data-gallery-photo="portrait"] button')).not.toHaveAttribute('aria-describedby');
   });
+  test(`editor has one persistent close control and supports backdrop dismissal in ${theme}`, async ({ page }) => {
+    await page.addInitScript(theme => localStorage.setItem('photoframe-theme', theme), theme);
+    await page.goto('/photos');
+    const opener = page.locator('[data-gallery-photo="coast"] button');
+    await opener.click();
+    const editor = page.locator('#photo-editor-dialog');
+    const close = editor.getByRole('button', { name: 'Close photo editor', exact: true });
+    await expect(editor.locator('[data-photo-editor-close]')).toHaveCount(1);
+    await editor.locator('.modal-box').evaluate(el => { el.scrollTop = el.scrollHeight; });
+    await expect(close).toBeInViewport();
+    const box = await close.boundingBox();
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    await close.click();
+    await expect(editor).toBeHidden();
+    await expect(opener).toBeFocused();
+    await opener.click();
+    await expect(editor).toBeVisible();
+    const title = await editor.locator('#selected-title').boundingBox();
+    await page.mouse.move(title.x + 5, title.y + 5);
+    await page.mouse.down();
+    await page.mouse.move(1, 1);
+    await page.mouse.up();
+    await expect(editor).toBeVisible();
+    await page.mouse.click(1, 1);
+    await expect(editor).toBeHidden();
+    await expect(opener).toBeFocused();
+  });
+
+  test(`manual preview notice stays quiet after polling and navigation in ${theme}`, async ({ page }) => {
+    await page.addInitScript(theme => localStorage.setItem('photoframe-theme', theme), theme);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/photos');
+    const headers = { Origin: new URL(page.url()).origin };
+    await page.request.post('/photo/preview', { headers, form: { photo_id: 'square' } });
+    await page.goto('/');
+    const notice = page.locator('[data-manual-preview-notice]');
+    await expect(notice).toBeVisible();
+    await expect(notice).toBeHidden({ timeout: 6000 });
+    await expect(page.locator('[data-preview-marker]')).toHaveText('↗ Preview pending');
+    await expect(page.locator('.frame-canvas [data-frame-transition="manual-preview"]')).toHaveCount(0);
+    await page.evaluate(() => htmx.ajax('GET', '/partials/frame-status', {target: '#frame-status', swap: 'outerHTML'}));
+    await expect(notice).toBeHidden();
+    await page.reload();
+    await expect(notice).toBeHidden();
+    await page.request.post('/photo/preview', { headers, form: { photo_id: 'portrait' } });
+    await page.reload();
+    await expect(notice).toBeVisible();
+    await page.request.post('/photo/preview/clear', { headers });
+  });
+
 }

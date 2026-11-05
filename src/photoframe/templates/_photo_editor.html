@@ -1,8 +1,9 @@
 {% import "components/actions.html" as actions %}
 {% import "components/forms.html" as forms %}
+{% import "components/icons.html" as icons %}
 <dialog id="photo-editor-dialog" class="modal" aria-labelledby="selected-title" data-photo-editor-dialog data-editor-open="{{ 'true' if photo_editor_open else 'false' }}">
 <div class="modal-box max-h-[calc(100dvh-2rem)] w-[calc(100%-1rem)] max-w-5xl p-0">
-  <div class="flex justify-end px-4 pt-3"><button type="button" class="btn btn-ghost btn-sm" data-photo-editor-close autofocus aria-label="Close photo editor">Close</button></div>
+  <div class="sticky top-0 z-20 flex justify-end bg-base-100 px-2 py-1"><button type="button" class="btn btn-ghost btn-circle min-h-11 min-w-11" data-photo-editor-close autofocus aria-label="Close photo editor">{{ icons.icon('close', 20) }}</button></div>
 <section class="selected-preview photo-editor card border border-primary/40 bg-base-100 shadow-sm" aria-labelledby="selected-title">
   <div class="card-body grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(12rem,1fr)_minmax(0,1.5fr)]">
     <div class="selected-image relative grid max-h-[35dvh] aspect-[3/2] place-items-center overflow-hidden rounded-box bg-base-200" aria-busy="true">
@@ -20,7 +21,6 @@
       <div class="selected-actions flex flex-wrap items-center gap-2">
         <form method="post" action="/render/start" hx-post="/render/start" hx-target="#workspace" hx-swap="outerHTML"><button class="primary btn btn-primary" type="submit" {% if not selected_rotation_eligible %}disabled{% endif %}>Show now</button></form>
         <form class="rotation-action" method="post" action="/photo/start" hx-post="/photo/start{% if photo_editor_source == 'layouts' %}?source=layouts{% endif %}" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ selected_photo.id }}">{{ actions.button('Start rotation here', 'secondary', type='submit', disabled=not selected_rotation_eligible) }}</form>
-        {{ actions.button('Close preview', 'quiet', attrs={'data-photo-editor-close': ''}) }}
       </div>
       <form class="hide-photo-form border-t border-base-300 pt-3" method="post" action="/photo/hide" hx-post="/photo/hide{% if photo_editor_source == 'layouts' %}?source=layouts{% endif %}" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML"><input type="hidden" name="photo_id" value="{{ selected_photo.id }}">{{ actions.button('Hide from this frame', 'quiet', 'sm', type='submit') }}<small class="ml-2 text-xs text-base-content/60">The original stays in your library.</small></form>
     </div>

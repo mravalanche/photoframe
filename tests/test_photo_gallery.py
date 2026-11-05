@@ -37,14 +37,13 @@ def test_gallery_uses_effective_saved_framing_and_preserves_full_filenames(tmp_p
     assert "Default framing · Whole photo · Soft photo" in coast
     assert filename in unescape(coast)
     assert "<2026>" not in coast
-    filename_title = re.search(r'title="([^"]+)" data-gallery-filename', coast)
-    assert filename_title and unescape(filename_title[1]) == filename
     assert 'loading="lazy" alt=""' in coast
-    assert "truncate pf-metadata" in coast
+    assert "data-gallery-filename" not in coast
     assert "Custom framing · Fill frame" in gallery["portrait"]
     button_body = re.search(r"<button[^>]*>(.*?)</button>", coast, re.S)
     assert button_body and filename not in unescape(button_body[1])
-    assert "data-gallery-caption" in coast.split("</button>", 1)[1]
+    assert button_body and "data-gallery-fit" in button_body[1]
+    assert "data-gallery-caption" not in coast
     assert 'id="photo-layouts"' in response.text
     assert 'id="all-photo-layouts"' in response.text
 
