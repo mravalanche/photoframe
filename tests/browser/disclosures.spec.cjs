@@ -87,7 +87,7 @@ test('album picker fits with long names and thumbnails', async ({ page }) => {
 
 test('photo framing dialog and its menus fit', async ({ page }) => {
   await page.goto('/photos');
-  await page.locator('.thumbnail button').first().click();
+  await page.locator('#photo-gallery button[type="submit"]').first().click();
   const editor = page.locator('#photo-editor-dialog');
   await expect(editor).toBeVisible();
   await fitsViewport(page, 'photo framing dialog');

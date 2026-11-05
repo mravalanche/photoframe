@@ -192,7 +192,7 @@ def test_default_layout_includes_opposite_orientation_without_custom_framing(tmp
     client.post("/photo/preview", data={"photo_id": "tall"})
     page = client.get("/partials/workspace?view=photos").text
     assert 'name="matte"' in page
-    assert "Ready to show using the current layout" in page
+    assert "Ready to show" in page
     assert "Default framing" in page and "Native orientation" in page
     assert "Needs framing" not in page
     assert 'aria-label="Frame photo tall.jpg"' in page

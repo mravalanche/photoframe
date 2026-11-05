@@ -22,17 +22,17 @@
   </script>
   <title>{{ 'Settings · ' if settings_section else 'Photos · ' if view|default('frame') == 'photos' else '' }}Photoframe</title>
   {{ branding.icons() }}
-  <link rel="stylesheet" href="{{ url_for('static', path='/v2.css') }}?v={{ version }}&amp;rev={{ ui_revision }}">
+  <link rel="stylesheet" href="/static/v2.css?v={{ version }}&amp;rev={{ ui_revision }}">
   <script src="/static/update-status.js?v={{ version }}&amp;rev={{ ui_revision }}" defer></script>
   {% if settings_section == 'updates' %}<script src="/static/updates.js?v={{ version }}&amp;rev={{ ui_revision }}" defer></script>{% endif %}
   <script src="/static/thumbnails.js?v={{ version }}&amp;rev={{ ui_revision }}" defer></script>
-  <script src="{{ url_for('static', path='/tab-identity.js') }}?v={{ version }}&amp;rev={{ ui_revision }}"></script>
-  <script src="{{ url_for('static', path='/vendor/htmx-2.0.4.min.js') }}" defer></script>
+  <script src="/static/tab-identity.js?v={{ version }}&amp;rev={{ ui_revision }}"></script>
+  <script src="/static/vendor/htmx-2.0.4.min.js" defer></script>
 </head>
 <body data-page="{{ 'settings' if settings_section else view|default('frame') }}" class="min-h-screen bg-base-200 text-base-content">
   <header class="sticky top-0 z-50 border-b border-base-300 bg-base-100/95 backdrop-blur">
     <div class="navbar mx-auto max-w-7xl gap-3 px-4 md:px-6">
-      <a href="/" class="inline-flex min-h-11 min-w-0 items-center gap-2 text-xl font-semibold tracking-tight text-base-content no-underline" aria-label="Photoframe home"><img class="size-9" src="{{ url_for('static', path='/photoframe.svg') }}" alt=""><span class="pf-section-title truncate">photoframe</span></a>
+      <a href="/" class="inline-flex min-h-11 min-w-0 items-center gap-2 text-xl font-semibold tracking-tight text-base-content no-underline" aria-label="Photoframe home"><img class="size-9" src="/static/photoframe.svg" alt=""><span class="pf-section-title truncate">photoframe</span></a>
       <div class="ml-auto flex shrink-0 items-center gap-2">
         <a class="inline-flex size-11 shrink-0 items-center justify-center rounded-field border border-base-300 sm:w-auto sm:gap-2 sm:px-3" href="/settings/updates" title="Software updates" aria-label="Software updates" data-update-badge hidden><span data-update-icon aria-hidden="true">○</span><span class="sr-only text-sm sm:not-sr-only" data-update-label>Update status</span></a>
         <button type="button" class="btn btn-ghost btn-sm pf-control min-h-11 gap-2" data-theme-toggle aria-label="Dark mode" aria-pressed="false" title="Switch to dark theme" onclick="setTheme(document.documentElement.dataset.theme === 'photoframe-dark' ? 'light' : 'dark')">{{ icons.icon('theme') }}<span class="hidden sm:inline">Theme</span></button>
@@ -483,6 +483,7 @@
     }
     let photoEditorViewState = null;
     let photoEditorClosePending = false;
+    let framePreviewClearPending = false;
     function restorePhotoEditorFocus() {
       const saved = photoEditorViewState;
       if (!saved) return;
@@ -504,6 +505,17 @@
       if (!dialog.dataset.editorReady) {
         dialog.dataset.editorReady = 'true';
         dialog.addEventListener('close', restorePhotoEditorFocus);
+        const outsidePanel = event => {
+          const panel = dialog.querySelector('.modal-box').getBoundingClientRect();
+          return event.target === dialog && (event.clientX < panel.left || event.clientX > panel.right
+            || event.clientY < panel.top || event.clientY > panel.bottom);
+        };
+        let pressedOutside = false;
+        dialog.addEventListener('pointerdown', event => { pressedOutside = outsidePanel(event); });
+        dialog.addEventListener('click', event => {
+          if (pressedOutside && outsidePanel(event)) dialog.close();
+          pressedOutside = false;
+        });
         dialog.querySelectorAll('[data-photo-editor-close]').forEach(control => {
           control.addEventListener('click', () => dialog.close());
         });
@@ -513,6 +525,30 @@
       dialog.showModal();
       if (photoEditorViewState) window.scrollTo(0, photoEditorViewState.pageY);
     }
+    let manualPreviewNotice = null;
+    try {
+      manualPreviewNotice = JSON.parse(sessionStorage.getItem('photoframe-preview-notice'));
+    } catch (_error) { /* The notice still works when browser storage is unavailable. */ }
+    function setupManualPreviewNotice() {
+      const notice = document.querySelector('[data-manual-preview-notice]');
+      if (!notice) {
+        if (document.querySelector('#frame-status')) {
+          manualPreviewNotice = null;
+          try { sessionStorage.removeItem('photoframe-preview-notice'); } catch (_error) { /* unavailable */ }
+        }
+        return;
+      }
+      const key = notice.dataset.previewKey;
+      if (manualPreviewNotice?.key !== key || !Number.isFinite(manualPreviewNotice?.expires)) {
+        manualPreviewNotice = {key, expires: Date.now() + 4000};
+        try {
+          sessionStorage.setItem('photoframe-preview-notice', JSON.stringify(manualPreviewNotice));
+        } catch (_error) { /* Keep the in-memory deadline across HTMX swaps. */ }
+      }
+      const remaining = manualPreviewNotice.expires - Date.now();
+      notice.hidden = remaining <= 0;
+      if (remaining > 0) window.setTimeout(() => { notice.hidden = true; }, remaining);
+    }
     function syncInterface() {
       syncThemeToggle();
       setupNotifications();
@@ -521,6 +557,7 @@
       setupAlbumSelection();
       setupFramingPreviews();
       setupPhotoEditorDialog();
+      setupManualPreviewNotice();
       setupScheduleSettings();
     }
     function workspaceLoadFailed(event) {
@@ -568,8 +605,10 @@
           pageY: window.scrollY,
         };
       }
-      if (event.detail.elt?.closest?.('form[action="/photo/preview/clear"]')) {
-        photoEditorClosePending = true;
+      const clearPreviewForm = event.detail.elt?.closest?.('form[action="/photo/preview/clear"]');
+      if (clearPreviewForm) {
+        framePreviewClearPending = Boolean(clearPreviewForm.closest('#frame-status'));
+        photoEditorClosePending = !framePreviewClearPending;
       }
       const visibilityForm = event.detail.elt?.closest?.('form[action="/photo/hide"], form[action="/photo/unhide"]');
       if (visibilityForm) {
@@ -588,6 +627,10 @@
       if (event.detail.elt?.closest?.('[data-album-confirm-form]')) setAlbumBusy(false);
     });
     document.addEventListener('htmx:afterSettle', () => {
+      if (framePreviewClearPending) {
+        framePreviewClearPending = false;
+        document.querySelector('#frame-status')?.focus({ preventScroll: true });
+      }
       if (settingsPanelViewState) {
         const savedPanel = settingsPanelViewState;
         settingsPanelViewState = null;
@@ -599,7 +642,10 @@
           anchor.focus({ preventScroll: true });
         }
       }
-      if (photoEditorClosePending) {
+      const closedEditorHasFocus = document.activeElement?.closest(
+        '[data-photo-editor-dialog]:not([open])',
+      );
+      if (photoEditorClosePending || closedEditorHasFocus) {
         photoEditorClosePending = false;
         restorePhotoEditorFocus();
       }
@@ -613,6 +659,6 @@
     <progress class="progress progress-primary mt-2 w-full" aria-label="Current operation progress" hidden></progress>
   </aside>
   {{ navigation.mobile_dock(primary_nav, active_nav) }}
-  <script src="{{ url_for('static', path='/activity.js') }}?v={{ version }}&amp;rev={{ ui_revision }}" defer></script>
+  <script src="/static/activity.js?v={{ version }}&amp;rev={{ ui_revision }}" defer></script>
 </body>
 </html>

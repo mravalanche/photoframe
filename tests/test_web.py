@@ -258,7 +258,8 @@ def test_preview_does_not_change_schedule_until_explicit_actions(tmp_path: Path)
         assert "Photo preview" in response.text
         assert 'id="photo-workspace"' in response.text
         assert 'data-frame-transition="manual-preview"' in frame_status.text
-        assert "Preview selected" in frame_status.text
+        assert "Preview pending" in frame_status.text
+        assert "data-manual-preview-notice" in frame_status.text
         assert "Show now" in response.text
         assert runtime.repository.load().frame.starting_photo_id == original_start
         response = client.post("/render/start", headers=RENDER_HEADERS)
@@ -289,7 +290,7 @@ def test_demo_mode_is_local_and_renderable(tmp_path: Path):
     with TestClient(app, headers={"Origin": "http://testserver"}) as client:
         page = client.get("/partials/workspace")
         assert "Quiet places" in page.text
-        assert "Selected album" in page.text
+        assert "Album · Quiet places" in page.text
         assert "Demo library" in page.text
         assert "Demo photos" in page.text
         assert 'name="timezone"' not in page.text

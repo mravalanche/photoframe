@@ -145,6 +145,8 @@ class Runtime:
 
     def initialise_display(self) -> None:
         """Probe Inky once at boot and retain its reported native capabilities."""
+        if self.demo_provider is not None:
+            return
         settings = self.repository.load()
         display, profile = discover_inky(settings.device)
         with self._runtime_lock:

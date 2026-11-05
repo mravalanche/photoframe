@@ -71,7 +71,7 @@ def test_portrait_controls_and_last_hidden_photo_remain_recoverable(tmp_path: Pa
         ).text
         assert "Show whole photo" in page
         assert "Fill frame" in page
-        assert "Ready to show using the current layout" in page
+        assert "Ready to show" in page
         assert "data-photo-editor-dialog" in page
         assert 'data-editor-open="true"' in page
         assert f"/photos/{portrait.id}/prepared?" in page

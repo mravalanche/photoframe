@@ -163,6 +163,28 @@ verification or a download. Header update status appears on phones and desktop o
 available/staged update, an active operation, or a failure needing attention. Phones use a 44px
 icon link with the full status in its accessible label; ordinary idle status stays on Updates.
 
+## Photo gallery
+
+The Photos gallery uses compact 4:3 thumbnails: three columns on phones, four from 640px,
+and five from 1024px. The shared neutral fit badge uses compact “Whole” / “Fill” labels at the bottom-left;
+confirmed “On frame” state uses an info badge at the top-left. Filenames remain in each
+button's accessible name and title, and in the editor, without a visible gallery caption.
+
+Photos and Frame use their destination name as the main heading, with a quiet `Album · name`
+subtitle. The editor uses one flat surface, a compact sticky “Photo preview” heading and one 44px corner X.
+Controls sit beside the image on desktop and below a compact image on phones; Fit and Background
+share a row. The editor supports Escape and backdrop
+clicks, and restores focus to its opener. Keep the root scrollbar gutter stable while this
+editor is open so scroll-lock and scroll-driven gutter detection cannot oscillate its width. A drag that begins inside the panel does not dismiss it.
+
+On Frame, a pending preview appears as a quiet marker outside the image. Its explanation lasts
+four seconds, then stays dismissed across status polling and navigation until the selected photo
+changes. The adjacent quiet X clears the selected preview on the server, preserving the displayed
+photo, schedule and rotation; dismissal remains effective after polling and navigation. Active rendering, failure and completion feedback retain their existing behavior.
+
+[Mobile photo editor review](images/ui-v2-photo-editor-mobile.png) shows the single-surface
+layout at 393 × 852, with its complete action group visible.
+
 ## Mobile thumbnail records and advanced controls
 
 The app and showcase render the same record macro. Cached thumbnails load lazily through the

@@ -9,6 +9,10 @@
         const placeholder = document.createElement('span');
         placeholder.className = 'thumbnail-error';
         placeholder.textContent = 'Preview unavailable';
+        if (img.id) {
+          placeholder.id = `${img.id}-error`;
+          img.closest('button')?.setAttribute('aria-describedby', placeholder.id);
+        }
         // Retry through the album recovery action; never nest buttons in thumbnail buttons.
         placeholder.title = 'Use Refresh photos & thumbnails to retry.';
         img.after(placeholder);
@@ -16,7 +20,11 @@
       img.addEventListener('error', failed);
       img.addEventListener('load', () => {
         img.hidden = false;
-        if (img.nextElementSibling?.classList.contains('thumbnail-error')) img.nextElementSibling.remove();
+        if (img.nextElementSibling?.classList.contains('thumbnail-error')) {
+          const trigger = img.closest('button');
+          if (trigger?.getAttribute('aria-describedby') === img.nextElementSibling.id) trigger.removeAttribute('aria-describedby');
+          img.nextElementSibling.remove();
+        }
       });
       if (img.complete && !img.naturalWidth) failed();
     });
