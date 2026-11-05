@@ -171,12 +171,18 @@ confirmed “On frame” state uses an info badge at the top-left. Filenames rem
 button's accessible name and title, and in the editor, without a visible gallery caption.
 
 Photos and Frame use their destination name as the main heading, with a quiet `Album · name`
-subtitle. The editor has one 44px corner X in a sticky header, supports Escape and backdrop
+subtitle. The editor uses one flat surface, a compact sticky “Photo preview” heading and one 44px corner X.
+Controls sit beside the image on desktop and below a compact image on phones; Fit and Background
+share a row. The editor supports Escape and backdrop
 clicks, and restores focus to its opener. A drag that begins inside the panel does not dismiss it.
 
 On Frame, a pending preview appears as a quiet marker outside the image. Its explanation lasts
 four seconds, then stays dismissed across status polling and navigation until the selected photo
-changes. Active rendering, failure and completion feedback retain their existing behavior.
+changes. The adjacent quiet X clears the selected preview on the server, preserving the displayed
+photo, schedule and rotation; dismissal remains effective after polling and navigation. Active rendering, failure and completion feedback retain their existing behavior.
+
+[Mobile photo editor review](images/ui-v2-photo-editor-mobile.png) shows the single-surface
+layout at 393 × 852, with its complete action group visible.
 
 ## Mobile thumbnail records and advanced controls
 

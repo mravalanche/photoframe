@@ -7,8 +7,7 @@
   <p class="eligibility-summary flex flex-wrap gap-2 text-sm">{{ feedback.badge(eligible|length ~ ' in rotation', 'success') }}{{ feedback.badge(hidden_photos|length ~ ' hidden') }}{% if unsupported_count %}{{ feedback.badge(unsupported_count ~ ' unavailable', 'error') }}{% endif %}</p>
   <form method="post" action="/album/refresh" data-album-refresh-form hx-post="/album/refresh" hx-target="#photo-workspace" hx-select="#photo-workspace" hx-select-oob="#workspace-notices" hx-swap="outerHTML" hx-disabled-elt="find button" hx-indicator="#album-refresh-progress" class="album-recovery flex flex-wrap items-center gap-3" hx-sync="this:drop">
     {{ actions.button('Refresh photos & thumbnails', 'secondary', 'sm', type='submit', disabled=render_state.active) }}
-    <span id="album-refresh-progress" class="htmx-indicator text-sm" role="status">Refreshing photos…</span>
-    <p class="text-sm text-base-content/65">Reload this album and retry missing photos.</p>
+    <span id="album-refresh-progress" class="htmx-indicator hidden text-sm [&.htmx-request]:inline" role="status">Refreshing photos…</span>
   </form>
   {% if browse_photos %}
   <div id="photo-gallery" class="grid min-w-0 grid-cols-3 gap-2 sm:grid-cols-4 md:gap-3 lg:grid-cols-5" aria-label="Photos available to preview">

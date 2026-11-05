@@ -38,6 +38,8 @@ for (const theme of ['light', 'dark']) {
     let tile = page.locator('[data-gallery-photo="portrait"]');
     await expect(tile).toBeVisible();
     await fitsGallery(page);
+    await expect(page.getByText('Reload this album and retry missing photos.', {exact: true})).toHaveCount(0);
+    await expect(page.locator('#album-refresh-progress')).toBeHidden();
     const filename = (await tile.getByRole('button').getAttribute('title')).split(' · ')[0];
     await expect(tile).not.toContainText(filename);
     await expect(page.locator('[data-selected-album]')).toContainText('Album ·');
@@ -53,7 +55,8 @@ for (const theme of ['light', 'dark']) {
     const previousFit = await editor.locator('#selected-fit').inputValue();
     const previousMatte = await editor.locator('#selected-matte').inputValue();
     try {
-      await expect(editor.locator('#selected-title')).toHaveText(filename);
+      await expect(editor.locator('#selected-title')).toHaveText('Photo preview');
+      await expect(editor.locator('[data-editor-filename]')).toHaveAttribute('title', filename);
       await editor.locator('#selected-fit').selectOption('fit');
       await editor.locator('#selected-matte').selectOption('black');
       await editor.getByRole('button', { name: 'Save framing', exact: true }).click();
@@ -139,6 +142,9 @@ for (const theme of ['light', 'dark']) {
     const editor = page.locator('#photo-editor-dialog');
     const close = editor.getByRole('button', { name: 'Close photo editor', exact: true });
     await expect(editor.locator('[data-photo-editor-close]')).toHaveCount(1);
+    await expect(editor.locator('.modal-box > header')).toContainText('Photo preview');
+    expect((await editor.locator('.modal-box > header').boundingBox()).height).toBeLessThanOrEqual(60);
+    await expect(editor.locator('section.card')).toHaveCount(0);
     await editor.locator('.modal-box').evaluate(el => { el.scrollTop = el.scrollHeight; });
     await expect(close).toBeInViewport();
     const box = await close.boundingBox();
@@ -179,7 +185,13 @@ for (const theme of ['light', 'dark']) {
     await page.request.post('/photo/preview', { headers, form: { photo_id: 'portrait' } });
     await page.reload();
     await expect(notice).toBeVisible();
-    await page.request.post('/photo/preview/clear', { headers });
+    await page.getByRole('button', {name: 'Clear selected preview', exact: true}).click();
+    await expect(page.locator('[data-preview-marker]')).toHaveCount(0);
+    await expect(page.locator('#frame-status')).toBeFocused();
+    await page.reload();
+    await expect(page.locator('[data-preview-marker]')).toHaveCount(0);
+    await page.goto('/photos');
+    await expect(page.locator('#photo-editor-dialog')).toBeHidden();
   });
 
 }
@@ -205,4 +217,27 @@ test('gallery keeps its real grid and corner badges behind a forwarded backend h
   expect(placement.left).toBeLessThanOrEqual(8);
   expect(placement.bottom).toBeLessThanOrEqual(8);
   expect(placement.badgeWidth).toBeLessThan(placement.imageWidth);
+});
+
+
+test('HTMX album refresh progress occupies space only while refreshing', async ({ page }) => {
+  // The normal activity coordinator owns a pinned progress tray. Exercise the
+  // inline HTMX fallback as well, when that optional script cannot load.
+  await page.route('**/static/activity.js*', route => route.abort());
+  await page.goto('/photos');
+  await expect(page.locator('#photo-gallery')).toBeVisible();
+  const refresh = page.locator('[data-album-refresh-form]');
+  const progress = page.locator('#album-refresh-progress');
+  await expect(progress).toBeHidden();
+  expect((await refresh.boundingBox()).height).toBeLessThanOrEqual(44);
+  let finishRefresh;
+  await page.route('**/album/refresh', async route => {
+    await new Promise(resolve => { finishRefresh = resolve; });
+    await route.continue();
+  });
+  await refresh.getByRole('button').click();
+  await expect(progress).toBeVisible();
+  finishRefresh();
+  await expect(progress).toBeHidden();
+  await expect(refresh.getByRole('button')).toBeEnabled();
 });

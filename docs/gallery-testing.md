@@ -42,7 +42,7 @@ a service or leave a server running.
 3. Hide a photo, use Undo, then hide and restore it from hidden-photo recovery. Check
    default and bulk layouts, and open all disclosures and menus without horizontal page
    scrolling.
-4. On Frame, confirm a preview explanation disappears after four seconds, leaving only a quiet marker outside the photo; polling must not bring it back.
+4. On Frame, confirm a preview explanation disappears after four seconds, leaving only a quiet marker outside the photo; polling must not bring it back. Use the adjacent X to clear the selected preview, then navigate and refresh: the marker must stay gone while the displayed photo and schedule stay unchanged.
 5. Open Settings → Advanced & recovery → Activity & diagnostics. Refresh, filter and
    download the log. Stop and restart the standalone app and confirm history remains.
 

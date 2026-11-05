@@ -483,6 +483,7 @@
     }
     let photoEditorViewState = null;
     let photoEditorClosePending = false;
+    let framePreviewClearPending = false;
     function restorePhotoEditorFocus() {
       const saved = photoEditorViewState;
       if (!saved) return;
@@ -530,7 +531,13 @@
     } catch (_error) { /* The notice still works when browser storage is unavailable. */ }
     function setupManualPreviewNotice() {
       const notice = document.querySelector('[data-manual-preview-notice]');
-      if (!notice) return;
+      if (!notice) {
+        if (document.querySelector('#frame-status')) {
+          manualPreviewNotice = null;
+          try { sessionStorage.removeItem('photoframe-preview-notice'); } catch (_error) { /* unavailable */ }
+        }
+        return;
+      }
       const key = notice.dataset.previewKey;
       if (manualPreviewNotice?.key !== key || !Number.isFinite(manualPreviewNotice?.expires)) {
         manualPreviewNotice = {key, expires: Date.now() + 4000};
@@ -598,8 +605,10 @@
           pageY: window.scrollY,
         };
       }
-      if (event.detail.elt?.closest?.('form[action="/photo/preview/clear"]')) {
-        photoEditorClosePending = true;
+      const clearPreviewForm = event.detail.elt?.closest?.('form[action="/photo/preview/clear"]');
+      if (clearPreviewForm) {
+        framePreviewClearPending = Boolean(clearPreviewForm.closest('#frame-status'));
+        photoEditorClosePending = !framePreviewClearPending;
       }
       const visibilityForm = event.detail.elt?.closest?.('form[action="/photo/hide"], form[action="/photo/unhide"]');
       if (visibilityForm) {
@@ -618,6 +627,10 @@
       if (event.detail.elt?.closest?.('[data-album-confirm-form]')) setAlbumBusy(false);
     });
     document.addEventListener('htmx:afterSettle', () => {
+      if (framePreviewClearPending) {
+        framePreviewClearPending = false;
+        document.querySelector('#frame-status')?.focus({ preventScroll: true });
+      }
       if (settingsPanelViewState) {
         const savedPanel = settingsPanelViewState;
         settingsPanelViewState = null;

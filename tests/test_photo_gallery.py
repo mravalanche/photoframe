@@ -90,3 +90,26 @@ def test_gallery_hidden_photos_remain_restorable_and_bulk_layout_still_applies(t
         not framing.included
         for framing in frame.photo_preferences.get(frame.photo_scope, {}).values()
     )
+
+
+def test_clearing_frame_preview_preserves_display_schedule_and_rotation(tmp_path):
+    app = create_app(tmp_path, demo_mode=True)
+    runtime = app.state.runtime
+    client = TestClient(app, headers={"Origin": "http://testserver", "X-Photoframe-View": "frame"})
+    runtime.repository.update(
+        lambda settings: setattr(settings.refresh_status, "last_rendered_photo_id", "coast")
+    )
+    client.post("/photo/preview", data={"photo_id": "portrait"})
+    before = runtime.repository.load().model_dump()
+    status = client.get("/partials/frame-status")
+    assert 'aria-label="Clear selected preview"' in status.text
+    assert 'hx-target="#frame-status" hx-select="#frame-status"' in status.text
+    cleared = client.post("/photo/preview/clear")
+    assert cleared.status_code == 200
+    assert runtime.preview_id() is None
+    assert runtime.repository.load().model_dump() == before
+    assert "data-preview-marker" not in cleared.text
+    assert "data-preview-marker" not in client.get("/partials/frame-status").text
+    photos = client.get("/partials/workspace?view=photos", headers={"X-Photoframe-View": "photos"})
+    assert "data-photo-editor-dialog" not in photos.text
+    assert "data-on-frame" in tiles(photos.text)["coast"]
